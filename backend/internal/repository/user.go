@@ -1,0 +1,129 @@
+package repository
+
+import (
+	"database/sql"
+	"encoding/json"
+	"errors"
+
+	"github.com/CatHeadTab/backend/internal/model"
+	"github.com/google/uuid"
+)
+
+// UserRepository handles database operations for the User model.
+type UserRepository interface {
+	Create(user *model.User) error
+	GetByID(id uuid.UUID) (*model.User, error)
+	GetByEmail(email string) (*model.User, error)
+	GetByUsername(username string) (*model.User, error)
+	UpdatePreferences(id uuid.UUID, prefs map[string]interface{}) error
+}
+
+type postgresUserRepository struct {
+	db *sql.DB
+}
+
+// NewUserRepository creates a new UserRepository connected to the database.
+func NewUserRepository(db *sql.DB) UserRepository {
+	return &postgresUserRepository{db: db}
+}
+
+func (r *postgresUserRepository) Create(user *model.User) error {
+	query := `
+		INSERT INTO users (id, email, password_hash, oauth_provider, oauth_id, username, avatar_url)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING created_at
+	`
+	
+	// Ensure ID is generated
+	if user.ID == uuid.Nil {
+		user.ID = uuid.New()
+	}
+
+	err := r.db.QueryRow(
+		query, 
+		user.ID, 
+		user.Email, 
+		user.PasswordHash, 
+		user.OAuthProvider, 
+		user.OAuthID, 
+		user.Username, 
+		user.AvatarURL,
+	).Scan(&user.CreatedAt)
+
+	return err
+}
+
+func (r *postgresUserRepository) GetByID(id uuid.UUID) (*model.User, error) {
+	query := `
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, created_at 
+		FROM users WHERE id = $1
+	`
+	return r.scanRow(r.db.QueryRow(query, id))
+}
+
+func (r *postgresUserRepository) GetByEmail(email string) (*model.User, error) {
+	query := `
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, created_at 
+		FROM users WHERE email = $1
+	`
+	return r.scanRow(r.db.QueryRow(query, email))
+}
+
+func (r *postgresUserRepository) GetByUsername(username string) (*model.User, error) {
+	query := `
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, created_at 
+		FROM users WHERE username = $1
+	`
+	return r.scanRow(r.db.QueryRow(query, username))
+}
+
+func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
+	var u model.User
+	var oauthProvider, oauthID sql.NullString
+	var email sql.NullString
+	var passwordHash sql.NullString
+
+	err := row.Scan(
+		&u.ID,
+		&email,
+		&passwordHash,
+		&oauthProvider,
+		&oauthID,
+		&u.Username,
+		&u.AvatarURL,
+		&u.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // Return nil, nil when not found to easily distinguish from true errors
+		}
+		return nil, err
+	}
+
+	if email.Valid {
+		u.Email = email.String
+	}
+	if passwordHash.Valid {
+		u.PasswordHash = passwordHash.String
+	}
+	if oauthProvider.Valid {
+		provider := oauthProvider.String
+		u.OAuthProvider = &provider
+	}
+	if oauthID.Valid {
+		id := oauthID.String
+		u.OAuthID = &id
+	}
+
+	return &u, nil
+}
+
+func (r *postgresUserRepository) UpdatePreferences(id uuid.UUID, prefs map[string]interface{}) error {
+	data, err := json.Marshal(prefs)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(`UPDATE users SET preferences = $1 WHERE id = $2`, data, id)
+	return err
+}

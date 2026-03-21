@@ -1,0 +1,183 @@
+import React, { useState, useEffect } from 'react';
+import { useLayoutStore, DesktopItem } from '../store/layoutStore';
+import { useTranslation } from '../i18n/useTranslation';
+
+interface AddItemModalProps {
+  onClose: () => void;
+  editItem?: DesktopItem | null;
+  parentFolderId?: string;
+  pageIndex?: number;
+}
+
+export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, parentFolderId, pageIndex }) => {
+  const { addDesktopItem, updateDesktopItem } = useLayoutStore();
+  const { t } = useTranslation();
+  const isEditing = !!editItem;
+
+  const [mode, setMode] = useState<'link' | 'folder'>(editItem?.type === 'folder' ? 'folder' : 'link');
+  const [title, setTitle] = useState(editItem?.title || '');
+  const [url, setUrl] = useState(editItem?.url || '');
+  const [customIcon, setCustomIcon] = useState(editItem?.icon || '');
+  const [faviconPreview, setFaviconPreview] = useState('');
+
+  // Auto-fetch favicon when URL changes
+  useEffect(() => {
+    if (mode === 'link' && url.trim()) {
+      try {
+        const u = new URL(url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`);
+        setFaviconPreview(`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(u.origin)}&sz=128`);
+      } catch {
+        setFaviconPreview('');
+      }
+    } else {
+      setFaviconPreview('');
+    }
+  }, [url, mode]);
+
+  // Auto-fill title from URL hostname
+  useEffect(() => {
+    if (mode === 'link' && url.trim() && !title.trim() && !isEditing) {
+      try {
+        const u = new URL(url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`);
+        setTitle(u.hostname.replace('www.', ''));
+      } catch { /* ignore */ }
+    }
+  }, [url]);
+
+  const handleSave = () => {
+    const finalTitle = title.trim() || (mode === 'folder' ? 'New Folder' : 'Untitled');
+    const finalUrl = mode === 'link' ? (url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`) : undefined;
+
+    if (isEditing && editItem) {
+      updateDesktopItem(editItem.id, {
+        title: finalTitle,
+        url: finalUrl,
+        icon: customIcon.trim() || undefined,
+      });
+    } else {
+      const newItem: DesktopItem = {
+        id: `${mode}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: mode === 'folder' ? 'folder' : 'link',
+        title: finalTitle,
+        url: finalUrl,
+        icon: customIcon.trim() || undefined,
+        children: mode === 'folder' ? [] : undefined,
+      };
+      addDesktopItem(newItem, pageIndex, parentFolderId);
+    }
+    onClose();
+  };
+
+  const isCustomIconUrl = customIcon.startsWith('http');
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/20 backdrop-blur-[2px] animate-fadeIn p-4">
+      <div 
+        className="w-full max-w-md bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] p-6 sm:p-8 flex flex-col transform animate-scaleIn pointer-events-auto relative"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Close */}
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/50 hover:text-white transition-colors rounded-full hover:bg-white/10 z-30 bg-black/30 backdrop-blur-md">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+
+        {/* Mode Toggle (only for new items) */}
+        {!isEditing && (
+          <div className="flex justify-center mb-6">
+            <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
+              <button 
+                type="button"
+                className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                onClick={() => setMode('link')}
+              >
+                🔗 {t('desktop.addLink')}
+              </button>
+              <button 
+                type="button"
+                className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                onClick={() => setMode('folder')}
+              >
+                📁 {t('desktop.addFolder')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isEditing && (
+          <h2 className="text-xl font-bold text-white mb-6 text-center">{t('desktop.editItem')}</h2>
+        )}
+
+        {/* Live Preview */}
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.15] backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-center overflow-hidden mb-2">
+            {customIcon ? (
+              isCustomIconUrl ? (
+                <img src={customIcon} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              ) : (
+                <span className="text-3xl">{customIcon}</span>
+              )
+            ) : mode === 'folder' ? (
+              <span className="text-3xl">📁</span>
+            ) : faviconPreview ? (
+              <img src={faviconPreview} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            ) : (
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+            )}
+          </div>
+          <span className="text-[12px] text-white/60 font-medium truncate max-w-[150px]">{title || (mode === 'folder' ? 'Folder' : 'Untitled')}</span>
+        </div>
+
+        {/* Form Fields */}
+        <div className="space-y-4">
+          {/* Name */}
+          <div>
+            <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.name')}</label>
+            <input 
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder={mode === 'folder' ? t('desktop.folderNamePlaceholder') : t('desktop.namePlaceholder')}
+              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+              autoFocus
+            />
+          </div>
+
+          {/* URL (only link mode) */}
+          {mode === 'link' && (
+            <div>
+              <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.url')}</label>
+              <input 
+                type="url"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder={t('desktop.urlPlaceholder')}
+                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+              />
+            </div>
+          )}
+
+          {/* Custom Icon */}
+          <div>
+            <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.icon')}</label>
+            <input 
+              type="text"
+              value={customIcon}
+              onChange={e => setCustomIcon(e.target.value)}
+              placeholder="🎯 / https://..."
+              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+            />
+          </div>
+        </div>
+
+        {/* Save button */}
+        <button 
+          onClick={handleSave}
+          disabled={mode === 'link' && !url.trim()}
+          className="w-full mt-6 py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] border border-[#5bb84f] text-black font-bold transition-colors shadow-[0_0_15px_rgba(114,213,101,0.3)] hover:shadow-[0_0_20px_rgba(114,213,101,0.5)] disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {t('desktop.save')}
+        </button>
+      </div>
+    </div>
+  );
+};

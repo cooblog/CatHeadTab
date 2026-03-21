@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+/backend/tmp/
+/backend/cmd/server/server
+/backend/cmd/server/server.exe
+
+# Frontend
+/frontend/.vite/
+/frontend/node_modules/
+
+# Docker
+pgdata/
+
+# Logs
+*.log

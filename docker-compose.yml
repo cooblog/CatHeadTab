@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  catheadtab-db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: catheadtab
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: catheadtab
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catheadtab"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  catheadtab-backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_DSN=postgres://catheadtab:secretpassword@catheadtab-db:5432/catheadtab?sslmode=disable
+      - JWT_SECRET=change-me-in-production
+      - GIN_MODE=release
+      - PORT=8080
+    depends_on:
+      catheadtab-db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

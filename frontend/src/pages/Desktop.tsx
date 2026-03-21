@@ -1,0 +1,639 @@
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { useBookmarkStore } from '../store/bookmarkStore';
+import { useLayoutStore, DesktopItem, getAllDesktopItems } from '../store/layoutStore';
+import { useConfigStore } from '../store/configStore';
+import { SettingsModal } from '../components/SettingsModal';
+import { AuthModal } from '../components/AuthModal';
+import { ProfileModal } from '../components/ProfileModal';
+import { BookmarkBrowser } from '../components/apps/BookmarkBrowser';
+import { AddItemModal } from '../components/AddItemModal';
+import { useTranslation } from '../i18n/useTranslation';
+
+// === Icons ===
+const SettingsIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
+const GlobeIcon = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/60"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+);
+
+// Search Mode Icons
+const GoogleGIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 48 48">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+  </svg>
+);
+
+const BingIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="#00809D">
+    <path d="M5.25 2.15v18.73l9.46 3.12 4.15-2.26V11.23L9.63 7.73v9.06l4.03-1.66v-2.02l-1.95.84V9.66l6.89 2.58v8.03l-3.37 1.83-8-2.67V2z"/>
+  </svg>
+);
+
+const BookmarkIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
+    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+  </svg>
+);
+
+const HistoryIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const DesktopAppIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400">
+    <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
+  </svg>
+);
+
+const UserAvatarIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+);
+
+
+// === DesktopIcon Component ===
+const DesktopIcon: React.FC<{ 
+  item: DesktopItem; 
+  onClick: (item: DesktopItem) => void;
+  onContextMenu?: (e: React.MouseEvent, item: DesktopItem) => void;
+  isDock?: boolean;
+  onDragStart?: (e: React.DragEvent, item: DesktopItem) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent, item: DesktopItem) => void;
+}> = ({ item, onClick, onContextMenu, isDock, onDragStart, onDragOver, onDrop }) => {
+  const isFolder = item.type === 'folder';
+  
+  const getMiniIcons = (nodes: DesktopItem[]): string[] => {
+    let urls: string[] = [];
+    for (const n of nodes) {
+      if (n.type === 'app' && n.icon) urls.push('');
+      else if (n.url) urls.push(n.url);
+      else if (n.children) urls = urls.concat(getMiniIcons(n.children));
+    }
+    return urls;
+  };
+
+  const miniIcons = isFolder && item.children ? getMiniIcons(item.children).slice(0, 9) : [];
+  const iconSize = isDock ? 'w-[50px] h-[50px] md:w-[54px] md:h-[54px]' : 'w-[60px] h-[60px] md:w-[64px] md:h-[64px]';
+  
+  return (
+    <div 
+      className={`flex flex-col items-center group ${isDock ? 'w-auto' : 'w-[80px]'}`} 
+      draggable
+      onDragStart={(e) => onDragStart?.(e, item)}
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop?.(e, item)}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick(item);
+      }} 
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu?.(e, item);
+      }}
+    >
+      <div className={`${iconSize} rounded-[16px] bg-white/[0.12] backdrop-blur-xl border border-white/15 shadow-lg flex items-center justify-center overflow-hidden transition-all duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/20 cursor-pointer relative ${isDock ? 'group-hover:shadow-[0_8px_25px_rgba(255,255,255,0.15)]' : ''}`}>
+        {isFolder ? (
+          <div className="grid grid-cols-3 grid-rows-3 gap-0.5 p-1.5 w-full h-full">
+            {miniIcons.map((url, i) => (
+              <div key={i} className="rounded overflow-hidden bg-white/10 flex items-center justify-center">
+                <img 
+                  src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=64`}
+                  className="w-full h-full object-cover"
+                  alt=""
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+            ))}
+            {miniIcons.length === 0 && (
+               <div className="col-span-3 row-span-3 flex items-center justify-center opacity-30">
+                 <GlobeIcon size={18} />
+               </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {item.type === 'app' ? (
+              <div className="flex items-center justify-center w-full h-full text-2xl md:text-3xl">
+                {item.icon || '📦'}
+              </div>
+            ) : item.icon ? (
+              item.icon.startsWith('http') ? (
+                <img src={item.icon} className="w-9 h-9 md:w-10 md:h-10 object-cover rounded-xl shadow-sm z-10" alt={item.title} onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }} />
+              ) : (
+                <div className="flex items-center justify-center w-full h-full text-2xl md:text-3xl">{item.icon}</div>
+              )
+            ) : item.url ? (
+              <img 
+                src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(item.url || '')}&sz=128`}
+                className="w-9 h-9 md:w-10 md:h-10 object-cover rounded-xl shadow-sm z-10"
+                alt={item.title}
+                onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
+              />
+            ) : null}
+            <div className="absolute inset-0 items-center justify-center hidden z-0">
+               <GlobeIcon size={24} />
+            </div>
+          </>
+        )}
+      </div>
+      {!isDock && (
+        <span className="mt-1.5 text-[11px] font-medium text-white tracking-wide w-full text-center px-0.5 truncate drop-shadow-md">
+          {item.title || 'Untitled'}
+        </span>
+      )}
+    </div>
+  );
+};
+
+
+// === Search Modes ===
+type SearchMode = 'google' | 'bing' | 'bookmarks' | 'history' | 'desktop';
+
+const SEARCH_MODES = [
+  { id: 'google', icon: <GoogleGIcon /> },
+  { id: 'bing', icon: <BingIcon /> },
+  { id: 'bookmarks', icon: <BookmarkIcon /> },
+  { id: 'history', icon: <HistoryIcon /> },
+  { id: 'desktop', icon: <DesktopAppIcon /> },
+] as const;
+
+
+// === Main Desktop Page ===
+
+export const Desktop: React.FC = () => {
+  const { fetchBookmarks } = useBookmarkStore();
+  const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem } = useLayoutStore();
+  const { jwtToken } = useConfigStore();
+  const { t } = useTranslation();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<SearchMode>('google');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isBookmarkBrowserOpen, setIsBookmarkBrowserOpen] = useState(false);
+  const [openedFolder, setOpenedFolder] = useState<DesktopItem | null>(null);
+  const [searchResults, setSearchResults] = useState<DesktopItem[]>([]);
+  
+  // Add/Edit/Context menu state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<DesktopItem | null>(null);
+  const [addToFolderId, setAddToFolderId] = useState<string | undefined>(undefined);
+  const [addToPageIndex, setAddToPageIndex] = useState<number | undefined>(undefined);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: DesktopItem; inDock?: boolean } | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+  const pagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const allItems = useMemo(() => getAllDesktopItems(layout), [layout]);
+
+  const getSearchModeLabel = (id: SearchMode) => {
+    switch (id) {
+      case 'google': return t('search.google');
+      case 'bing': return t('search.bing');
+      case 'bookmarks': return t('search.bookmarks');
+      case 'history': return t('search.history');
+      case 'desktop': return t('search.desktop');
+    }
+  };
+
+  useEffect(() => {
+    fetchBookmarks();
+  }, [fetchBookmarks]);
+
+  // Live search
+  useEffect(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q || searchMode === 'google' || searchMode === 'bing') {
+      setSearchResults([]);
+      return;
+    }
+
+    if (searchMode === 'desktop') {
+      const filtered = allItems.filter(item => 
+        (item.title && item.title.toLowerCase().includes(q)) || 
+        (item.url && item.url.toLowerCase().includes(q))
+      );
+      setSearchResults(filtered);
+    } 
+    else if (searchMode === 'bookmarks') {
+      if (typeof chrome !== 'undefined' && chrome.bookmarks) {
+        chrome.bookmarks.search(q, (results) => {
+          const nodes: DesktopItem[] = results.map(r => ({
+            id: r.id, type: 'link', title: r.title, url: r.url
+          }));
+          setSearchResults(nodes.slice(0, 50));
+        });
+      } else {
+        setSearchResults(allItems.filter(item => item.title.toLowerCase().includes(q)));
+      }
+    } 
+    else if (searchMode === 'history') {
+      if (typeof chrome !== 'undefined' && chrome.history) {
+        chrome.history.search({ text: q, maxResults: 50 }, (results) => {
+          const historyNodes: DesktopItem[] = results.map(r => ({
+            id: r.id,
+            type: 'link',
+            title: r.title || r.url || 'History Item',
+            url: r.url
+          }));
+          setSearchResults(historyNodes);
+        });
+      } else {
+        setSearchResults([]);
+      }
+    }
+  }, [searchQuery, searchMode, allItems]);
+
+  const handleItemClick = (item: DesktopItem) => {
+    if (item.type === 'link' && item.url) {
+      window.open(item.url, '_blank');
+    } else if (item.type === 'folder') {
+      setOpenedFolder(item);
+    } else if (item.type === 'app') {
+      if (item.id === 'app-bookmarks') {
+        setIsBookmarkBrowserOpen(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (openedFolder) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [openedFolder]);
+
+  const handleDragStart = (e: React.DragEvent, item: DesktopItem) => {
+    e.dataTransfer.setData('text/plain', item.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDropOnItem = (e: React.DragEvent, targetItem: DesktopItem) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain');
+    if (sourceId && sourceId !== targetItem.id) {
+      reorderDesktopItem(sourceId, targetItem.id);
+    }
+  };
+
+  const handleAuthClick = () => {
+    if (jwtToken) setIsProfileOpen(true);
+    else setIsAuthOpen(true);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, item: DesktopItem, inDock?: boolean) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, item, inDock });
+  };
+
+  const handleEdit = (item: DesktopItem) => {
+    setEditingItem(item);
+    setIsAddModalOpen(true);
+    setContextMenu(null);
+  };
+
+  const handleDelete = (item: DesktopItem) => {
+    if (window.confirm(t('desktop.deleteConfirm', { title: item.title }))) {
+      removeDesktopItem(item.id);
+    }
+    setContextMenu(null);
+  };
+
+  const openAddModal = (pageIdx?: number, folderId?: string) => {
+    setEditingItem(null);
+    setAddToFolderId(folderId);
+    setAddToPageIndex(pageIdx);
+    setIsAddModalOpen(true);
+  };
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+    if (searchMode === 'google') {
+      window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
+    } else if (searchMode === 'bing') {
+      window.open(`https://www.bing.com/search?q=${encodeURIComponent(q)}`, '_blank');
+    } else {
+      if (searchResults.length > 0 && searchResults[0].url) {
+        window.location.href = searchResults[0].url;
+      }
+    }
+  };
+
+  // Handle page scroll snapping
+  const scrollToPage = (pageIdx: number) => {
+    if (pagesContainerRef.current) {
+      const w = pagesContainerRef.current.clientWidth;
+      pagesContainerRef.current.scrollTo({ left: w * pageIdx, behavior: 'smooth' });
+    }
+    setCurrentPage(pageIdx);
+  };
+
+  const handlePageScroll = () => {
+    if (pagesContainerRef.current) {
+      const w = pagesContainerRef.current.clientWidth;
+      const scrollLeft = pagesContainerRef.current.scrollLeft;
+      const page = Math.round(scrollLeft / w);
+      setCurrentPage(page);
+    }
+  };
+
+  const isLocalSearchActive = (searchMode !== 'google' && searchMode !== 'bing' && searchQuery.trim() !== '');
+
+  // For the Add (+) icon to appear on each page
+  const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
+    <div className="flex flex-col items-center w-[80px] group" onClick={() => openAddModal(pageIdx, folderId)}>
+      <div className="w-[60px] h-[60px] md:w-[64px] md:h-[64px] rounded-[16px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-all duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </div>
+      <span className="mt-1.5 text-[11px] font-medium text-white/30 group-hover:text-white/70 tracking-wide transition-colors">
+        {t('desktop.addLink')}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="w-full h-full flex flex-col overflow-hidden relative">
+      
+      {/* 1. Search Bar - absolutely positioned at top */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-4 md:pt-8 px-6">
+        <div className="w-full max-w-[580px]">
+          <form onSubmit={handleSearchSubmit} className="relative group flex items-center">
+            {isDropdownOpen && (
+              <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)}></div>
+            )}
+            <div className="absolute inset-y-0 left-2 z-50 flex items-center">
+              <button 
+                type="button" 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="p-2 ml-0.5 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center cursor-pointer opacity-80 hover:opacity-100"
+              >
+                {SEARCH_MODES.find(m => m.id === searchMode)?.icon}
+              </button>
+              {isDropdownOpen && (
+                <div className="absolute top-12 left-0 w-[200px] bg-[#1a1c1a]/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 fade-in">
+                  {SEARCH_MODES.map(mode => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => {
+                        setSearchMode(mode.id as SearchMode);
+                        setIsDropdownOpen(false);
+                        if (searchInputRef.current) searchInputRef.current.focus();
+                      }}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${searchMode === mode.id ? 'bg-white/15 shadow-md shadow-black/20 text-white' : 'hover:bg-white/5 text-white/80'}`}
+                    >
+                      <div className="shrink-0">{mode.icon}</div>
+                      <span className="text-[13px] font-medium tracking-wide">{getSearchModeLabel(mode.id as SearchMode)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input 
+              ref={searchInputRef}
+              type="text" 
+              placeholder={
+                searchMode === 'google' ? t('desktop.searchGoogle') :
+                searchMode === 'bing' ? t('desktop.searchBing') :
+                searchMode === 'bookmarks' ? t('desktop.searchBookmarks') :
+                searchMode === 'history' ? t('desktop.searchHistory') :
+                t('desktop.searchDesktop')
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-black/30 backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-black/40 focus:bg-black/50 focus:border-white/30 rounded-full py-3 md:py-3.5 pl-14 pr-6 text-[14px] font-medium text-white shadow-2xl outline-none placeholder-white/40 transition-all duration-300"
+            />
+          </form>
+        </div>
+      </div>
+
+      {/* 2. Pages Area (main content) */}
+      <div className="flex-1 overflow-hidden pt-28 md:pt-36 pb-28 md:pb-32">
+        {isLocalSearchActive ? (
+          // Search Results View
+          <div className="h-full overflow-y-auto no-scrollbar px-6 md:px-12 pt-4">
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-y-6 gap-x-2 md:gap-x-4 justify-items-center content-start">
+              {searchResults.length > 0 ? (
+                searchResults.map(item => (
+                  <DesktopIcon key={item.id} item={item} onClick={handleItemClick} onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDropOnItem} />
+                ))
+              ) : (
+                <div className="col-span-full opacity-60 text-center mt-20 fade-in">
+                  <p className="text-4xl mb-4">📭</p>
+                  <p>{t('desktop.noResults')} "{searchQuery}"</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          // Paginated Grid View
+          <div 
+            ref={pagesContainerRef}
+            className="h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
+            onScroll={handlePageScroll}
+          >
+            {layout.pages.map((page, pageIdx) => (
+              <div 
+                key={pageIdx} 
+                className="min-w-full h-full snap-center px-6 md:px-16 lg:px-24 pt-4 flex flex-col"
+              >
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-y-6 md:gap-y-8 gap-x-2 md:gap-x-4 justify-items-center content-start">
+                  {page.map(item => (
+                    <DesktopIcon key={item.id} item={item} onClick={handleItemClick} onContextMenu={(e, i) => handleContextMenu(e, i, false)} onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDropOnItem} />
+                  ))}
+                  <AddButton pageIdx={pageIdx} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Page Indicator Dots */}
+      {!isLocalSearchActive && layout.pages.length > 1 && (
+        <div className="absolute bottom-[108px] md:bottom-[118px] left-0 right-0 z-20 flex justify-center gap-2">
+          {layout.pages.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => scrollToPage(i)}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${currentPage === i ? 'bg-white scale-125' : 'bg-white/30 hover:bg-white/50'}`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 4. Dock Bar */}
+      <div className="absolute bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 z-30">
+        <div className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 md:py-2 bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[18px] md:rounded-[20px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
+          {layout.dock.map(item => (
+            <DesktopIcon key={item.id} item={item} onClick={handleItemClick} onContextMenu={(e, i) => handleContextMenu(e, i, true)} isDock onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDropOnItem} />
+          ))}
+        </div>
+      </div>
+
+      {/* 5. Settings Button (FAB) */}
+      <div className="fixed top-4 left-4 md:top-6 md:left-6 z-30">
+        <button 
+          className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+          onClick={() => setIsSettingsOpen(true)}
+        >
+          <SettingsIcon />
+        </button>
+      </div>
+
+      {/* 6. User/Auth Button */}
+      <div className="fixed top-4 right-4 md:top-6 md:right-6 z-30">
+        <button 
+          className={`w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer ${jwtToken ? 'bg-[#72d565]/80 text-black border-[#72d565]' : 'bg-black/30 text-white/60 border-white/10 hover:bg-white/15 hover:text-white'}`}
+          onClick={handleAuthClick}
+        >
+          <UserAvatarIcon />
+        </button>
+      </div>
+
+      {/* 7. Folder Overlay */}
+      {openedFolder && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
+          onClick={() => setOpenedFolder(null)}
+        >
+          <div 
+            className="w-full max-w-3xl max-h-[85vh] bg-white/[0.12] backdrop-blur-3xl border border-white/20 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden transform animate-scaleIn pointer-events-auto"
+            onClick={(e) => e.stopPropagation()} 
+          >
+            <div className="w-full pt-8 pb-4 px-8 shrink-0 flex items-center justify-between">
+              <h2 className="text-3xl font-bold text-white tracking-wide text-center w-full drop-shadow-lg">
+                {openedFolder.title}
+              </h2>
+            </div>
+            <div className="flex-1 overflow-y-auto w-full px-8 pb-12 pt-4 no-scrollbar">
+              <div className="grid grid-cols-4 md:grid-cols-6 gap-y-8 gap-x-4 justify-items-center content-start">
+                {openedFolder.children?.map(item => (
+                  <DesktopIcon 
+                    key={item.id} 
+                    item={item} 
+                    onClick={(node) => {
+                      if (node.url) window.location.href = node.url;
+                      else setOpenedFolder(node);
+                    }}
+                    onContextMenu={(e, i) => handleContextMenu(e, i, false)}
+                  />
+                ))}
+                <AddButton folderId={openedFolder.id} />
+                {(!openedFolder.children || openedFolder.children.length === 0) && (
+                  <div className="col-span-full w-full text-center text-white/50 py-12">
+                    {t('desktop.emptyFolder')}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
+      {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
+      {isProfileOpen && <ProfileModal onClose={() => setIsProfileOpen(false)} />}
+      {isBookmarkBrowserOpen && <BookmarkBrowser onClose={() => setIsBookmarkBrowserOpen(false)} />}
+      {isAddModalOpen && <AddItemModal 
+        onClose={() => { setIsAddModalOpen(false); setEditingItem(null); setAddToFolderId(undefined); setAddToPageIndex(undefined); }}
+        editItem={editingItem}
+        parentFolderId={addToFolderId}
+        pageIndex={addToPageIndex}
+      />}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-[200]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div 
+            className="fixed z-[210] bg-[#1c1c1e]/80 backdrop-blur-[40px] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[180px] animate-scaleIn"
+            style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
+          >
+            {contextMenu.item.type !== 'app' && (
+              <>
+                <button 
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+                  onClick={() => handleEdit(contextMenu.item)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                  {t('desktop.editItem')}
+                </button>
+                <div className="h-[1px] bg-white/10 mx-2 my-1" />
+              </>
+            )}
+            
+            {/* Move to/from Dock */}
+            {contextMenu.inDock ? (
+              <button 
+                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+                onClick={() => { moveItemFromDock(contextMenu.item.id); setContextMenu(null); }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+                {t('desktop.removeFromDock')}
+              </button>
+            ) : (
+              <button 
+                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+                onClick={() => { moveItemToDock(contextMenu.item.id); setContextMenu(null); }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                {t('desktop.moveToDock')}
+              </button>
+            )}
+
+            {contextMenu.item.type !== 'app' && (
+              <>
+                <div className="h-[1px] bg-white/10 mx-2 my-1" />
+                <button 
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-red-400 hover:bg-red-500/10 flex items-center gap-3 transition-colors"
+                  onClick={() => handleDelete(contextMenu.item)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  {t('desktop.deleteItem')}
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Animations */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .animate-fadeIn { animation: fadeIn 0.25s ease-out forwards; }
+        .animate-scaleIn { animation: scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .fade-in { animation: fadeIn 0.15s ease-out forwards; }
+      `}} />
+    </div>
+  );
+};
