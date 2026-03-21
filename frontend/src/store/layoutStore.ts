@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import client from '../api/client';
 import { useConfigStore, customStorage } from './configStore';
+import { getRawBlob, compressImageToWebP, saveImageBlob } from '../utils/imageStore';
 
 const triggerAutoSync = () => {
   const { jwtToken } = useConfigStore.getState();
@@ -45,6 +46,10 @@ interface LayoutState {
   moveItemToDock: (id: string) => void;
   moveItemFromDock: (id: string) => void;
   reorderDesktopItem: (sourceId: string, targetId: string) => void;
+  moveItemToFolder: (sourceId: string, folderId: string) => void;
+  moveItemToPage: (sourceId: string, pageIndex: number, insertIndex?: number) => void;
+  reorderInsideFolder: (folderId: string, sourceId: string, targetId: string) => void;
+  moveItemOutOfFolder: (sourceId: string, folderId: string, pageIndex?: number) => void;
   
   // Cloud Sync Actions
   uploadLayoutToCloud: () => Promise<void>;
@@ -209,8 +214,39 @@ export const useLayoutStore = create<LayoutState>()(
       reorderDesktopItem: (sourceId, targetId) => {
         if (sourceId === targetId) return;
         const layout = { ...get().layout };
+
+        // 1. Find original indices of source BEFORE removal
+        let sourceLocation: 'page' | 'dock' | null = null;
+        let sourcePageIdx = -1;
+        let sourceIdx = -1;
+
+        for (let p = 0; p < layout.pages.length; p++) {
+          const i = layout.pages[p].findIndex(item => item.id === sourceId);
+          if (i >= 0) { sourceLocation = 'page'; sourcePageIdx = p; sourceIdx = i; break; }
+        }
+        if (!sourceLocation) {
+          const i = layout.dock.findIndex(item => item.id === sourceId);
+          if (i >= 0) { sourceLocation = 'dock'; sourceIdx = i; }
+        }
+
+        // Find target index BEFORE removal
+        let targetLocation: 'page' | 'dock' | null = null;
+        let targetPageIdx = -1;
+        let targetIdx = -1;
+
+        for (let p = 0; p < layout.pages.length; p++) {
+          const i = layout.pages[p].findIndex(item => item.id === targetId);
+          if (i >= 0) { targetLocation = 'page'; targetPageIdx = p; targetIdx = i; break; }
+        }
+        if (!targetLocation) {
+          const i = layout.dock.findIndex(item => item.id === targetId);
+          if (i >= 0) { targetLocation = 'dock'; targetIdx = i; }
+        }
+
+        if (!sourceLocation || !targetLocation) return;
+
+        // 2. Remove source from its original location
         let sourceItem: DesktopItem | null = null;
-        
         const pr = removeFromPages(layout.pages, sourceId);
         if (pr.removed) {
           layout.pages = pr.pages;
@@ -224,35 +260,148 @@ export const useLayoutStore = create<LayoutState>()(
         }
         if (!sourceItem) return;
 
-        let targetType: 'page' | 'dock' | null = null;
-        let pIndex = -1;
-        let idx = -1;
+        // 3. Recalculate target index after removal
+        //    When source and target are in the same container and source was
+        //    before target, removing source shifts target index left by 1.
+        let insertIdx = targetIdx;
+        const sameContainer =
+          (sourceLocation === 'dock' && targetLocation === 'dock') ||
+          (sourceLocation === 'page' && targetLocation === 'page' && sourcePageIdx === targetPageIdx);
 
-        for (let p = 0; p < layout.pages.length; p++) {
-          const i = layout.pages[p].findIndex(item => item.id === targetId);
-          if (i >= 0) { targetType = 'page'; pIndex = p; idx = i; break; }
-        }
-        if (!targetType) {
-          const i = layout.dock.findIndex(item => item.id === targetId);
-          if (i >= 0) { targetType = 'dock'; idx = i; }
+        if (sameContainer && sourceIdx < targetIdx) {
+          // Source was before target, so after removal target shifted left.
+          // We don't need to subtract because we want to insert AFTER the
+          // target's new position (which is targetIdx - 1), i.e. at targetIdx.
+          insertIdx = targetIdx;
         }
 
-        if (targetType === 'page') {
-          layout.pages[pIndex] = [
-            ...layout.pages[pIndex].slice(0, idx),
+        // 4. Insert source at the calculated position
+        if (targetLocation === 'page') {
+          layout.pages[targetPageIdx] = [
+            ...layout.pages[targetPageIdx].slice(0, insertIdx),
             sourceItem,
-            ...layout.pages[pIndex].slice(idx)
+            ...layout.pages[targetPageIdx].slice(insertIdx)
           ];
-        } else if (targetType === 'dock') {
+        } else if (targetLocation === 'dock') {
           layout.dock = [
-            ...layout.dock.slice(0, idx),
+            ...layout.dock.slice(0, insertIdx),
             sourceItem,
-            ...layout.dock.slice(idx)
+            ...layout.dock.slice(insertIdx)
           ];
-        } else {
-          const lastPage = layout.pages.length - 1;
-          layout.pages[lastPage] = [...layout.pages[lastPage], sourceItem];
         }
+
+        set({ layout });
+        triggerAutoSync();
+      },
+
+      moveItemToFolder: (sourceId, folderId) => {
+        if (sourceId === folderId) return;
+        const layout = { ...get().layout };
+        let sourceItem: DesktopItem | null = null;
+
+        const pr = removeFromPages(layout.pages, sourceId);
+        if (pr.removed) {
+          layout.pages = pr.pages;
+          sourceItem = pr.removed;
+        } else {
+          const dr = removeItemFromList(layout.dock, sourceId);
+          if (dr.removed) {
+            layout.dock = dr.result;
+            sourceItem = dr.removed;
+          }
+        }
+        if (!sourceItem) return;
+
+        layout.pages = layout.pages.map(page => addToFolder(page, folderId, sourceItem!));
+        layout.dock = addToFolder(layout.dock, folderId, sourceItem);
+
+        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
+          layout.pages.pop();
+        }
+        set({ layout });
+        triggerAutoSync();
+      },
+
+      moveItemToPage: (sourceId, pageIndex, insertIndex) => {
+        const layout = { ...get().layout };
+        let sourceItem: DesktopItem | null = null;
+
+        const pr = removeFromPages(layout.pages, sourceId);
+        if (pr.removed) {
+          layout.pages = pr.pages;
+          sourceItem = pr.removed;
+        } else {
+          const dr = removeItemFromList(layout.dock, sourceId);
+          if (dr.removed) {
+            layout.dock = dr.result;
+            sourceItem = dr.removed;
+          }
+        }
+        if (!sourceItem) return;
+
+        while (layout.pages.length <= pageIndex) layout.pages.push([]);
+        if (insertIndex !== undefined) {
+          layout.pages[pageIndex].splice(insertIndex, 0, sourceItem);
+        } else {
+          layout.pages[pageIndex].push(sourceItem);
+        }
+
+        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
+          layout.pages.pop();
+        }
+        set({ layout });
+        triggerAutoSync();
+      },
+
+      reorderInsideFolder: (folderId, sourceId, targetId) => {
+        if (sourceId === targetId) return;
+        const layout = { ...get().layout };
+
+        const reorderInList = (list: DesktopItem[]): DesktopItem[] => {
+          return list.map(item => {
+            if (item.id === folderId && item.type === 'folder' && item.children) {
+              const children = [...item.children];
+              const srcIdx = children.findIndex(c => c.id === sourceId);
+              const tgtIdx = children.findIndex(c => c.id === targetId);
+              if (srcIdx >= 0 && tgtIdx >= 0) {
+                const [moved] = children.splice(srcIdx, 1);
+                children.splice(tgtIdx, 0, moved);
+              }
+              return { ...item, children };
+            }
+            if (item.children) {
+              return { ...item, children: reorderInList(item.children) };
+            }
+            return item;
+          });
+        };
+
+        layout.pages = layout.pages.map(page => reorderInList(page));
+        layout.dock = reorderInList(layout.dock);
+        set({ layout });
+        triggerAutoSync();
+      },
+
+      moveItemOutOfFolder: (sourceId, _folderId, pageIndex) => {
+        const layout = { ...get().layout };
+        let sourceItem: DesktopItem | null = null;
+
+        const pr = removeFromPages(layout.pages, sourceId);
+        if (pr.removed) {
+          layout.pages = pr.pages;
+          sourceItem = pr.removed;
+        } else {
+          const dr = removeItemFromList(layout.dock, sourceId);
+          if (dr.removed) {
+            layout.dock = dr.result;
+            sourceItem = dr.removed;
+          }
+        }
+        if (!sourceItem) return;
+
+        const pi = pageIndex ?? layout.pages.length - 1;
+        while (layout.pages.length <= pi) layout.pages.push([]);
+        layout.pages[pi].push(sourceItem);
 
         set({ layout });
         triggerAutoSync();
@@ -280,7 +429,24 @@ export const useLayoutStore = create<LayoutState>()(
           await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
           
           const { backgroundImage } = useConfigStore.getState();
-          await client.put('/api/v1/user/preferences', { backgroundImage });
+
+          if (backgroundImage.startsWith('idb://')) {
+            // Upload local image binary to cloud
+            const rawBlob = await getRawBlob('bg-custom');
+            if (rawBlob) {
+              const webpBlob = await compressImageToWebP(rawBlob);
+              const formData = new FormData();
+              formData.append('image', webpBlob, 'background.webp');
+              await client.post('/api/v1/user/background', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+              });
+            }
+            // Save preferences with marker indicating cloud-stored image
+            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background' });
+          } else {
+            // URL-based wallpaper — just sync the URL string
+            await client.put('/api/v1/user/preferences', { backgroundImage });
+          }
           
           set({ loading: false });
         } catch (err: any) {
@@ -300,7 +466,23 @@ export const useLayoutStore = create<LayoutState>()(
           const prefsRes = await client.get('/api/v1/user/preferences');
           const bg = prefsRes.data.preferences?.backgroundImage;
           if (bg) {
-            useConfigStore.getState().setBackgroundImage(bg);
+            if (bg === 'cloud://background') {
+              // Download the cloud-stored image binary and save to local IndexedDB
+              try {
+                const imgRes = await client.get('/api/v1/user/background', {
+                  responseType: 'blob',
+                });
+                const blob = imgRes.data as Blob;
+                await saveImageBlob('bg-custom', blob);
+                useConfigStore.getState().setBackgroundImage(`idb://bg-custom?t=${Date.now()}`);
+              } catch {
+                // No cloud background image — ignore silently
+                console.warn('No cloud background image found, skipping');
+              }
+            } else {
+              // URL-based wallpaper
+              useConfigStore.getState().setBackgroundImage(bg);
+            }
           }
 
           set({ loading: false });

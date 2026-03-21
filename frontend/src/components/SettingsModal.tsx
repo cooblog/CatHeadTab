@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useConfigStore } from '../store/configStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { saveImageBlob, loadImageBlob } from '../utils/imageStore';
+import { saveImageBlob, loadImageBlob, compressImageToWebP, getRawBlob } from '../utils/imageStore';
+import client from '../api/client';
 
 type Tab = 'appearance' | 'language' | 'system';
 
 const IDB_BG_KEY = 'bg-custom';
+// Max original file size allowed before compression (20 MB)
+const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
 export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage } = useConfigStore();
@@ -15,6 +18,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [url, setUrl] = useState(serverUrl);
   const [bg, setBg] = useState(backgroundImage);
   const [bgPreview, setBgPreview] = useState(''); // Object URL for local file preview
+  const [isCompressing, setIsCompressing] = useState(false);
 
   // Resolve idb:// reference to an Object URL on mount
   useEffect(() => {
@@ -28,16 +32,63 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Store blob in IndexedDB, only save a lightweight reference key
-    await saveImageBlob(IDB_BG_KEY, file);
-    const objUrl = URL.createObjectURL(file);
-    setBgPreview(objUrl);
-    setBg(`idb://${IDB_BG_KEY}?t=${Date.now()}`);
+
+    // Reject files that are absurdly large
+    if (file.size > MAX_ORIGINAL_SIZE) {
+      alert(t('settings.bgTooLarge'));
+      return;
+    }
+
+    setIsCompressing(true);
+    try {
+      // Compress to WebP for efficient storage & cloud sync
+      const compressed = await compressImageToWebP(file);
+      await saveImageBlob(IDB_BG_KEY, compressed);
+      const objUrl = URL.createObjectURL(compressed);
+      setBgPreview(objUrl);
+      setBg(`idb://${IDB_BG_KEY}?t=${Date.now()}`);
+    } catch (err) {
+      console.error('Failed to compress image', err);
+      // Fallback: save original
+      await saveImageBlob(IDB_BG_KEY, file);
+      const objUrl = URL.createObjectURL(file);
+      setBgPreview(objUrl);
+      setBg(`idb://${IDB_BG_KEY}?t=${Date.now()}`);
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setServerUrl(url.trim());
-    setBackgroundImage(bg.trim());
+    const newBg = bg.trim();
+    setBackgroundImage(newBg);
+
+    // If user is logged in, actively sync background to cloud
+    const { jwtToken } = useConfigStore.getState();
+    if (jwtToken) {
+      try {
+        if (newBg.startsWith('idb://')) {
+          // Upload local image binary to cloud
+          const rawBlob = await getRawBlob('bg-custom');
+          if (rawBlob) {
+            const webpBlob = await compressImageToWebP(rawBlob);
+            const formData = new FormData();
+            formData.append('image', webpBlob, 'background.webp');
+            await client.post('/api/v1/user/background', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+          }
+          await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background' });
+        } else {
+          // URL wallpaper or empty — just sync the string
+          await client.put('/api/v1/user/preferences', { backgroundImage: newBg });
+        }
+      } catch (err) {
+        console.error('Failed to sync background to cloud', err);
+      }
+    }
+
     onClose();
   };
 
@@ -135,8 +186,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                       title="Upload Custom Image"
                       className="w-24 h-16 rounded-xl bg-white/5 hover:bg-white/10 border border-dashed border-white/30 hover:scale-105 hover:border-white/80 transition-all shadow-md flex items-center justify-center cursor-pointer text-white/50 hover:text-white"
                     >
-                      <span className="text-2xl leading-none mb-1">+</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                      {isCompressing ? (
+                        <svg className="animate-spin w-5 h-5 text-white/60" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <span className="text-2xl leading-none mb-1">+</span>
+                      )}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} disabled={isCompressing} />
                     </label>
                   </div>
                 </div>

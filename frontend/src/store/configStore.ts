@@ -4,6 +4,10 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 export interface UserProfile {
   username: string;
   email: string;
+  email_verified: boolean;
+  avatar_url: string;
+  has_password: boolean;
+  user_id: string;
 }
 
 interface ConfigState {

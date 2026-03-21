@@ -82,4 +82,42 @@ body {
   .glass-input {
     @apply w-full px-4 py-2 bg-black/20 backdrop-blur-sm border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 transition-all;
   }
+
+  .window-sidebar {
+    background: transparent;
+  }
+
+  .window-content {
+    background: transparent;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* Bookmark row hover effects */
+  .bookmark-actions {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .bookmark-row:hover .bookmark-actions {
+    opacity: 1;
+  }
+
+  .bookmark-row:hover .bookmark-title {
+    color: white;
+  }
+
+  /* Explore row hover effects (same pattern as bookmark) */
+  .explore-actions {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .explore-row:hover .explore-actions {
+    opacity: 1;
+  }
+
+  .explore-row:hover .explore-title {
+    color: white;
+  }
 }

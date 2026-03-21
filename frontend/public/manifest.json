@@ -12,7 +12,11 @@
     "bookmarks",
     "history"
   ],
+  "icons": {
+    "128": "icon-128.png"
+  },
   "action": {
-    "default_title": "CatHeadTab Settings"
+    "default_title": "CatHeadTab Settings",
+    "default_icon": "icon-128.png"
   }
 }

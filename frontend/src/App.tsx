@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
+import { useLayoutStore } from './store/layoutStore'
 import client from './api/client'
 import { SetupWizard } from './components/SetupWizard'
 import { Desktop } from './pages/Desktop'
+import { OAuthCallback } from './pages/OAuthCallback'
+import { VerifyEmail } from './pages/VerifyEmail'
+import { ResetPassword } from './pages/ResetPassword'
 import { loadImageBlob } from './utils/imageStore'
 
 function App() {
   const { isConfigured, backgroundImage, jwtToken, logout, setUserProfile } = useConfigStore();
+  const { pullLayoutFromCloud } = useLayoutStore();
   const [mounted, setMounted] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,26 +35,42 @@ function App() {
     }
   }, [backgroundImage]);
 
-  // Token freshness check
+  // Token freshness check + pull cloud data on page load
   useEffect(() => {
     if (mounted && jwtToken) {
+      setSyncing(true);
       client.get('/api/v1/user/profile')
-        .then((res: any) => setUserProfile(res.data))
-        .catch(() => logout());
+        .then((res: any) => {
+          setUserProfile(res.data);
+          // Token is valid — pull cloud data to overwrite local
+          return pullLayoutFromCloud();
+        })
+        .catch(() => {
+          logout();
+        })
+        .finally(() => {
+          setSyncing(false);
+        });
     } else {
       setUserProfile(null);
+      setSyncing(false);
     }
-  }, [mounted, jwtToken, logout, setUserProfile]);
+  }, [mounted, jwtToken, logout, setUserProfile, pullLayoutFromCloud]);
+
+  // Skip redirect for special pages
+  const isSpecialPage = location.pathname === '/oauth/callback' || 
+                         location.hash.includes('verify-email') || 
+                         location.hash.includes('reset-password');
 
   useEffect(() => {
-    if (mounted) {
+    if (mounted && !isSpecialPage) {
       if (!isConfigured() && location.pathname !== '/setup') {
         navigate('/setup');
       } else if (isConfigured() && location.pathname === '/setup') {
         navigate('/');
       }
     }
-  }, [mounted, isConfigured, navigate, location]);
+  }, [mounted, isConfigured, navigate, location, isSpecialPage]);
 
   if (!mounted) return null; // Prevent hydration flash
 
@@ -59,10 +81,24 @@ function App() {
         backgroundImage: resolvedBg ? `url("${resolvedBg}")` : undefined 
       }}
     >
+      {/* Cloud Sync Indicator */}
+      {syncing && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-full shadow-lg animate-pulse">
+          <svg className="animate-spin w-4 h-4 text-white/80" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="text-xs text-white/80 font-medium">Syncing...</span>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <main className="flex-1 w-full h-full relative z-10 pt-10">
         <Routes>
           <Route path="/setup" element={<SetupWizard />} />
+          <Route path="/oauth/callback" element={<OAuthCallback />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/*" element={<Desktop />} />
         </Routes>
       </main>

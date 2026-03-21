@@ -68,7 +68,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
       {/* App Window container */}
       <div 
-        className={`bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] shadow-[0_30px_80px_rgba(0,0,0,0.6)] flex flex-col pointer-events-auto transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${isFullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-[1100px] h-[90vh] md:h-[85vh] rounded-[1.5rem] md:rounded-[2rem]'}`}
+        className={`bg-black/30 backdrop-blur-xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${isFullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-[800px] h-[80vh] md:h-[75vh] rounded-[1.5rem] md:rounded-[2rem]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header */}
@@ -119,7 +119,8 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
         </div>
 
         {/* Browser Body */}
-        <div className="flex-1 flex overflow-hidden mt-12 md:mt-14 bg-gradient-to-br from-white/[0.01] to-transparent relative">
+        <div className="flex-1 flex overflow-hidden mt-12 md:mt-14 relative">
+          <div className="absolute inset-0 border-t border-white/5 pointer-events-none" />
           
           {/* Mobile sidebar overlay */}
           {showSidebar && (
@@ -177,7 +178,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
           )}
 
           {/* Desktop Sidebar */}
-          <div className="hidden md:flex w-[300px] bg-black/40 border-r border-white/10 flex-col shrink-0 relative z-10">
+          <div className="window-sidebar hidden md:flex w-[240px] border-r border-white/10 flex-col shrink-0 relative z-10">
             {/* Search Area */}
             <div className="p-5 pb-2">
               <div className="relative">
@@ -236,7 +237,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
           </div>
 
           {/* Right Main List View */}
-          <div className="flex-1 bg-transparent overflow-y-auto no-scrollbar relative w-full">
+          <div className="window-content flex-1 overflow-y-auto">
             {/* Mobile: inline search */}
             <div className="md:hidden p-3 pb-0">
               <div className="relative">
@@ -250,45 +251,45 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                 />
               </div>
             </div>
-            <div className="p-4 md:p-8">
+            <div className="p-4 md:p-6">
               
-              <div className="flex items-center justify-between mb-4 md:mb-6 pb-3 md:pb-4 border-b border-white/10 pl-1 md:pl-2">
-                <h1 className="text-lg md:text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+              <div className="flex items-center justify-between mb-3 md:mb-4 pb-3 border-b border-white/10 pl-1">
+                <h1 className="text-base md:text-xl font-bold text-white tracking-tight flex items-center gap-3">
                   {currentFolder?.title || t('bookmark.bookmarks')}
                 </h1>
                 <span className="text-white/40 text-[12px] md:text-[13px] font-medium bg-white/5 px-2.5 md:px-3 py-0.5 md:py-1 rounded-full">{filteredChildren.length} {t('bookmark.items')}</span>
               </div>
 
               {filteredChildren.length > 0 ? (
-                <div className="flex flex-col gap-1.5 w-full">
+                <div className="flex flex-col gap-1 w-full">
                   {filteredChildren.map(item => (
                     <div 
                       key={item.id} 
-                      className="group flex items-center justify-between px-3 md:px-4 py-2.5 md:py-3 rounded-xl hover:bg-white/[0.08] transition-all cursor-pointer border border-transparent hover:border-white/5 active:scale-[0.99]"
+                      className="bookmark-row flex items-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl hover:bg-white/[0.08] transition-all cursor-pointer border border-transparent hover:border-white/5 active:scale-[0.99]"
                       onClick={() => handleNodeClick(item)}
                     >
-                      <div className="flex items-center gap-3 md:gap-4 min-w-0 pr-2 md:pr-4 w-full">
-                        <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
                           {item.url ? (
                             <img 
                               src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(item.url)}&sz=64`} 
                               alt="" 
-                              className="w-5 h-5 object-contain"
+                              className="w-4.5 h-4.5 object-contain"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
                                 e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';
                               }}
                             />
                           ) : (
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="white" className="text-white/90"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="white" className="text-white/90"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                           )}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-[14px] font-semibold text-white/90 truncate group-hover:text-white transition-colors">
+                          <span className="text-[13px] font-semibold text-white/90 truncate bookmark-title transition-colors">
                             {item.title || (item.url ? new URL(item.url).hostname : t('bookmark.untitled'))}
                           </span>
                           {item.url && (
-                            <span className="text-[11px] text-white/30 truncate mt-0.5 max-w-[80%]">
+                            <span className="text-[11px] text-white/30 truncate mt-0.5">
                               {item.url}
                             </span>
                           )}
@@ -296,18 +297,17 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                       </div>
 
                       {/* Action Buttons (Hover) */}
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0 shrink-0 pr-2">
+                      <div className="bookmark-actions flex items-center gap-1.5 shrink-0 ml-2">
                         {item.url && (
                            <button 
                              onClick={(e) => {
                                e.stopPropagation();
                                navigator.clipboard.writeText(item.url!);
-                               // Optional: show toast here
                              }}
-                             className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/20 text-white/50 hover:text-white flex items-center justify-center transition-colors"
+                             className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/20 text-white/50 hover:text-white flex items-center justify-center transition-colors"
                              title={t('bookmark.copyUrl')}
                            >
-                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                            </button>
                         )}
                         <button 
@@ -317,10 +317,10 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                               deleteBookmark(item.id);
                             }
                           }}
-                          className="w-8 h-8 rounded-full bg-red-500/10 hover:bg-red-500/90 text-red-400 hover:text-white border border-red-500/20 hover:border-500 flex items-center justify-center transition-all shadow-lg"
+                          className="w-7 h-7 rounded-full bg-red-500/10 hover:bg-red-500/90 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 flex items-center justify-center transition-all"
                           title={t('bookmark.deleteItem')}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                         </button>
                       </div>
                     </div>

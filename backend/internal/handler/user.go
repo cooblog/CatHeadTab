@@ -68,8 +68,11 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user_id":  user.ID,
-		"email":    user.Email,
-		"username": user.Username,
+		"user_id":        user.ID,
+		"email":          user.Email,
+		"username":       user.Username,
+		"email_verified": user.EmailVerified,
+		"avatar_url":     user.AvatarURL,
+		"has_password":   user.PasswordHash != "",
 	})
 }

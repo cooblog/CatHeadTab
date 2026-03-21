@@ -16,6 +16,9 @@ type UserRepository interface {
 	GetByEmail(email string) (*model.User, error)
 	GetByUsername(username string) (*model.User, error)
 	UpdatePreferences(id uuid.UUID, prefs map[string]interface{}) error
+	UpdatePassword(id uuid.UUID, passwordHash string) error
+	SetEmailVerified(id uuid.UUID, verified bool) error
+	UpdateAvatar(id uuid.UUID, avatarURL string) error
 }
 
 type postgresUserRepository struct {
@@ -29,25 +32,25 @@ func NewUserRepository(db *sql.DB) UserRepository {
 
 func (r *postgresUserRepository) Create(user *model.User) error {
 	query := `
-		INSERT INTO users (id, email, password_hash, oauth_provider, oauth_id, username, avatar_url)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, email_verified)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING created_at
 	`
-	
-	// Ensure ID is generated
+
 	if user.ID == uuid.Nil {
 		user.ID = uuid.New()
 	}
 
 	err := r.db.QueryRow(
-		query, 
-		user.ID, 
-		user.Email, 
-		user.PasswordHash, 
-		user.OAuthProvider, 
-		user.OAuthID, 
-		user.Username, 
+		query,
+		user.ID,
+		user.Email,
+		user.PasswordHash,
+		user.OAuthProvider,
+		user.OAuthID,
+		user.Username,
 		user.AvatarURL,
+		user.EmailVerified,
 	).Scan(&user.CreatedAt)
 
 	return err
@@ -55,7 +58,7 @@ func (r *postgresUserRepository) Create(user *model.User) error {
 
 func (r *postgresUserRepository) GetByID(id uuid.UUID) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, created_at 
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, created_at 
 		FROM users WHERE id = $1
 	`
 	return r.scanRow(r.db.QueryRow(query, id))
@@ -63,7 +66,7 @@ func (r *postgresUserRepository) GetByID(id uuid.UUID) (*model.User, error) {
 
 func (r *postgresUserRepository) GetByEmail(email string) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, created_at 
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, created_at 
 		FROM users WHERE email = $1
 	`
 	return r.scanRow(r.db.QueryRow(query, email))
@@ -71,7 +74,7 @@ func (r *postgresUserRepository) GetByEmail(email string) (*model.User, error) {
 
 func (r *postgresUserRepository) GetByUsername(username string) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, created_at 
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, created_at 
 		FROM users WHERE username = $1
 	`
 	return r.scanRow(r.db.QueryRow(query, username))
@@ -82,6 +85,7 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 	var oauthProvider, oauthID sql.NullString
 	var email sql.NullString
 	var passwordHash sql.NullString
+	var prefsJSON []byte
 
 	err := row.Scan(
 		&u.ID,
@@ -91,12 +95,14 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 		&oauthID,
 		&u.Username,
 		&u.AvatarURL,
+		&prefsJSON,
+		&u.EmailVerified,
 		&u.CreatedAt,
 	)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil // Return nil, nil when not found to easily distinguish from true errors
+			return nil, nil
 		}
 		return nil, err
 	}
@@ -115,6 +121,13 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 		id := oauthID.String
 		u.OAuthID = &id
 	}
+	if len(prefsJSON) > 0 {
+		if err := json.Unmarshal(prefsJSON, &u.Preferences); err != nil {
+			u.Preferences = make(map[string]interface{})
+		}
+	} else {
+		u.Preferences = make(map[string]interface{})
+	}
 
 	return &u, nil
 }
@@ -125,5 +138,20 @@ func (r *postgresUserRepository) UpdatePreferences(id uuid.UUID, prefs map[strin
 		return err
 	}
 	_, err = r.db.Exec(`UPDATE users SET preferences = $1 WHERE id = $2`, data, id)
+	return err
+}
+
+func (r *postgresUserRepository) UpdatePassword(id uuid.UUID, passwordHash string) error {
+	_, err := r.db.Exec(`UPDATE users SET password_hash = $1 WHERE id = $2`, passwordHash, id)
+	return err
+}
+
+func (r *postgresUserRepository) SetEmailVerified(id uuid.UUID, verified bool) error {
+	_, err := r.db.Exec(`UPDATE users SET email_verified = $1 WHERE id = $2`, verified, id)
+	return err
+}
+
+func (r *postgresUserRepository) UpdateAvatar(id uuid.UUID, avatarURL string) error {
+	_, err := r.db.Exec(`UPDATE users SET avatar_url = $1 WHERE id = $2`, avatarURL, id)
 	return err
 }

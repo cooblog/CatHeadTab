@@ -47,7 +47,7 @@ func main() {
 	}
 
 	// Setup router
-	r := router.Setup(cfg.JWTSecret)
+	r := router.Setup(cfg)
 
 	// Start server
 	addr := ":" + cfg.Port

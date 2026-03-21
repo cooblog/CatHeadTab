@@ -1,6 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLayoutStore, DesktopItem } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
+
+// Fetch website title from URL (works in Chrome extension context)
+const fetchWebsiteTitle = async (rawUrl: string): Promise<string | null> => {
+  try {
+    const fullUrl = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'text/html' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    // Only read the first chunk for performance
+    const text = await response.text();
+    const match = text.match(/<title[^>]*>([^<]+)<\/title>/i);
+    return match?.[1]?.trim() || null;
+  } catch {
+    return null;
+  }
+};
 
 interface AddItemModalProps {
   onClose: () => void;
@@ -19,6 +38,10 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [url, setUrl] = useState(editItem?.url || '');
   const [customIcon, setCustomIcon] = useState(editItem?.icon || '');
   const [faviconPreview, setFaviconPreview] = useState('');
+  const [isFetchingTitle, setIsFetchingTitle] = useState(false);
+  const [titleAutoFilled, setTitleAutoFilled] = useState(false);
+  const titleFetchAbortRef = useRef<AbortController | null>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-fetch favicon when URL changes
   useEffect(() => {
@@ -34,15 +57,45 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
     }
   }, [url, mode]);
 
-  // Auto-fill title from URL hostname
-  useEffect(() => {
-    if (mode === 'link' && url.trim() && !title.trim() && !isEditing) {
-      try {
-        const u = new URL(url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`);
-        setTitle(u.hostname.replace('www.', ''));
-      } catch { /* ignore */ }
+  // Auto-fetch website title when URL changes (debounced)
+  const fetchTitle = useCallback(async (rawUrl: string) => {
+    if (!rawUrl.trim()) return;
+    
+    // Cancel previous fetch
+    if (titleFetchAbortRef.current) {
+      titleFetchAbortRef.current.abort();
     }
-  }, [url]);
+    titleFetchAbortRef.current = new AbortController();
+
+    setIsFetchingTitle(true);
+    try {
+      const fetchedTitle = await fetchWebsiteTitle(rawUrl.trim());
+      if (fetchedTitle) {
+        setTitle(fetchedTitle);
+        setTitleAutoFilled(true);
+      } else {
+        // Fallback to hostname
+        try {
+          const u = new URL(rawUrl.trim().startsWith('http') ? rawUrl.trim() : `https://${rawUrl.trim()}`);
+          setTitle(u.hostname.replace('www.', ''));
+          setTitleAutoFilled(true);
+        } catch { /* ignore */ }
+      }
+    } finally {
+      setIsFetchingTitle(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'link' || isEditing || !url.trim()) return;
+    // Only auto-fetch if title hasn't been manually edited
+    if (title.trim() && !titleAutoFilled) return;
+
+    const timer = setTimeout(() => {
+      fetchTitle(url);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [url, mode, isEditing, fetchTitle, titleAutoFilled, title]);
 
   const handleSave = () => {
     const finalTitle = title.trim() || (mode === 'folder' ? 'New Folder' : 'Untitled');
@@ -129,32 +182,39 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
 
         {/* Form Fields */}
         <div className="space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.name')}</label>
-            <input 
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder={mode === 'folder' ? t('desktop.folderNamePlaceholder') : t('desktop.namePlaceholder')}
-              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
-              autoFocus
-            />
-          </div>
-
-          {/* URL (only link mode) */}
+          {/* URL (first for link mode) */}
           {mode === 'link' && (
             <div>
               <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.url')}</label>
               <input 
+                ref={urlInputRef}
                 type="url"
                 value={url}
-                onChange={e => setUrl(e.target.value)}
+                onChange={e => { setUrl(e.target.value); setTitleAutoFilled(false); }}
                 placeholder={t('desktop.urlPlaceholder')}
                 className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+                autoFocus
               />
             </div>
           )}
+
+          {/* Name */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 ml-1">{t('desktop.name')}</label>
+              {isFetchingTitle && (
+                <span className="text-[11px] text-[#72d565]/70 font-medium animate-pulse">{t('desktop.fetchingTitle')}</span>
+              )}
+            </div>
+            <input 
+              type="text"
+              value={title}
+              onChange={e => { setTitle(e.target.value); setTitleAutoFilled(false); }}
+              placeholder={mode === 'folder' ? t('desktop.folderNamePlaceholder') : t('desktop.namePlaceholder')}
+              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+              autoFocus={mode === 'folder'}
+            />
+          </div>
 
           {/* Custom Icon */}
           <div>
