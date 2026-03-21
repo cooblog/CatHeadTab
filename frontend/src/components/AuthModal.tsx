@@ -4,8 +4,18 @@ import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
 
 type AuthView = 'login' | 'register' | 'forgot';
+type ModalStep = 'server' | 'auth';
 
 export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { serverUrl, setServerUrl, setJwtToken } = useConfigStore();
+  const { t } = useTranslation();
+
+  // If serverUrl is already configured, skip the server step
+  const [step, setStep] = useState<ModalStep>(serverUrl ? 'auth' : 'server');
+  const [serverInput, setServerInput] = useState(serverUrl);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
+
   const [view, setView] = useState<AuthView>('login');
   const [identifier, setIdentifier] = useState('');
   const [email, setEmail] = useState('');
@@ -16,15 +26,35 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string } | null>(null);
 
-  const { setJwtToken } = useConfigStore();
-  const { t } = useTranslation();
+  // Validate and save server URL
+  const handleServerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = serverInput.replace(/\/+$/, '').trim();
+    if (!url) {
+      setServerError(t('auth.serverUrlRequired'));
+      return;
+    }
+    setServerLoading(true);
+    setServerError('');
+    try {
+      const res = await fetch(`${url}/api/v1/health`);
+      if (!res.ok) throw new Error('unhealthy');
+      setServerUrl(url);
+      setStep('auth');
+    } catch {
+      setServerError(t('auth.serverConnectFailed'));
+    } finally {
+      setServerLoading(false);
+    }
+  };
 
-  // Fetch OAuth config on mount
+  // Fetch OAuth config once we are on the auth step
   useEffect(() => {
+    if (step !== 'auth') return;
     client.get('/api/v1/auth/oauth-config')
       .then(res => setOAuthConfig(res.data))
       .catch(() => { /* OAuth not configured, buttons will be hidden */ });
-  }, []);
+  }, [step]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,8 +155,40 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         className="w-full max-w-sm bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] rounded-[2.5rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] p-8 flex flex-col transform animate-scaleIn pointer-events-auto"
         onClick={e => e.stopPropagation()}
       >
-        {/* Tab switcher — only for login/register */}
-        {view !== 'forgot' && (
+        {/* ===== Step 1: Server URL Configuration ===== */}
+        {step === 'server' && (
+          <>
+            <div className="mb-6 text-center">
+              <h2 className="text-xl font-bold text-white mb-2">{t('auth.serverSetupTitle')}</h2>
+              <p className="text-white/50 text-[13px]">{t('auth.serverSetupDesc')}</p>
+            </div>
+
+            {serverError && (
+              <div className="mb-4 text-red-500 text-[13px] font-medium text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{serverError}</div>
+            )}
+
+            <form onSubmit={handleServerSubmit} className="flex flex-col gap-4">
+              <input
+                type="text"
+                placeholder={t('auth.serverUrlPlaceholder')}
+                value={serverInput}
+                onChange={e => setServerInput(e.target.value)}
+                required
+                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+              />
+              <button
+                type="submit"
+                disabled={serverLoading}
+                className="w-full mt-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-colors shadow-lg disabled:opacity-50"
+              >
+                {serverLoading ? t('auth.processing') : t('auth.serverConnect')}
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* ===== Step 2: Auth (Login / Register / Forgot) ===== */}
+        {step === 'auth' && view !== 'forgot' && (
           <div className="flex justify-center mb-6">
             <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
               <button 
@@ -148,139 +210,143 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         )}
 
         {/* Forgot password header */}
-        {view === 'forgot' && (
+        {step === 'auth' && view === 'forgot' && (
           <div className="mb-6 text-center">
             <h2 className="text-xl font-bold text-white mb-2">{t('auth.forgotPassword')}</h2>
             <p className="text-white/50 text-[13px]">{t('auth.forgotPasswordDesc')}</p>
           </div>
         )}
 
-        {error && <div className="mb-4 text-red-500 text-[13px] font-medium text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{error}</div>}
-        {success && <div className="mb-4 text-[#72d565] text-[13px] font-medium text-center bg-[#72d565]/10 p-3 rounded-xl border border-[#72d565]/20">{success}</div>}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {view === 'login' && (
-            <input 
-              type="text" 
-              placeholder={t('auth.usernameOrEmail')} 
-              value={identifier}
-              onChange={e => setIdentifier(e.target.value)}
-              required
-              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
-            />
-          )}
-
-          {view === 'register' && (
-            <>
-              <input 
-                type="email" 
-                placeholder={t('auth.email')} 
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
-              />
-              <input 
-                type="text" 
-                placeholder={t('auth.username')} 
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                required
-                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
-              />
-            </>
-          )}
-
-          {view === 'forgot' && (
-            <input 
-              type="email" 
-              placeholder={t('auth.email')} 
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
-            />
-          )}
-
-          {view !== 'forgot' && (
-            <input 
-              type="password" 
-              placeholder={t('auth.password')} 
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
-            />
-          )}
-
-          {/* Forgot password link */}
-          {view === 'login' && (
-            <button 
-              type="button"
-              onClick={() => switchView('forgot')}
-              className="text-right text-white/40 hover:text-white/70 text-[12px] transition-colors -mt-2"
-            >
-              {t('auth.forgotPassword')}
-            </button>
-          )}
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full mt-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-colors shadow-lg disabled:opacity-50"
-          >
-            {loading ? t('auth.processing') : (
-              view === 'login' ? t('auth.continue') : 
-              view === 'register' ? t('auth.createAccount') : 
-              t('auth.sendResetLink')
-            )}
-          </button>
-        </form>
-
-        {/* Back to login from forgot */}
-        {view === 'forgot' && (
-          <button 
-            type="button"
-            onClick={() => switchView('login')}
-            className="mt-4 text-white/40 hover:text-white/70 text-[13px] transition-colors text-center"
-          >
-            ← {t('auth.backToLogin')}
-          </button>
-        )}
-
-        {/* OAuth section */}
-        {view !== 'forgot' && showOAuth && (
+        {step === 'auth' && (
           <>
-            <div className="relative flex items-center justify-center my-6">
-              <div className="absolute inset-x-0 h-[1px] bg-white/10" />
-              <span className="relative bg-[#1a1c1a] px-4 text-[11px] uppercase font-bold tracking-widest text-white/40">{t('auth.or')}</span>
-            </div>
+            {error && <div className="mb-4 text-red-500 text-[13px] font-medium text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{error}</div>}
+            {success && <div className="mb-4 text-[#72d565] text-[13px] font-medium text-center bg-[#72d565]/10 p-3 rounded-xl border border-[#72d565]/20">{success}</div>}
 
-            <div className="flex flex-col gap-3">
-              {oauthConfig?.github_client_id && (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              {view === 'login' && (
+                <input 
+                  type="text" 
+                  placeholder={t('auth.usernameOrEmail')} 
+                  value={identifier}
+                  onChange={e => setIdentifier(e.target.value)}
+                  required
+                  className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+                />
+              )}
+
+              {view === 'register' && (
+                <>
+                  <input 
+                    type="email" 
+                    placeholder={t('auth.email')} 
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+                  />
+                  <input 
+                    type="text" 
+                    placeholder={t('auth.username')} 
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    required
+                    className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+                  />
+                </>
+              )}
+
+              {view === 'forgot' && (
+                <input 
+                  type="email" 
+                  placeholder={t('auth.email')} 
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+                />
+              )}
+
+              {view !== 'forgot' && (
+                <input 
+                  type="password" 
+                  placeholder={t('auth.password')} 
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+                />
+              )}
+
+              {/* Forgot password link */}
+              {view === 'login' && (
                 <button 
-                  type="button" 
-                  onClick={() => handleOAuth('github')}
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl bg-black/50 hover:bg-black/70 border border-white/10 text-white font-medium transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
+                  type="button"
+                  onClick={() => switchView('forgot')}
+                  className="text-right text-white/40 hover:text-white/70 text-[12px] transition-colors -mt-2"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
-                  {t('auth.github')}
+                  {t('auth.forgotPassword')}
                 </button>
               )}
-              {oauthConfig?.google_client_id && (
-                <button 
-                  type="button" 
-                  onClick={() => handleOAuth('google')}
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl bg-white text-black hover:bg-gray-100 border border-white/10 font-bold transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                  {t('auth.google')}
-                </button>
-              )}
-            </div>
+
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full mt-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-colors shadow-lg disabled:opacity-50"
+              >
+                {loading ? t('auth.processing') : (
+                  view === 'login' ? t('auth.continue') : 
+                  view === 'register' ? t('auth.createAccount') : 
+                  t('auth.sendResetLink')
+                )}
+              </button>
+            </form>
+
+            {/* Back to login from forgot */}
+            {view === 'forgot' && (
+              <button 
+                type="button"
+                onClick={() => switchView('login')}
+                className="mt-4 text-white/40 hover:text-white/70 text-[13px] transition-colors text-center"
+              >
+                ← {t('auth.backToLogin')}
+              </button>
+            )}
+
+            {/* OAuth section */}
+            {view !== 'forgot' && showOAuth && (
+              <>
+                <div className="relative flex items-center justify-center my-6">
+                  <div className="absolute inset-x-0 h-[1px] bg-white/10" />
+                  <span className="relative bg-[#1a1c1a] px-4 text-[11px] uppercase font-bold tracking-widest text-white/40">{t('auth.or')}</span>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {oauthConfig?.github_client_id && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleOAuth('github')}
+                      disabled={loading}
+                      className="w-full py-3 rounded-xl bg-black/50 hover:bg-black/70 border border-white/10 text-white font-medium transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+                      {t('auth.github')}
+                    </button>
+                  )}
+                  {oauthConfig?.google_client_id && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleOAuth('google')}
+                      disabled={loading}
+                      className="w-full py-3 rounded-xl bg-white text-black hover:bg-gray-100 border border-white/10 font-bold transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                      {t('auth.google')}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

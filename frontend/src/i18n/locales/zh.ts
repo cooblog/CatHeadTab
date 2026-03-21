@@ -113,6 +113,12 @@ export const zh = {
   'auth.emailVerified': '您的邮箱已成功验证！',
   'auth.verificationFailed': '邮箱验证失败，链接可能已过期。',
   'auth.resetFailed': '密码重置失败，链接可能已过期。',
+  'auth.serverSetupTitle': '连接服务器',
+  'auth.serverSetupDesc': '请输入后端服务器地址以启用登录和云同步功能。',
+  'auth.serverUrlPlaceholder': 'https://your-server.com',
+  'auth.serverUrlRequired': '请输入服务器地址。',
+  'auth.serverConnectFailed': '无法连接到服务器，请检查地址后重试。',
+  'auth.serverConnect': '连 接',
 
   // Bookmark App
   'bookmark.favorites': '默认收藏夹',

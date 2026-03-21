@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import client from '../api/client';
-import { useTranslation } from '../i18n/useTranslation';
+import { useTranslation, TranslationKeys } from '../i18n/useTranslation';
 import { useConfigStore } from '../store/configStore';
 import { DesktopItem, useLayoutStore } from '../store/layoutStore';
 
@@ -113,7 +113,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
   const displaySites = searchResults ?? activeCategory?.sites ?? [];
 
   function getCategoryDisplayName(name: string): string {
-    const key = `explore.cat_${name.toLowerCase()}`;
+    const key = `explore.cat_${name.toLowerCase()}` as TranslationKeys;
     const translated = t(key);
     return translated === key ? name : translated;
   }

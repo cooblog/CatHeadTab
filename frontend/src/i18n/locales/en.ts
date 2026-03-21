@@ -113,6 +113,12 @@ export const en = {
   'auth.emailVerified': 'Your email has been verified successfully!',
   'auth.verificationFailed': 'Failed to verify email. The link may have expired.',
   'auth.resetFailed': 'Failed to reset password. The link may have expired.',
+  'auth.serverSetupTitle': 'Connect to Server',
+  'auth.serverSetupDesc': 'Enter your backend server address to enable login and cloud sync.',
+  'auth.serverUrlPlaceholder': 'https://your-server.com',
+  'auth.serverUrlRequired': 'Please enter a server URL.',
+  'auth.serverConnectFailed': 'Cannot connect to the server. Please check the URL and try again.',
+  'auth.serverConnect': 'Connect',
 
   // Bookmark App
   'bookmark.favorites': 'Favorites',

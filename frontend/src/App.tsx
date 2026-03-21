@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
 import { useLayoutStore } from './store/layoutStore'
 import client from './api/client'
-import { SetupWizard } from './components/SetupWizard'
 import { Desktop } from './pages/Desktop'
 import { OAuthCallback } from './pages/OAuthCallback'
 import { VerifyEmail } from './pages/VerifyEmail'
@@ -11,13 +10,11 @@ import { ResetPassword } from './pages/ResetPassword'
 import { loadImageBlob } from './utils/imageStore'
 
 function App() {
-  const { isConfigured, backgroundImage, jwtToken, logout, setUserProfile } = useConfigStore();
+  const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile } = useConfigStore();
   const { pullLayoutFromCloud } = useLayoutStore();
   const [mounted, setMounted] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
-  const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     // Wait for Zustand to hydrate from storage
@@ -36,8 +33,9 @@ function App() {
   }, [backgroundImage]);
 
   // Token freshness check + pull cloud data on page load
+  // Only attempt when both serverUrl and jwtToken are available
   useEffect(() => {
-    if (mounted && jwtToken) {
+    if (mounted && jwtToken && serverUrl) {
       setSyncing(true);
       client.get('/api/v1/user/profile')
         .then((res: any) => {
@@ -55,22 +53,7 @@ function App() {
       setUserProfile(null);
       setSyncing(false);
     }
-  }, [mounted, jwtToken, logout, setUserProfile, pullLayoutFromCloud]);
-
-  // Skip redirect for special pages
-  const isSpecialPage = location.pathname === '/oauth/callback' || 
-                         location.hash.includes('verify-email') || 
-                         location.hash.includes('reset-password');
-
-  useEffect(() => {
-    if (mounted && !isSpecialPage) {
-      if (!isConfigured() && location.pathname !== '/setup') {
-        navigate('/setup');
-      } else if (isConfigured() && location.pathname === '/setup') {
-        navigate('/');
-      }
-    }
-  }, [mounted, isConfigured, navigate, location, isSpecialPage]);
+  }, [mounted, jwtToken, serverUrl, logout, setUserProfile, pullLayoutFromCloud]);
 
   if (!mounted) return null; // Prevent hydration flash
 
@@ -95,7 +78,6 @@ function App() {
       {/* Main Content Area */}
       <main className="flex-1 w-full h-full relative z-10 pt-10">
         <Routes>
-          <Route path="/setup" element={<SetupWizard />} />
           <Route path="/oauth/callback" element={<OAuthCallback />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/reset-password" element={<ResetPassword />} />
