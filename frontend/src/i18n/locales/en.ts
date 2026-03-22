@@ -25,6 +25,7 @@ export const en = {
   'desktop.removeFromDock': 'Remove from Dock',
   'desktop.fetchingTitle': 'Fetching title...',
   'desktop.folderRenameHint': 'Click to rename',
+  'desktop.openBookmarks': 'Bookmark Browser',
   // Search Modes
   'search.google': 'Google Search',
   'search.bing': 'Bing Search',

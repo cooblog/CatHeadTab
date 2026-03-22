@@ -17,9 +17,11 @@ import {
   PointerSensor,
   TouchSensor,
   closestCenter,
+  pointerWithin,
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
+  CollisionDetection,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -183,7 +185,8 @@ const SortableDesktopIcon: React.FC<{
   isDock?: boolean;
   isDraggedOver?: boolean;
   activeId?: string | null;
-}> = ({ item, onClick, onContextMenu, isDock, isDraggedOver, activeId }) => {
+  isFolderDropPending?: boolean;
+}> = ({ item, onClick, onContextMenu, isDock, isDraggedOver, activeId, isFolderDropPending }) => {
   const {
     attributes,
     listeners,
@@ -193,12 +196,17 @@ const SortableDesktopIcon: React.FC<{
     isDragging,
   } = useSortable({ 
     id: item.id,
-    data: { item, isDock },
+    data: { item, isDock, isFolder: item.type === 'folder' },
   });
 
+  // When a folder drop is pending (user is dragging an icon toward a folder),
+  // freeze sortable transforms for ALL non-dragging items so the grid stays stable
+  // and the folder icon doesn't slide around.
+  const shouldFreezeTransform = isFolderDropPending && !isDragging;
+
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition: transition || 'transform 250ms cubic-bezier(0.25, 1, 0.5, 1)',
+    transform: shouldFreezeTransform ? undefined : CSS.Transform.toString(transform),
+    transition: shouldFreezeTransform ? 'none' : (transition || 'transform 250ms cubic-bezier(0.25, 1, 0.5, 1)'),
     opacity: isDragging ? 0.3 : 1,
     zIndex: isDragging ? 0 : 1,
   };
@@ -242,6 +250,22 @@ const SEARCH_MODES = [
   { id: 'history', icon: <HistoryIcon /> },
   { id: 'desktop', icon: <DesktopAppIcon /> },
 ] as const;
+
+
+// === Custom collision detection: folders get priority when pointer is within them ===
+const folderAwareCollision: CollisionDetection = (args) => {
+  // First, check if the pointer is directly within any folder droppable
+  const pointerCollisions = pointerWithin(args);
+  const folderHit = pointerCollisions.find(
+    c => c.data?.droppableContainer?.data?.current?.isFolder
+  );
+  if (folderHit) {
+    return [folderHit];
+  }
+
+  // Fallback to closestCenter for normal sortable reordering
+  return closestCenter(args);
+};
 
 
 // === Main Desktop Page ===
@@ -288,6 +312,11 @@ export const Desktop: React.FC = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const folderHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
+  // Track the last folder we hovered over (survives brief flickers away)
+  const lastFolderOverRef = useRef<string | null>(null);
+  const lastFolderOverTimeRef = useRef<number>(0);
+  // When true, sortable transforms are frozen so the grid doesn't reorder while hovering a folder
+  const [isFolderDropPending, setIsFolderDropPending] = useState(false);
 
   const allItems = useMemo(() => getAllDesktopItems(layout), [layout]);
 
@@ -409,26 +438,45 @@ export const Desktop: React.FC = () => {
     const { over } = event;
     const newOverId = over?.id as string | null;
 
-    // Folder hover detection
+    // Folder hover detection — tolerant of brief flickers caused by sortable reordering
     if (newOverId && newOverId !== activeId) {
       const overItem = findItemById(newOverId);
       if (overItem?.type === 'folder') {
-        if (folderDropTargetId !== newOverId) {
+        // We're over a folder — freeze the grid so icons don't shuffle
+        setIsFolderDropPending(true);
+
+        if (lastFolderOverRef.current !== newOverId) {
+          // Switched to a different folder — restart timer
+          lastFolderOverRef.current = newOverId;
+          lastFolderOverTimeRef.current = Date.now();
           if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
           setFolderDropTargetId(null);
           folderHoverTimerRef.current = setTimeout(() => {
             setFolderDropTargetId(newOverId);
-          }, 500);
+          }, 300);
         }
-      } else {
-        if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
-        setFolderDropTargetId(null);
+        // Same folder as before — keep the timer running, don't reset
+        return;
       }
-    } else {
-      if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
-      setFolderDropTargetId(null);
     }
-  }, [activeId, findItemById, folderDropTargetId]);
+
+    // Over a non-folder item or nothing:
+    // Only reset if we've been away from the last folder for a while (debounce flicker)
+    // The sortable algorithm may briefly report a non-folder neighbor during reorder animation
+    if (lastFolderOverRef.current) {
+      // Give a 150ms grace period before clearing the folder target
+      // This prevents sortable position-swap flickers from resetting the timer
+      setTimeout(() => {
+        // If after the grace period we still haven't returned to a folder, clear it
+        if (lastFolderOverRef.current && Date.now() - lastFolderOverTimeRef.current > 250) {
+          if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
+          lastFolderOverRef.current = null;
+          setFolderDropTargetId(null);
+          setIsFolderDropPending(false);
+        }
+      }, 150);
+    }
+  }, [activeId, findItemById]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -438,15 +486,24 @@ export const Desktop: React.FC = () => {
     const targetId = over?.id as string | null;
 
     if (targetId && sourceId !== targetId) {
-      // If dropping onto a folder that's been hovered long enough
-      if (folderDropTargetId === targetId) {
-        const targetItem = findItemById(targetId);
-        if (targetItem?.type === 'folder') {
-          moveItemToFolder(sourceId, targetId);
-          setActiveId(null);
-          setFolderDropTargetId(null);
-          return;
-        }
+      const targetItem = findItemById(targetId);
+
+      // --- Drop into folder ---
+      // Accept the drop into a folder if EITHER:
+      //   (a) folderDropTargetId is set (user hovered long enough), OR
+      //   (b) the over target is a folder AND we've been tracking it as the last folder hover
+      const shouldDropIntoFolder = targetItem?.type === 'folder' && (
+        folderDropTargetId === targetId ||
+        lastFolderOverRef.current === targetId
+      );
+
+      if (shouldDropIntoFolder) {
+        moveItemToFolder(sourceId, targetId);
+        setActiveId(null);
+        setFolderDropTargetId(null);
+        lastFolderOverRef.current = null;
+        setIsFolderDropPending(false);
+        return;
       }
 
       // Check if we're inside a folder overlay
@@ -466,12 +523,16 @@ export const Desktop: React.FC = () => {
 
     setActiveId(null);
     setFolderDropTargetId(null);
+    lastFolderOverRef.current = null;
+    setIsFolderDropPending(false);
   }, [folderDropTargetId, findItemById, moveItemToFolder, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage]);
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
     setActiveId(null);
     setFolderDropTargetId(null);
+    lastFolderOverRef.current = null;
+    setIsFolderDropPending(false);
   }, []);
 
   const handleAuthClick = () => {
@@ -571,7 +632,7 @@ export const Desktop: React.FC = () => {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={folderAwareCollision}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -687,6 +748,7 @@ export const Desktop: React.FC = () => {
                         onContextMenu={(e, i) => handleContextMenu(e, i, false)}
                         isDraggedOver={folderDropTargetId === item.id}
                         activeId={activeId}
+                        isFolderDropPending={isFolderDropPending}
                       />
                     ))}
                     <AddButton pageIdx={pageIdx} />
@@ -724,6 +786,7 @@ export const Desktop: React.FC = () => {
                 isDock
                 isDraggedOver={folderDropTargetId === item.id}
                 activeId={activeId}
+                isFolderDropPending={isFolderDropPending}
               />
             ))}
           </SortableContext>
@@ -757,7 +820,7 @@ export const Desktop: React.FC = () => {
           onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}
         >
           <div 
-            className="w-full max-w-3xl max-h-[85vh] bg-white/[0.12] backdrop-blur-3xl border border-white/20 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden transform animate-scaleIn pointer-events-auto"
+            className="w-full max-w-5xl max-h-[85vh] bg-white/[0.12] backdrop-blur-3xl border border-white/20 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden transform animate-scaleIn pointer-events-auto"
             onClick={(e) => e.stopPropagation()} 
           >
             <div className="w-full pt-8 pb-4 px-8 shrink-0 flex items-center justify-center">
@@ -804,9 +867,12 @@ export const Desktop: React.FC = () => {
                 </button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto w-full px-8 pb-12 pt-4 no-scrollbar">
+            <div className="flex-1 overflow-y-auto w-full px-6 sm:px-8 md:px-10 lg:px-14 pb-12 pt-4 no-scrollbar">
               <SortableContext items={folderItemIds} strategy={rectSortingStrategy}>
-                <div className="grid grid-cols-4 md:grid-cols-6 gap-y-8 gap-x-4 justify-items-center content-start">
+                <div 
+                  className="grid gap-y-6 gap-x-4 sm:gap-x-6 md:gap-y-10 md:gap-x-10 lg:gap-y-12 lg:gap-x-16 justify-items-center content-start"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', maxWidth: '900px', margin: '0 auto' }}
+                >
                   {openedFolder.children?.map(item => (
                     <SortableDesktopIcon
                       key={item.id} 
@@ -817,6 +883,7 @@ export const Desktop: React.FC = () => {
                       }}
                       onContextMenu={(e, i) => handleContextMenu(e, i, false)}
                       activeId={activeId}
+                      isFolderDropPending={isFolderDropPending}
                     />
                   ))}
                   <AddButton folderId={openedFolder.id} />
@@ -933,6 +1000,13 @@ export const Desktop: React.FC = () => {
               {t('desktop.addFolder')}
             </button>
             <div className="h-[1px] bg-white/10 mx-2 my-1" />
+            <button 
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+              onClick={() => { setBlankContextMenu(null); setIsBookmarkBrowserOpen(true); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+              {t('desktop.openBookmarks')}
+            </button>
             <button 
               className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
               onClick={() => { setBlankContextMenu(null); setIsExploreOpen(true); }}

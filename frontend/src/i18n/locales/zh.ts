@@ -25,6 +25,7 @@ export const zh = {
   'desktop.removeFromDock': '从 Dock 移出',
   'desktop.fetchingTitle': '正在获取标题...',
   'desktop.folderRenameHint': '点击重命名',
+  'desktop.openBookmarks': '书签浏览器',
   // Search Modes
   'search.google': '谷歌搜索',
   'search.bing': '必应搜索',

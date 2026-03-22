@@ -124,119 +124,158 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const isCustomIconUrl = customIcon.startsWith('http');
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/20 backdrop-blur-[2px] animate-fadeIn p-4">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none p-4 sm:p-12">
+      {/* Dimmed Background Overlay */}
       <div 
-        className="w-full max-w-md bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] p-6 sm:p-8 flex flex-col transform animate-scaleIn pointer-events-auto relative"
+        className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"
+        onClick={onClose}
+      />
+
+      {/* App Window container */}
+      <div 
+        className="w-full max-w-md bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Close */}
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 text-white/50 hover:text-white transition-colors rounded-full hover:bg-white/10 z-30 bg-black/30 backdrop-blur-md">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-
-        {/* Mode Toggle (only for new items) */}
-        {!isEditing && (
-          <div className="flex justify-center mb-6">
-            <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
-              <button 
-                type="button"
-                className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
-                onClick={() => setMode('link')}
-              >
-                🔗 {t('desktop.addLink')}
+        {/* Window Header */}
+        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+          {/* Left: Mac traffic lights on desktop, close on mobile */}
+          <div className="flex items-center gap-2 w-auto md:w-20">
+            {/* Mobile close */}
+            <button onClick={onClose} className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            {/* Desktop traffic lights */}
+            <div className="hidden md:flex gap-2.5">
+              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20">
+                <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
-              <button 
-                type="button"
-                className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
-                onClick={() => setMode('folder')}
-              >
-                📁 {t('desktop.addFolder')}
+              <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20">
+                <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
+              </button>
+              <button className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20">
+                <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
               </button>
             </div>
           </div>
-        )}
-
-        {isEditing && (
-          <h2 className="text-xl font-bold text-white mb-6 text-center">{t('desktop.editItem')}</h2>
-        )}
-
-        {/* Live Preview */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.15] backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-center overflow-hidden mb-2">
-            {customIcon ? (
-              isCustomIconUrl ? (
-                <img src={customIcon} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-              ) : (
-                <span className="text-3xl">{customIcon}</span>
-              )
-            ) : mode === 'folder' ? (
-              <span className="text-3xl">📁</span>
-            ) : faviconPreview ? (
-              <img src={faviconPreview} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-            ) : (
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
-            )}
+          
+          {/* Center title */}
+          <div className="flex-1 flex justify-center">
+            <span className="text-[13px] font-semibold text-white/70">
+              {isEditing ? t('desktop.editItem') : (mode === 'link' ? t('desktop.addLink') : t('desktop.addFolder'))}
+            </span>
           </div>
-          <span className="text-[12px] text-white/60 font-medium truncate max-w-[150px]">{title || (mode === 'folder' ? 'Folder' : 'Untitled')}</span>
+          
+          {/* Right spacer / mobile close */}
+          <div className="flex items-center w-auto md:w-20 justify-end">
+            <button onClick={onClose} className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <div className="hidden md:block w-20" />
+          </div>
         </div>
 
-        {/* Form Fields */}
-        <div className="space-y-4">
-          {/* URL (first for link mode) */}
-          {mode === 'link' && (
-            <div>
-              <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.url')}</label>
-              <input 
-                ref={urlInputRef}
-                type="url"
-                value={url}
-                onChange={e => { setUrl(e.target.value); setTitleAutoFilled(false); }}
-                placeholder={t('desktop.urlPlaceholder')}
-                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
-                autoFocus
-              />
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 no-scrollbar">
+          {/* Mode Toggle (only for new items) */}
+          {!isEditing && (
+            <div className="flex justify-center mb-6">
+              <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
+                <button 
+                  type="button"
+                  className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                  onClick={() => setMode('link')}
+                >
+                  🔗 {t('desktop.addLink')}
+                </button>
+                <button 
+                  type="button"
+                  className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                  onClick={() => setMode('folder')}
+                >
+                  📁 {t('desktop.addFolder')}
+                </button>
+              </div>
             </div>
           )}
 
-          {/* Name */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 ml-1">{t('desktop.name')}</label>
-              {isFetchingTitle && (
-                <span className="text-[11px] text-[#72d565]/70 font-medium animate-pulse">{t('desktop.fetchingTitle')}</span>
+          {/* Live Preview */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.15] backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-center overflow-hidden mb-2">
+              {customIcon ? (
+                isCustomIconUrl ? (
+                  <img src={customIcon} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <span className="text-3xl">{customIcon}</span>
+                )
+              ) : mode === 'folder' ? (
+                <span className="text-3xl">📁</span>
+              ) : faviconPreview ? (
+                <img src={faviconPreview} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              ) : (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
               )}
             </div>
-            <input 
-              type="text"
-              value={title}
-              onChange={e => { setTitle(e.target.value); setTitleAutoFilled(false); }}
-              placeholder={mode === 'folder' ? t('desktop.folderNamePlaceholder') : t('desktop.namePlaceholder')}
-              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
-              autoFocus={mode === 'folder'}
-            />
+            <span className="text-[12px] text-white/60 font-medium truncate max-w-[150px]">{title || (mode === 'folder' ? 'Folder' : 'Untitled')}</span>
           </div>
 
-          {/* Custom Icon */}
-          <div>
-            <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.icon')}</label>
-            <input 
-              type="text"
-              value={customIcon}
-              onChange={e => setCustomIcon(e.target.value)}
-              placeholder="🎯 / https://..."
-              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
-            />
+          {/* Form Fields */}
+          <div className="space-y-4">
+            {/* URL (first for link mode) */}
+            {mode === 'link' && (
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.url')}</label>
+                <input 
+                  ref={urlInputRef}
+                  type="url"
+                  value={url}
+                  onChange={e => { setUrl(e.target.value); setTitleAutoFilled(false); }}
+                  placeholder={t('desktop.urlPlaceholder')}
+                  className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {/* Name */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 ml-1">{t('desktop.name')}</label>
+                {isFetchingTitle && (
+                  <span className="text-[11px] text-[#72d565]/70 font-medium animate-pulse">{t('desktop.fetchingTitle')}</span>
+                )}
+              </div>
+              <input 
+                type="text"
+                value={title}
+                onChange={e => { setTitle(e.target.value); setTitleAutoFilled(false); }}
+                placeholder={mode === 'folder' ? t('desktop.folderNamePlaceholder') : t('desktop.namePlaceholder')}
+                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+                autoFocus={mode === 'folder'}
+              />
+            </div>
+
+            {/* Custom Icon */}
+            <div>
+              <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('desktop.icon')}</label>
+              <input 
+                type="text"
+                value={customIcon}
+                onChange={e => setCustomIcon(e.target.value)}
+                placeholder="🎯 / https://..."
+                className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
+              />
+            </div>
           </div>
+
+          {/* Save button */}
+          <button 
+            onClick={handleSave}
+            disabled={mode === 'link' && !url.trim()}
+            className="w-full mt-6 py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] border border-[#5bb84f] text-black font-bold transition-colors shadow-[0_0_15px_rgba(114,213,101,0.3)] hover:shadow-[0_0_20px_rgba(114,213,101,0.5)] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t('desktop.save')}
+          </button>
         </div>
-
-        {/* Save button */}
-        <button 
-          onClick={handleSave}
-          disabled={mode === 'link' && !url.trim()}
-          className="w-full mt-6 py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] border border-[#5bb84f] text-black font-bold transition-colors shadow-[0_0_15px_rgba(114,213,101,0.3)] hover:shadow-[0_0_20px_rgba(114,213,101,0.5)] disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {t('desktop.save')}
-        </button>
       </div>
     </div>
   );
