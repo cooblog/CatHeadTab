@@ -178,6 +178,8 @@ export const zh = {
   'explore.searchPlaceholder': '搜索网站...',
   'explore.searchResults': '搜索结果',
   'explore.addToDesktop': '添加到桌面',
+  'explore.addCategoryAsFolder': '一键添加为文件夹',
+  'explore.folderAdded': '已添加',
   'explore.alreadyOnDesktop': '桌面已存在',
   'explore.added': '已添加',
   'explore.noResults': '没有找到匹配的网站',

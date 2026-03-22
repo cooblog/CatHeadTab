@@ -178,6 +178,8 @@ export const en = {
   'explore.searchPlaceholder': 'Search sites...',
   'explore.searchResults': 'Search Results',
   'explore.addToDesktop': 'Add to desktop',
+  'explore.addCategoryAsFolder': 'Add all as folder',
+  'explore.folderAdded': 'Added',
   'explore.alreadyOnDesktop': 'Already on desktop',
   'explore.added': 'Added',
   'explore.noResults': 'No matching sites found',

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import client from '../api/client';
 import { useTranslation, TranslationKeys } from '../i18n/useTranslation';
 import { useConfigStore } from '../store/configStore';
-import { DesktopItem, useLayoutStore } from '../store/layoutStore';
+import { DesktopItem, DesktopItemType, useLayoutStore } from '../store/layoutStore';
 import { getSmartFaviconUrl } from '../utils/favicon';
 
 // --- Helper: normalise URL for comparison (mirrors layoutStore logic) ---
@@ -156,6 +156,28 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     };
     addDesktopItem(newItem);
     setAddedSites((prev) => new Set(prev).add(site.id));
+  }
+
+  // Add all sites in a category as a folder to the desktop
+  const [folderAdded, setFolderAdded] = useState<Set<string>>(new Set());
+
+  function handleAddCategoryAsFolder(category: PresetCategory) {
+    const categoryName = getCategoryDisplayName(category.name);
+    const children: DesktopItem[] = category.sites.map((site) => ({
+      id: `preset-${site.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type: 'link' as DesktopItemType,
+      title: site.title,
+      url: site.url,
+      icon: site.icon || undefined,
+    }));
+    const folder: DesktopItem = {
+      id: `folder-explore-${category.id}-${Date.now()}`,
+      type: 'folder',
+      title: `${category.icon} ${categoryName}`,
+      children,
+    };
+    addDesktopItem(folder);
+    setFolderAdded((prev) => new Set(prev).add(category.id));
   }
 
   function handleCategoryClick(categoryID: string) {
@@ -407,9 +429,35 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                 <h1 className="text-base md:text-xl font-bold text-white tracking-tight flex items-center gap-3">
                   {searchResults ? headerTitle : activeCategory ? `${activeCategory.icon} ${headerTitle}` : t('explore.title')}
                 </h1>
-                <span className="text-white/40 text-[12px] md:text-[13px] font-medium bg-white/5 px-2.5 md:px-3 py-0.5 md:py-1 rounded-full">
-                  {rightPaneCount} {t('explore.sites')}
-                </span>
+                <div className="flex items-center gap-2">
+                  {activeCategory && !searchResults && (
+                    <button
+                      onClick={() => handleAddCategoryAsFolder(activeCategory)}
+                      disabled={folderAdded.has(activeCategory.id)}
+                      className={`flex items-center gap-1.5 text-[12px] md:text-[13px] font-medium px-2.5 md:px-3 py-0.5 md:py-1 rounded-full transition-all ${
+                        folderAdded.has(activeCategory.id)
+                          ? 'bg-green-500/15 text-green-400 border border-green-500/25 cursor-default'
+                          : 'bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/40 cursor-pointer'
+                      }`}
+                      title={t('explore.addCategoryAsFolder')}
+                    >
+                      {folderAdded.has(activeCategory.id) ? (
+                        <>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                          {t('explore.folderAdded')}
+                        </>
+                      ) : (
+                        <>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                          {t('explore.addCategoryAsFolder')}
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <span className="text-white/40 text-[12px] md:text-[13px] font-medium bg-white/5 px-2.5 md:px-3 py-0.5 md:py-1 rounded-full">
+                    {rightPaneCount} {t('explore.sites')}
+                  </span>
+                </div>
               </div>
 
               {/* Content */}
