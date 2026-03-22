@@ -194,8 +194,9 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
 
   const rightPaneCount = searchResults ? searchResults.length : displaySites.length;
 
-  // Reusable search input
-  const SearchInput = ({ className = '' }: { className?: string }) => (
+  // Reusable search input — use as renderSearchInput() not <SearchInput/>
+  // to avoid React remounting the input on every re-render
+  const renderSearchInput = (className = '') => (
     <div className={`relative ${className}`}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
       <input
@@ -383,7 +384,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
               <div className="absolute inset-0 bg-black/40" />
               <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-[#1c1c1e]/90 backdrop-blur-[64px] border-r border-white/10 flex flex-col z-40 animate-slideIn" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 pb-2">
-                  <SearchInput />
+                  {renderSearchInput()}
                 </div>
                 <div className="flex-1 overflow-y-auto no-scrollbar pl-4 pr-3 pb-8 pt-3 space-y-1">
                   <div className="px-3 text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1.5">
@@ -402,7 +403,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
           {/* Desktop Sidebar — same as BookmarkBrowser sidebar */}
           <div className="window-sidebar hidden md:flex w-[260px] border-r border-white/10 flex-col shrink-0 relative z-10">
             <div className="p-5 pb-2">
-              <SearchInput />
+              {renderSearchInput()}
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar pl-5 pr-3 pb-8 pt-3 space-y-1">
               <div className="px-3 text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1.5">
@@ -420,7 +421,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
           <div className="window-content flex-1 overflow-y-auto">
             {/* Mobile: inline search */}
             <div className="md:hidden p-3 pb-0">
-              <SearchInput />
+              {renderSearchInput()}
             </div>
 
             <div className="p-4 md:p-6">

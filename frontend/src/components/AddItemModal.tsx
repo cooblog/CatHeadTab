@@ -157,13 +157,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
       >
         {/* Window Header */}
         <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
-          {/* Left: Mac traffic lights on desktop, close on mobile */}
+          {/* Left: Mac traffic lights on desktop */}
           <div className="flex items-center gap-2 w-auto md:w-20">
-            {/* Mobile close */}
-            <button onClick={onClose} className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-            {/* Desktop traffic lights */}
             <div className="hidden md:flex gap-2.5">
               <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20">
                 <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -184,11 +179,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
             </span>
           </div>
           
-          {/* Right spacer / mobile close */}
+          {/* Right spacer */}
           <div className="flex items-center w-auto md:w-20 justify-end">
-            <button onClick={onClose} className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
             <div className="hidden md:block w-20" />
           </div>
         </div>

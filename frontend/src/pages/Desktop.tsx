@@ -642,8 +642,8 @@ export const Desktop: React.FC = () => {
     <div className="w-full h-full flex flex-col overflow-hidden relative">
       
       {/* 1. Search Bar */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-14 md:pt-14 px-6">
-        <div className="w-full max-w-[580px]">
+      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-14 md:pt-14 px-6 pointer-events-none">
+        <div className="w-full max-w-[580px] pointer-events-auto">
           <form onSubmit={handleSearchSubmit} className="relative group flex items-center">
             {isDropdownOpen && (
               <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)}></div>
@@ -695,7 +695,22 @@ export const Desktop: React.FC = () => {
       </div>
 
       {/* 2. Pages Area */}
-      <div className="flex-1 overflow-hidden pt-48 md:pt-56 pb-28 md:pb-32">
+      <div 
+        className="flex-1 overflow-hidden pt-48 md:pt-56 pb-28 md:pb-32"
+        onDoubleClick={(e) => {
+          // Only trigger on blank area (the container itself or the page wrapper)
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
+          setIsExploreOpen(true);
+        }}
+        onContextMenu={(e) => {
+          // Right-click on blank area (not on an icon)
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
+          e.preventDefault();
+          setBlankContextMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
         {isLocalSearchActive ? (
           <div className="h-full overflow-y-auto no-scrollbar px-6 md:px-12 pt-4">
             <div className="grid grid-cols-4 md:grid-cols-8 gap-y-6 gap-x-2 md:gap-x-4 justify-items-center content-start">
@@ -720,19 +735,6 @@ export const Desktop: React.FC = () => {
             ref={pagesContainerRef}
             className="h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
             onScroll={handlePageScroll}
-            onDoubleClick={(e) => {
-              // Only trigger on blank area (the container itself or the page wrapper)
-              const target = e.target as HTMLElement;
-              if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
-              setIsExploreOpen(true);
-            }}
-            onContextMenu={(e) => {
-              // Right-click on blank area (not on an icon)
-              const target = e.target as HTMLElement;
-              if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
-              e.preventDefault();
-              setBlankContextMenu({ x: e.clientX, y: e.clientY });
-            }}
           >
             {layout.pages.map((page, pageIdx) => (
               <div 
@@ -776,7 +778,7 @@ export const Desktop: React.FC = () => {
 
       {/* 4. Dock Bar */}
       <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30">
-        <div className="flex items-center gap-3 md:gap-4 px-3.5 md:px-5 py-2.5 md:py-3 bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
+        <div className="flex items-center gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3 bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
           <SortableContext items={dockItemIds} strategy={rectSortingStrategy}>
             {layout.dock.map(item => (
               <SortableDesktopIcon 
@@ -820,11 +822,9 @@ export const Desktop: React.FC = () => {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
           onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}
         >
-          <div 
-            className="w-full max-w-5xl max-h-[85vh] bg-white/[0.12] backdrop-blur-3xl border border-white/20 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden transform animate-scaleIn pointer-events-auto"
-            onClick={(e) => e.stopPropagation()} 
-          >
-            <div className="w-full pt-8 pb-4 px-8 shrink-0 flex items-center justify-center">
+          <div className="w-full max-w-5xl flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Folder name - outside the rounded container, at top-left */}
+            <div className="pl-6 sm:pl-10 pb-5 shrink-0">
               {isEditingFolderName ? (
                 <input
                   ref={folderNameInputRef}
@@ -845,7 +845,7 @@ export const Desktop: React.FC = () => {
                       setIsEditingFolderName(false);
                     }
                   }}
-                  className="text-3xl font-bold text-white tracking-wide text-center bg-transparent border-b-2 border-white/40 outline-none w-full max-w-[400px] pb-1 placeholder-white/30"
+                  className="text-2xl sm:text-3xl font-bold text-white tracking-wide bg-transparent border-b-2 border-white/40 outline-none max-w-[400px] pb-1 placeholder-white/30"
                   placeholder={t('desktop.folderNamePlaceholder')}
                   autoFocus
                 />
@@ -859,16 +859,20 @@ export const Desktop: React.FC = () => {
                   }}
                   title={t('desktop.folderRenameHint')}
                 >
-                  <h2 className="text-3xl font-bold text-white tracking-wide drop-shadow-lg">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-wide drop-shadow-lg">
                     {openedFolder.title}
                   </h2>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30 group-hover:text-white/60 transition-colors shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/30 group-hover:text-white/60 transition-colors shrink-0">
                     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
                   </svg>
                 </button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto w-full px-6 sm:px-8 md:px-10 lg:px-14 pb-12 pt-4 no-scrollbar">
+            {/* Rounded container for folder content */}
+            <div 
+              className="w-full max-h-[75vh] bg-white/[0.12] backdrop-blur-3xl border border-white/20 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden transform animate-scaleIn"
+            >
+            <div className="flex-1 overflow-y-auto w-full px-6 sm:px-8 md:px-10 lg:px-14 py-8 sm:py-10 no-scrollbar">
               <SortableContext items={folderItemIds} strategy={rectSortingStrategy}>
                 <div 
                   className="grid gap-y-6 gap-x-4 sm:gap-x-6 md:gap-y-10 md:gap-x-10 lg:gap-y-12 lg:gap-x-16 justify-items-center content-start"
@@ -895,6 +899,7 @@ export const Desktop: React.FC = () => {
                   )}
                 </div>
               </SortableContext>
+            </div>
             </div>
           </div>
         </div>
