@@ -60,8 +60,28 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [wpLoading, setWpLoading] = useState(false);
   const [wpError, setWpError] = useState('');
   const [wpPreviewItem, setWpPreviewItem] = useState<WallpaperItem | null>(null);
+  const [wpSortOpen, setWpSortOpen] = useState(false);
+  // Mobile infinite scroll state
+  const [wpMobileItems, setWpMobileItems] = useState<WallpaperItem[]>([]);
+  const [wpLoadingMore, setWpLoadingMore] = useState(false);
+  const [wpHasMore, setWpHasMore] = useState(true);
+  const wpSortRef = useRef<HTMLDivElement>(null);
   const wpScrollRef = useRef<HTMLDivElement>(null);
+  const wpSentinelRef = useRef<HTMLDivElement>(null);
   const wpInitialLoadDone = useRef(false);
+
+  // Close sorting dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wpSortRef.current && !wpSortRef.current.contains(e.target as Node)) {
+        setWpSortOpen(false);
+      }
+    };
+    if (wpSortOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [wpSortOpen]);
 
   // Detect mobile viewport for limiting wallpaper grid count
   const [isMobileWp, setIsMobileWp] = useState(() => window.innerWidth < 640);
@@ -71,13 +91,17 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>) => {
+  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, append = false) => {
     const { serverUrl: srvUrl } = useConfigStore.getState();
     if (!srvUrl) {
       setWpError(t('settings.wpNeedServer'));
       return;
     }
-    setWpLoading(true);
+    if (append) {
+      setWpLoadingMore(true);
+    } else {
+      setWpLoading(true);
+    }
     setWpError('');
     try {
       const params = new URLSearchParams();
@@ -97,14 +121,23 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
       setWpResult(resp.data);
       setWpPage(resp.data.currentPage);
-      if (wpScrollRef.current) {
-        wpScrollRef.current.scrollTop = 0;
+      setWpHasMore(resp.data.currentPage < resp.data.lastPage);
+      if (append) {
+        // Mobile infinite scroll: append new items
+        setWpMobileItems(prev => [...prev, ...resp.data.wallpapers]);
+      } else {
+        // Desktop pagination or fresh search: reset mobile items too
+        setWpMobileItems(resp.data.wallpapers);
+        if (wpScrollRef.current) {
+          wpScrollRef.current.scrollTop = 0;
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setWpError(msg);
     } finally {
       setWpLoading(false);
+      setWpLoadingMore(false);
     }
   }, [t]);
 
@@ -117,8 +150,33 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   }, [activeTab, fetchWallpapers, wpQuery, wpSorting, wpCategories]);
 
   const handleWpSearch = () => {
+    setWpMobileItems([]);
+    setWpHasMore(true);
     fetchWallpapers(1, wpQuery, wpSorting, wpCategories);
   };
+
+  const handleWpLoadMore = useCallback(() => {
+    if (wpLoadingMore || wpLoading || !wpHasMore || !wpResult) return;
+    const nextPage = wpPage + 1;
+    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, true);
+  }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, fetchWallpapers]);
+
+  // Mobile infinite scroll: observe sentinel element
+  useEffect(() => {
+    if (!isMobileWp) return;
+    const sentinel = wpSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleWpLoadMore();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isMobileWp, handleWpLoadMore]);
 
   const handleWpPageChange = (newPage: number) => {
     if (newPage < 1 || (wpResult && newPage > wpResult.lastPage)) return;
@@ -316,7 +374,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           {/* Content Area */}
           <div className="flex-1 flex flex-col p-3 sm:p-6 sm:pb-3 md:px-8 md:pt-8 md:pb-3 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
 
-            <div className="flex-1 min-h-0 overflow-y-auto pr-2 md:pr-4 no-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 no-scrollbar">
               {activeTab === 'appearance' && (
                 <div className="space-y-8 fade-in">
                   <div>
@@ -430,9 +488,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               )}
 
               {activeTab === 'online-wallpaper' && (
-                <div className="space-y-4 fade-in flex flex-col min-h-full" ref={wpScrollRef}>
+                <div className="space-y-5 sm:space-y-4 fade-in flex flex-col min-h-full" ref={wpScrollRef}>
                   <div>
-                    <h3 className="text-lg font-bold text-white mb-1">{t('settings.onlineWallpaper')}</h3>
+                    <h3 className="text-lg font-bold text-white mb-1.5 sm:mb-1">{t('settings.onlineWallpaper')}</h3>
                     <p className="text-[12px] text-white/50">{t('settings.wpDesc')}</p>
                   </div>
 
@@ -443,42 +501,77 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                       value={wpQuery}
                       onChange={e => setWpQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleWpSearch()}
-                      className="flex-1 bg-black/40 border border-white/10 hover:border-white/30 rounded-lg px-3 py-1.5 text-[13px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all"
+                      className="flex-1 bg-black/40 border border-white/10 hover:border-white/30 rounded-lg px-3 py-2 sm:py-1.5 text-[13px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all"
                       placeholder={t('settings.wpSearchPlaceholder')}
                     />
                     <button
                       type="button"
                       onClick={handleWpSearch}
                       disabled={wpLoading}
-                      className="px-4 py-1.5 rounded-lg bg-[#72d565] hover:bg-[#5bb84f] text-black font-semibold text-[13px] transition-colors disabled:opacity-50"
+                      className="px-4 py-2 sm:py-1.5 rounded-lg bg-[#72d565] hover:bg-[#5bb84f] text-black font-semibold text-[13px] transition-colors disabled:opacity-50"
                     >
                       {wpLoading ? '...' : t('settings.wpSearch')}
                     </button>
                   </div>
 
                   {/* Filters row */}
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {/* Sorting */}
-                    <select
-                      value={wpSorting}
-                      onChange={e => setWpSorting(e.target.value as WallpaperSorting)}
-                      className="bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-[12px] text-white/80 focus:outline-none appearance-none cursor-pointer"
-                    >
-                      <option value="toplist">{t('settings.wpSortToplist')}</option>
-                      <option value="date_added">{t('settings.wpSortLatest')}</option>
-                      <option value="random">{t('settings.wpSortRandom')}</option>
-                      <option value="views">{t('settings.wpSortViews')}</option>
-                      <option value="favorites">{t('settings.wpSortFavorites')}</option>
-                    </select>
+                  <div className="flex flex-wrap gap-2.5 sm:gap-2 items-center">
+                    {/* Sorting - custom dropdown */}
+                    <div className="relative" ref={wpSortRef}>
+                      <button
+                        type="button"
+                        onClick={() => setWpSortOpen(v => !v)}
+                        className="flex items-center gap-1.5 bg-black/40 border border-white/10 hover:border-white/25 rounded-lg px-3 py-1.5 sm:px-2.5 sm:py-1 text-[12px] text-white/80 cursor-pointer transition-colors"
+                      >
+                        <span>
+                          {({
+                            toplist: t('settings.wpSortToplist'),
+                            date_added: t('settings.wpSortLatest'),
+                            random: t('settings.wpSortRandom'),
+                            views: t('settings.wpSortViews'),
+                            favorites: t('settings.wpSortFavorites'),
+                            relevance: t('settings.wpSortToplist'),
+                          } as Record<WallpaperSorting, string>)[wpSorting]}
+                        </span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${wpSortOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+                      </button>
+                      {wpSortOpen && (
+                        <div className="absolute top-full left-0 mt-1 z-50 min-w-[120px] bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl shadow-black/40 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                          {([
+                            { value: 'toplist', label: t('settings.wpSortToplist') },
+                            { value: 'date_added', label: t('settings.wpSortLatest') },
+                            { value: 'random', label: t('settings.wpSortRandom') },
+                            { value: 'views', label: t('settings.wpSortViews') },
+                            { value: 'favorites', label: t('settings.wpSortFavorites') },
+                          ] as { value: WallpaperSorting; label: string }[]).map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => { setWpSorting(opt.value); setWpSortOpen(false); }}
+                              className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors ${
+                                wpSorting === opt.value
+                                  ? 'text-[#72d565] bg-[#72d565]/10'
+                                  : 'text-white/70 hover:text-white hover:bg-white/8'
+                              }`}
+                            >
+                              {wpSorting === opt.value && (
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="inline mr-1.5 -mt-0.5"><path d="M20 6 9 17l-5-5"/></svg>
+                              )}
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     {/* Category toggles */}
-                    <div className="flex gap-1 ml-auto">
+                    <div className="flex gap-1.5 sm:gap-1 ml-auto">
                       {(['general', 'anime', 'people'] as WallpaperCategoryFilter[]).map(cat => (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => toggleWpCategory(cat)}
-                          className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${wpCategories.has(cat) ? 'bg-white/20 text-white' : 'bg-white/5 text-white/40 hover:text-white/60'}`}
+                          className={`px-3 py-1.5 sm:px-2.5 sm:py-1 rounded-md text-[12px] sm:text-[11px] font-medium transition-all ${wpCategories.has(cat) ? 'bg-white/20 text-white' : 'bg-white/5 text-white/40 hover:text-white/60'}`}
                         >
                           {t(`settings.wpCat_${cat}`)}
                         </button>
@@ -505,8 +598,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
                   {/* Wallpaper grid */}
                   {!wpLoading && wpResult && wpResult.wallpapers.length > 0 && (
+                    <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3.5 content-start">
-                      {(isMobileWp ? wpResult.wallpapers.slice(0, 8) : wpResult.wallpapers).map(item => (
+                      {(isMobileWp ? wpMobileItems : wpResult.wallpapers).map(item => (
                         <div
                           key={item.id}
                           className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
@@ -532,6 +626,22 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         </div>
                       ))}
                     </div>
+
+                    {/* Mobile infinite scroll sentinel & loading indicator */}
+                    {isMobileWp && (
+                      <div ref={wpSentinelRef} className="flex flex-col items-center py-4 gap-2">
+                        {wpLoadingMore && (
+                          <svg className="animate-spin w-5 h-5 text-white/40" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        )}
+                        {!wpHasMore && wpMobileItems.length > 0 && (
+                          <span className="text-[11px] text-white/30">{t('settings.wpNoMore')}</span>
+                        )}
+                      </div>
+                    )}
+                    </>
                   )}
 
                   {/* Empty state */}
@@ -541,8 +651,8 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                     </div>
                   )}
 
-                  {/* Pagination */}
-                  {wpResult && wpResult.lastPage > 1 && (
+                  {/* Pagination - desktop only (mobile uses infinite scroll) */}
+                  {!isMobileWp && wpResult && wpResult.lastPage > 1 && (
                     <div className="flex items-center justify-center gap-3 !mt-0 flex-1">
                       <button
                         type="button"
