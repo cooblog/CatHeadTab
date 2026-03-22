@@ -3,39 +3,33 @@ import { useConfigStore } from '../store/configStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { saveImageBlob, loadImageBlob, compressImageToWebP, getRawBlob } from '../utils/imageStore';
 import client from '../api/client';
+import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter } from '../api/wallhavenTypes';
 
 type Tab = 'appearance' | 'language' | 'system' | 'online-wallpaper';
 
-interface WallpaperItem {
-  id: string;
-  source: string;
-  url: string;
-  thumbSmall: string;
-  thumbLarge: string;
-  fullUrl: string;
-  width: number;
-  height: number;
-  fileSize: number;
-  fileType: string;
-  purity: string;
-  category: string;
-  colors?: string[];
-  views: number;
-  favorites: number;
-  createdAt?: string;
-}
+/** Border color classes matching Wallhaven's purity indicators. */
+const purityBorderClass = (purity: string): string => {
+  switch (purity) {
+    case 'sketchy':
+      return 'border-yellow-500/70 hover:border-yellow-400';
+    case 'nsfw':
+      return 'border-red-500/70 hover:border-red-400';
+    default:
+      return 'border-white/10 hover:border-[#72d565]/50';
+  }
+};
 
-interface WallpaperSearchResult {
-  wallpapers: WallpaperItem[];
-  currentPage: number;
-  lastPage: number;
-  perPage: number;
-  total: number;
-  seed?: string;
-}
-
-type WallpaperSorting = 'toplist' | 'date_added' | 'random' | 'views' | 'favorites' | 'relevance';
-type WallpaperCategoryFilter = 'general' | 'anime' | 'people';
+/** Purity badge for the preview modal. */
+const purityBadge = (purity: string): { label: string; color: string } | null => {
+  switch (purity) {
+    case 'sketchy':
+      return { label: 'Sketchy', color: 'bg-yellow-500/80 text-black' };
+    case 'nsfw':
+      return { label: 'NSFW', color: 'bg-red-500/80 text-white' };
+    default:
+      return null;
+  }
+};
 
 const IDB_BG_KEY = 'bg-custom';
 // Max original file size allowed before compression (20 MB)
@@ -46,6 +40,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const { t } = useTranslation();
   
   const [activeTab, setActiveTab] = useState<Tab>('appearance');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [url, setUrl] = useState(serverUrl);
   const [bg, setBg] = useState(backgroundImage);
   const [bgPreview, setBgPreview] = useState(''); // Object URL for local file preview
@@ -83,13 +78,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
   }, [wpSortOpen]);
 
-  // Detect mobile viewport for limiting wallpaper grid count
-  const [isMobileWp, setIsMobileWp] = useState(() => window.innerWidth < 640);
-  useEffect(() => {
-    const handleResize = () => setIsMobileWp(window.innerWidth < 640);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+
 
   const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, append = false) => {
     const { serverUrl: srvUrl } = useConfigStore.getState();
@@ -103,12 +92,12 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       setWpLoading(true);
     }
     setWpError('');
+
     try {
       const params = new URLSearchParams();
       params.set('provider', 'wallhaven');
       params.set('page', String(page));
       params.set('sorting', sorting);
-      params.set('purity', 'sfw');
       if (sorting === 'toplist') {
         params.set('topRange', '1M');
       }
@@ -119,15 +108,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         params.set('categories', Array.from(cats).join(','));
       }
       const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
-      setWpResult(resp.data);
-      setWpPage(resp.data.currentPage);
-      setWpHasMore(resp.data.currentPage < resp.data.lastPage);
+      const data = resp.data;
+
+      setWpResult(data);
+      setWpPage(data.currentPage);
+      setWpHasMore(data.currentPage < data.lastPage);
       if (append) {
-        // Mobile infinite scroll: append new items
-        setWpMobileItems(prev => [...prev, ...resp.data.wallpapers]);
+        setWpMobileItems(prev => [...prev, ...data.wallpapers]);
       } else {
-        // Desktop pagination or fresh search: reset mobile items too
-        setWpMobileItems(resp.data.wallpapers);
+        setWpMobileItems(data.wallpapers);
         if (wpScrollRef.current) {
           wpScrollRef.current.scrollTop = 0;
         }
@@ -161,9 +150,8 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, true);
   }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, fetchWallpapers]);
 
-  // Mobile infinite scroll: observe sentinel element
+  // Infinite scroll: observe sentinel element
   useEffect(() => {
-    if (!isMobileWp) return;
     const sentinel = wpSentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
@@ -176,12 +164,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [isMobileWp, handleWpLoadMore]);
-
-  const handleWpPageChange = (newPage: number) => {
-    if (newPage < 1 || (wpResult && newPage > wpResult.lastPage)) return;
-    fetchWallpapers(newPage, wpQuery, wpSorting, wpCategories);
-  };
+  }, [handleWpLoadMore]);
 
   const handleSelectWallpaper = async (item: WallpaperItem) => {
     const wallpaperUrl = item.fullUrl;
@@ -291,7 +274,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   }, [setServerUrl]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-0 sm:p-6 md:p-12">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`}>
       {/* Dimmed Background Overlay */}
       <div 
         className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"
@@ -300,7 +283,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
       {/* App Window container */}
       <div 
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 w-full h-full sm:w-auto sm:h-auto ${activeTab === 'online-wallpaper' ? 'sm:w-full sm:max-w-5xl sm:h-[85vh] md:h-[80vh]' : 'sm:w-full sm:max-w-3xl sm:h-[85vh] md:h-[500px]'}`}
+        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : `w-full h-full sm:w-auto sm:h-auto ${activeTab === 'online-wallpaper' ? 'sm:w-full sm:max-w-5xl sm:h-[85vh] md:h-[80vh]' : 'sm:w-full sm:max-w-3xl sm:h-[85vh] md:h-[500px]'}`}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
@@ -315,8 +298,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20">
                 <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
               </button>
-              <button className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20">
-                <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+              <button
+                onClick={() => setIsFullscreen(f => !f)}
+                className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20"
+              >
+                {isFullscreen ? (
+                  <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>
+                ) : (
+                  <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                )}
               </button>
             </div>
           </div>
@@ -372,9 +362,9 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 flex flex-col p-3 sm:p-6 sm:pb-3 md:px-8 md:pt-8 md:pb-3 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
+          <div className="flex-1 flex flex-col p-3 sm:p-6 sm:pb-2 md:px-8 md:pt-8 md:pb-2 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
 
-            <div className="flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 no-scrollbar">
+            <div className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'online-wallpaper' ? 'wp-scrollbar' : 'no-scrollbar'}`}>
               {activeTab === 'appearance' && (
                 <div className="space-y-8 fade-in">
                   <div>
@@ -488,7 +478,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               )}
 
               {activeTab === 'online-wallpaper' && (
-                <div className="space-y-5 sm:space-y-4 fade-in flex flex-col min-h-full" ref={wpScrollRef}>
+                <div className="space-y-3 sm:space-y-3 fade-in flex flex-col" ref={wpScrollRef}>
                   <div>
                     <h3 className="text-lg font-bold text-white mb-1.5 sm:mb-1">{t('settings.onlineWallpaper')}</h3>
                     <p className="text-[12px] text-white/50">{t('settings.wpDesc')}</p>
@@ -599,20 +589,26 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   {/* Wallpaper grid */}
                   {!wpLoading && wpResult && wpResult.wallpapers.length > 0 && (
                     <>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3.5 content-start">
-                      {(isMobileWp ? wpMobileItems : wpResult.wallpapers).map(item => (
+                    <div className={`grid gap-2.5 sm:gap-3.5 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
+                      {wpMobileItems.map(item => (
                         <div
                           key={item.id}
-                          className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
+                          className={`relative group cursor-pointer rounded-lg overflow-hidden border ${purityBorderClass(item.purity)} transition-all`}
                           onClick={() => setWpPreviewItem(item)}
                         >
-                          <div className="w-full pb-[68%] sm:pb-[62%]" />
+                          <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[68%] sm:pb-[62%]'} />
                           <img
                             src={item.thumbSmall}
                             alt={`Wallpaper ${item.id}`}
                             className="absolute inset-0 w-full h-full object-cover"
                             loading="lazy"
                           />
+                          {/* Purity badge (sketchy/nsfw only) */}
+                          {item.purity !== 'sfw' && (
+                            <div className={`absolute top-0.5 left-0.5 text-[8px] font-bold px-1 rounded ${item.purity === 'nsfw' ? 'bg-red-500/80 text-white' : 'bg-yellow-500/80 text-black'}`}>
+                              {item.purity === 'nsfw' ? 'NSFW' : 'Sketchy'}
+                            </div>
+                          )}
                           {/* Hover overlay */}
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                             <div className="p-2 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -627,20 +623,18 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                       ))}
                     </div>
 
-                    {/* Mobile infinite scroll sentinel & loading indicator */}
-                    {isMobileWp && (
-                      <div ref={wpSentinelRef} className="flex flex-col items-center py-4 gap-2">
-                        {wpLoadingMore && (
-                          <svg className="animate-spin w-5 h-5 text-white/40" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                        )}
-                        {!wpHasMore && wpMobileItems.length > 0 && (
-                          <span className="text-[11px] text-white/30">{t('settings.wpNoMore')}</span>
-                        )}
-                      </div>
-                    )}
+                    {/* Infinite scroll sentinel & loading indicator */}
+                    <div ref={wpSentinelRef} className="flex flex-col items-center py-3 gap-2">
+                      {wpLoadingMore && (
+                        <svg className="animate-spin w-5 h-5 text-white/40" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      )}
+                      {!wpHasMore && wpMobileItems.length > 0 && (
+                        <span className="text-[11px] text-white/30">{t('settings.wpNoMore')}</span>
+                      )}
+                    </div>
                     </>
                   )}
 
@@ -648,31 +642,6 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   {!wpLoading && wpResult && wpResult.wallpapers.length === 0 && (
                     <div className="text-center text-white/40 py-8 text-[13px]">
                       {t('settings.wpNoResults')}
-                    </div>
-                  )}
-
-                  {/* Pagination - desktop only (mobile uses infinite scroll) */}
-                  {!isMobileWp && wpResult && wpResult.lastPage > 1 && (
-                    <div className="flex items-center justify-center gap-3 !mt-0 flex-1">
-                      <button
-                        type="button"
-                        onClick={() => handleWpPageChange(wpPage - 1)}
-                        disabled={wpPage <= 1 || wpLoading}
-                        className="px-3 py-1 rounded-lg bg-white/10 text-white/70 text-[12px] hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        ‹ {t('settings.wpPrev')}
-                      </button>
-                      <span className="text-[12px] text-white/50">
-                        {wpPage} / {wpResult.lastPage}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleWpPageChange(wpPage + 1)}
-                        disabled={wpPage >= wpResult.lastPage || wpLoading}
-                        className="px-3 py-1 rounded-lg bg-white/10 text-white/70 text-[12px] hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {t('settings.wpNext')} ›
-                      </button>
                     </div>
                   )}
 
@@ -684,8 +653,13 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                     >
                       {/* Top bar with info & close */}
                       <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0" onClick={e => e.stopPropagation()}>
-                        <div className="text-[11px] sm:text-[13px] text-white/50 truncate mr-3">
-                          {wpPreviewItem.width}×{wpPreviewItem.height} · {wpPreviewItem.fileType} · ❤ {wpPreviewItem.favorites} · 👁 {wpPreviewItem.views}
+                        <div className="flex items-center gap-2 text-[11px] sm:text-[13px] text-white/50 truncate mr-3">
+                          {purityBadge(wpPreviewItem.purity) && (
+                            <span className={`text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded ${purityBadge(wpPreviewItem.purity)!.color}`}>
+                              {purityBadge(wpPreviewItem.purity)!.label}
+                            </span>
+                          )}
+                          <span>{wpPreviewItem.width}×{wpPreviewItem.height} · {wpPreviewItem.fileType} · ❤ {wpPreviewItem.favorites} · 👁 {wpPreviewItem.views}</span>
                         </div>
                         <button
                           type="button"

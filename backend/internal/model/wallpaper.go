@@ -8,6 +8,8 @@ const (
 	PuritySFW WallpaperPurity = "sfw"
 	// PuritySketchy indicates sketchy content (borderline).
 	PuritySketchy WallpaperPurity = "sketchy"
+	// PurityNSFW indicates not-safe-for-work content.
+	PurityNSFW WallpaperPurity = "nsfw"
 )
 
 // WallpaperCategory represents the category of a wallpaper.
@@ -43,10 +45,11 @@ type Wallpaper struct {
 }
 
 // WallpaperSearchParams holds the parameters for searching wallpapers.
+// Note: Purity is not included here — it is controlled entirely by the
+// server-side WALLHAVEN_PURITY environment variable.
 type WallpaperSearchParams struct {
 	Query      string              `json:"query"`
 	Categories []WallpaperCategory `json:"categories,omitempty"`
-	Purity     []WallpaperPurity   `json:"purity,omitempty"`
 	Sorting    string              `json:"sorting"`
 	Order      string              `json:"order"`
 	TopRange   string              `json:"topRange,omitempty"` // Required when sorting=toplist: 1d,3d,1w,1M,3M,6M,1y

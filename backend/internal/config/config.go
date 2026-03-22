@@ -31,6 +31,10 @@ type Config struct {
 
 	// Wallpaper source: Wallhaven
 	WallhavenAPIKey string
+	// WallhavenPurity controls the allowed purity levels for wallhaven results.
+	// Comma-separated values: "sfw", "sketchy". Default: "sfw".
+	// "sketchy" requires a valid API key to work on wallhaven.cc.
+	WallhavenPurity string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -56,6 +60,7 @@ func Load() *Config {
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
 
 		WallhavenAPIKey: getEnv("WALLHAVEN_API_KEY", ""),
+		WallhavenPurity: getEnv("WALLHAVEN_PURITY", "sfw"),
 	}
 }
 

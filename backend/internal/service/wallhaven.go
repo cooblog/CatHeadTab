@@ -21,17 +21,46 @@ const (
 
 // WallhavenProvider implements WallpaperProvider for wallhaven.cc.
 type WallhavenProvider struct {
-	apiKey string
-	client *http.Client
+	apiKey        string
+	allowedPurity map[model.WallpaperPurity]bool // purity levels allowed by server config
+	client        *http.Client
 }
 
 // NewWallhavenProvider creates a new WallhavenProvider.
-// If apiKey is empty, the provider still works but only SFW content is accessible.
-func NewWallhavenProvider(apiKey string) *WallhavenProvider {
+// apiKey may be empty — the provider still works but only SFW content is accessible.
+// purityCSV is a comma-separated list of allowed purity levels (e.g. "sfw,sketchy").
+// If empty, defaults to SFW only.
+func NewWallhavenProvider(apiKey, purityCSV string) *WallhavenProvider {
+	allowed := parseAllowedPurity(purityCSV)
 	return &WallhavenProvider{
-		apiKey: apiKey,
-		client: &http.Client{Timeout: wallhavenTimeout},
+		apiKey:        apiKey,
+		allowedPurity: allowed,
+		client:        &http.Client{Timeout: wallhavenTimeout},
 	}
+}
+
+// parseAllowedPurity converts a comma-separated purity config into a set.
+// Recognised values: "sfw", "sketchy", "nsfw". Default (empty): SFW only.
+func parseAllowedPurity(csv string) map[model.WallpaperPurity]bool {
+	m := map[model.WallpaperPurity]bool{model.PuritySFW: true} // SFW is always allowed
+	for _, s := range strings.Split(csv, ",") {
+		switch strings.TrimSpace(strings.ToLower(s)) {
+		case "sketchy":
+			m[model.PuritySketchy] = true
+		case "nsfw":
+			m[model.PurityNSFW] = true
+		}
+	}
+	return m
+}
+
+// AllowedPurity returns the set of purity levels configured on the server.
+func (w *WallhavenProvider) AllowedPurity() []string {
+	out := make([]string, 0, len(w.allowedPurity))
+	for p := range w.allowedPurity {
+		out = append(out, string(p))
+	}
+	return out
 }
 
 // Name returns the provider identifier.
@@ -45,9 +74,14 @@ func (w *WallhavenProvider) Available() bool {
 	return true
 }
 
+// HasAPIKey reports whether an API key is configured for Wallhaven.
+func (w *WallhavenProvider) HasAPIKey() bool {
+	return w.apiKey != ""
+}
+
 // Search queries wallhaven.cc with the given parameters.
-// NSFW content is never requested regardless of parameters — the purity bitmask
-// is forced to exclude NSFW (bit position 001 is always 0).
+// Purity is controlled entirely by the server-side WALLHAVEN_PURITY environment
+// variable — the frontend does not pass a purity parameter.
 func (w *WallhavenProvider) Search(params model.WallpaperSearchParams) (*model.WallpaperSearchResult, error) {
 	u, err := url.Parse(wallhavenBaseURL + "/search")
 	if err != nil {
@@ -69,8 +103,8 @@ func (w *WallhavenProvider) Search(params model.WallpaperSearchParams) (*model.W
 	// Categories bitmask: General=1xx, Anime=x1x, People=xx1
 	q.Set("categories", buildCategoryBitmask(params.Categories))
 
-	// Purity bitmask — NEVER allow NSFW (bit 001)
-	q.Set("purity", buildPurityBitmask(params.Purity))
+	// Purity bitmask — fully controlled by server environment variable
+	q.Set("purity", w.buildPurityBitmask())
 
 	// Sorting
 	sorting := params.Sorting
@@ -186,25 +220,23 @@ func buildCategoryBitmask(categories []model.WallpaperCategory) string {
 	return string(bits[:])
 }
 
-// buildPurityBitmask creates the 3-digit bitmask for purity.
-// SFW=1xx, Sketchy=x1x, NSFW=xx1
-// NSFW is ALWAYS forced to 0. Default: SFW only (100).
-func buildPurityBitmask(purities []model.WallpaperPurity) string {
-	if len(purities) == 0 {
-		return "100" // SFW only by default
-	}
+// buildPurityBitmask creates the 3-digit bitmask for purity based on server
+// configuration (environment variable). SFW=1xx, Sketchy=x1x, NSFW=xx1.
+// Purity is fully controlled by the server; the frontend does not pass purity.
+// If nothing is configured, defaults to SFW only (100).
+func (w *WallhavenProvider) buildPurityBitmask() string {
 	bits := [3]byte{'0', '0', '0'}
-	for _, p := range purities {
-		switch p {
-		case model.PuritySFW:
-			bits[0] = '1'
-		case model.PuritySketchy:
-			bits[1] = '1'
-		// NSFW is intentionally omitted — never set bit[2]
-		}
+	if w.allowedPurity[model.PuritySFW] {
+		bits[0] = '1'
 	}
-	// If somehow nothing is selected, fall back to SFW
-	if bits[0] == '0' && bits[1] == '0' {
+	if w.allowedPurity[model.PuritySketchy] {
+		bits[1] = '1'
+	}
+	if w.allowedPurity[model.PurityNSFW] {
+		bits[2] = '1'
+	}
+	// Fallback: if nothing is set, default to SFW
+	if bits[0] == '0' && bits[1] == '0' && bits[2] == '0' {
 		bits[0] = '1'
 	}
 	return string(bits[:])
@@ -297,6 +329,8 @@ func mapWallhavenPurity(p string) model.WallpaperPurity {
 	switch p {
 	case "sketchy":
 		return model.PuritySketchy
+	case "nsfw":
+		return model.PurityNSFW
 	default:
 		return model.PuritySFW
 	}

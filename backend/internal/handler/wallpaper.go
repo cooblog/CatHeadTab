@@ -31,9 +31,28 @@ func (h *WallpaperHandler) ListProviders(c *gin.Context) {
 	})
 }
 
-// Search queries a wallpaper provider and returns paginated results.
+// GetConfig returns provider configuration hints so the frontend can
+// decide whether to use the backend proxy or query the upstream directly.
 //
-//	GET /api/v1/wallpapers/search?provider=wallhaven&q=nature&page=1&sorting=toplist&purity=sfw&categories=general,anime
+//	GET /api/v1/wallpapers/config
+func (h *WallpaperHandler) GetConfig(c *gin.Context) {
+	provider := c.DefaultQuery("provider", "wallhaven")
+	hasKey, allowedPurity, found := h.svc.ProviderConfig(provider)
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"provider":      provider,
+		"hasApiKey":     hasKey,
+		"allowedPurity": allowedPurity,
+	})
+}
+
+// Search queries a wallpaper provider and returns paginated results.
+// Purity is controlled by the server-side WALLHAVEN_PURITY environment variable.
+//
+//	GET /api/v1/wallpapers/search?provider=wallhaven&q=nature&page=1&sorting=toplist&categories=general,anime
 func (h *WallpaperHandler) Search(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "wallhaven")
 
@@ -53,7 +72,6 @@ func (h *WallpaperHandler) Search(c *gin.Context) {
 		Page:       page,
 		Seed:       c.Query("seed"),
 		Categories: parseCategories(c.Query("categories")),
-		Purity:     parsePurities(c.Query("purity")),
 	}
 
 	result, err := h.svc.Search(provider, params)
@@ -91,21 +109,4 @@ func parseCategories(raw string) []model.WallpaperCategory {
 	return cats
 }
 
-// parsePurities converts a comma-separated purity string to a slice.
-// NSFW is intentionally excluded — never parsed.
-func parsePurities(raw string) []model.WallpaperPurity {
-	if raw == "" {
-		return nil
-	}
-	var purities []model.WallpaperPurity
-	for _, s := range strings.Split(raw, ",") {
-		switch strings.TrimSpace(s) {
-		case "sfw":
-			purities = append(purities, model.PuritySFW)
-		case "sketchy":
-			purities = append(purities, model.PuritySketchy)
-		// "nsfw" is intentionally not handled — blocked at this layer too
-		}
-	}
-	return purities
-}
+

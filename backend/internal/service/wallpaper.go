@@ -18,6 +18,12 @@ type WallpaperProvider interface {
 
 	// Available reports whether the provider is configured and ready to use.
 	Available() bool
+
+	// HasAPIKey reports whether an API key is configured for this provider.
+	HasAPIKey() bool
+
+	// AllowedPurity returns the purity levels allowed by the server configuration.
+	AllowedPurity() []string
 }
 
 // WallpaperService manages multiple wallpaper providers and dispatches requests.
@@ -52,4 +58,14 @@ func (s *WallpaperService) ListProviders() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// ProviderConfig returns configuration details about a provider so the
+// frontend can adapt its UI (e.g. show/hide purity filter options).
+func (s *WallpaperService) ProviderConfig(providerName string) (hasKey bool, allowedPurity []string, found bool) {
+	p, ok := s.providers[providerName]
+	if !ok {
+		return false, nil, false
+	}
+	return p.HasAPIKey(), p.AllowedPurity(), true
 }

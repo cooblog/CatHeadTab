@@ -55,6 +55,9 @@ services:
       # Get your API key at: https://wallhaven.cc/settings/account
       # Without a key the provider still works (SFW only); with a key you also get Sketchy content.
       - WALLHAVEN_API_KEY=${WALLHAVEN_API_KEY:-}
+      # Allowed purity levels: sfw, sketchy, nsfw (comma-separated). Default: sfw.
+      # "sketchy" and "nsfw" require WALLHAVEN_API_KEY to be set.
+      - WALLHAVEN_PURITY=${WALLHAVEN_PURITY:-sfw}
     depends_on:
       catheadtab-db:
         condition: service_healthy

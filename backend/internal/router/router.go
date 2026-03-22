@@ -40,7 +40,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	presetRepo := repository.NewPresetRepository(repository.DB)
 
 	// Initialize wallpaper service (provider-based, no DB needed)
-	wallhavenProvider := service.NewWallhavenProvider(cfg.WallhavenAPIKey)
+	wallhavenProvider := service.NewWallhavenProvider(cfg.WallhavenAPIKey, cfg.WallhavenPurity)
 	wallpaperSvc := service.NewWallpaperService(wallhavenProvider)
 
 	// Initialize handlers
@@ -61,6 +61,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 
 	// Public routes (no auth) — Wallpaper source browsing
 	r.GET("/api/v1/wallpapers/providers", wallpaperHandler.ListProviders)
+	r.GET("/api/v1/wallpapers/config", wallpaperHandler.GetConfig)
 	r.GET("/api/v1/wallpapers/search", wallpaperHandler.Search)
 
 	// Public routes (no auth)

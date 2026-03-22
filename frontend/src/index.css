@@ -18,6 +18,21 @@ html, body, #root {
   padding: 0;
 }
 
+/* 所有可交互元素默认使用手型光标（业内规范） */
+button,
+a,
+[role="button"],
+summary,
+select {
+  cursor: pointer;
+}
+
+button:disabled,
+a[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 body {
   /* 默认星空/渐变背景，可通过设置动态替换 */
   background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
@@ -138,5 +153,28 @@ body {
 
   .explore-row:hover .explore-title {
     color: white;
+  }
+
+  /* Online wallpaper scrollbar – thin & translucent, matching glass theme */
+  .wp-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .wp-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .wp-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .wp-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+  }
+
+  .wp-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
   }
 }

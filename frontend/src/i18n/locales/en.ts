@@ -68,8 +68,6 @@ export const en = {
   'settings.wpUseThis': 'Use This Wallpaper',
   'settings.wpNoResults': 'No matching wallpapers found',
   'settings.wpNoMore': 'No more wallpapers',
-  'settings.wpPrev': 'Prev',
-  'settings.wpNext': 'Next',
   'settings.wpNeedServer': 'Please connect a backend server in the System tab first',
 
   // Profile Modal
