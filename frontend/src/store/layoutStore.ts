@@ -40,7 +40,13 @@ interface LayoutState {
 
   // Local mutations
   setLayout: (layout: DesktopLayout) => void;
-  addDesktopItem: (item: DesktopItem, pageIndex?: number, parentFolderId?: string) => void;
+  /**
+   * Add a desktop item. Returns the existing duplicate item if one is found,
+   * or null if the item was added successfully.
+   */
+  addDesktopItem: (item: DesktopItem, pageIndex?: number, parentFolderId?: string) => DesktopItem | null;
+  /** Check if a URL already exists on the desktop or inside a specific folder. */
+  checkDuplicate: (url: string, parentFolderId?: string) => DesktopItem | null;
   removeDesktopItem: (id: string) => void;
   updateDesktopItem: (id: string, updates: Partial<DesktopItem>) => void;
   moveItemToDock: (id: string) => void;
@@ -133,6 +139,64 @@ function updateItemInList(list: DesktopItem[], id: string, updates: Partial<Desk
   });
 }
 
+// --- Helper: normalise URL for deduplication ---
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    // Strip trailing slash, lowercase host, ignore protocol differences
+    const host = u.hostname.replace(/^www\./, '').toLowerCase();
+    const path = u.pathname.replace(/\/+$/, '') || '';
+    return `${host}${path}${u.search}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+// --- Helper: find an existing item by URL in the whole layout ---
+function findItemByUrl(layout: DesktopLayout, url: string): DesktopItem | null {
+  const norm = normalizeUrl(url);
+  const searchList = (items: DesktopItem[]): DesktopItem | null => {
+    for (const item of items) {
+      if (item.url && normalizeUrl(item.url) === norm) return item;
+      if (item.children) {
+        const found = searchList(item.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  for (const page of layout.pages) {
+    const found = searchList(page);
+    if (found) return found;
+  }
+  return searchList(layout.dock);
+}
+
+// --- Helper: find an existing item by URL inside a folder ---
+function findItemByUrlInFolder(layout: DesktopLayout, folderId: string, url: string): DesktopItem | null {
+  const norm = normalizeUrl(url);
+  const searchFolder = (items: DesktopItem[]): DesktopItem | null => {
+    for (const item of items) {
+      if (item.id === folderId && item.type === 'folder' && item.children) {
+        for (const child of item.children) {
+          if (child.url && normalizeUrl(child.url) === norm) return child;
+        }
+        return null;
+      }
+      if (item.children) {
+        const found = searchFolder(item.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  for (const page of layout.pages) {
+    const found = searchFolder(page);
+    if (found) return found;
+  }
+  return searchFolder(layout.dock);
+}
+
 function addToFolder(list: DesktopItem[], folderId: string, item: DesktopItem): DesktopItem[] {
   return list.map(i => {
     if (i.id === folderId && i.type === 'folder') {
@@ -156,7 +220,22 @@ export const useLayoutStore = create<LayoutState>()(
       setLayout: (layout) => set({ layout }),
 
       addDesktopItem: (item, pageIndex, parentFolderId) => {
-        const layout = { ...get().layout, pages: get().layout.pages.map(p => [...p]), dock: [...get().layout.dock] };
+        const currentLayout = get().layout;
+
+        // Deduplication: skip folders, only check links with URLs
+        if (item.type !== 'folder' && item.url) {
+          if (parentFolderId) {
+            // Adding into a folder — check inside that folder
+            const dup = findItemByUrlInFolder(currentLayout, parentFolderId, item.url);
+            if (dup) return dup;
+          } else {
+            // Adding to desktop page — check entire layout
+            const dup = findItemByUrl(currentLayout, item.url);
+            if (dup) return dup;
+          }
+        }
+
+        const layout = { ...currentLayout, pages: currentLayout.pages.map(p => [...p]), dock: [...currentLayout.dock] };
         if (parentFolderId) {
           // Add into a folder (search all pages + dock)
           layout.pages = layout.pages.map(page => addToFolder(page, parentFolderId, item));
@@ -168,6 +247,15 @@ export const useLayoutStore = create<LayoutState>()(
         }
         set({ layout });
         triggerAutoSync();
+        return null;
+      },
+
+      checkDuplicate: (url, parentFolderId) => {
+        const layout = get().layout;
+        if (parentFolderId) {
+          return findItemByUrlInFolder(layout, parentFolderId, url);
+        }
+        return findItemByUrl(layout, url);
       },
 
       removeDesktopItem: (id) => {

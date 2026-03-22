@@ -30,7 +30,7 @@ interface AddItemModalProps {
 }
 
 export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, parentFolderId, pageIndex }) => {
-  const { addDesktopItem, updateDesktopItem } = useLayoutStore();
+  const { addDesktopItem, updateDesktopItem, checkDuplicate } = useLayoutStore();
   const { t } = useTranslation();
   const isEditing = !!editItem;
 
@@ -41,6 +41,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [faviconPreview, setFaviconPreview] = useState('');
   const [isFetchingTitle, setIsFetchingTitle] = useState(false);
   const [titleAutoFilled, setTitleAutoFilled] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const titleFetchAbortRef = useRef<AbortController | null>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,7 +99,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
     return () => clearTimeout(timer);
   }, [url, mode, isEditing, fetchTitle, titleAutoFilled, title]);
 
-  const handleSave = () => {
+  const doAdd = (skipDupCheck: boolean) => {
     const finalTitle = title.trim() || (mode === 'folder' ? 'New Folder' : 'Untitled');
     const finalUrl = mode === 'link' ? (url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`) : undefined;
 
@@ -108,19 +109,36 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
         url: finalUrl,
         icon: customIcon.trim() || undefined,
       });
-    } else {
-      const newItem: DesktopItem = {
-        id: `${mode}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        type: mode === 'folder' ? 'folder' : 'link',
-        title: finalTitle,
-        url: finalUrl,
-        icon: customIcon.trim() || undefined,
-        children: mode === 'folder' ? [] : undefined,
-      };
-      addDesktopItem(newItem, pageIndex, parentFolderId);
+      onClose();
+      return;
     }
+
+    // Check for duplicate before adding (only for links, skip if forced)
+    if (!skipDupCheck && mode === 'link' && finalUrl) {
+      const existing = checkDuplicate(finalUrl, parentFolderId);
+      if (existing) {
+        const msg = parentFolderId
+          ? t('desktop.duplicateInFolderHint', { title: existing.title })
+          : t('desktop.duplicateHint', { title: existing.title });
+        setDuplicateWarning(msg);
+        return; // Don't add yet — show the warning first
+      }
+    }
+
+    const newItem: DesktopItem = {
+      id: `${mode}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type: mode === 'folder' ? 'folder' : 'link',
+      title: finalTitle,
+      url: finalUrl,
+      icon: customIcon.trim() || undefined,
+      children: mode === 'folder' ? [] : undefined,
+    };
+    addDesktopItem(newItem, pageIndex, parentFolderId);
     onClose();
   };
+
+  const handleSave = () => doAdd(false);
+  const handleForceAdd = () => doAdd(true);
 
   const isCustomIconUrl = customIcon.startsWith('http');
 
@@ -268,14 +286,34 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
             </div>
           </div>
 
+          {/* Duplicate Warning */}
+          {duplicateWarning && (
+            <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-amber-400 text-[13px] font-medium">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span>{duplicateWarning}</span>
+              </div>
+            </div>
+          )}
+
           {/* Save button */}
-          <button 
-            onClick={handleSave}
-            disabled={mode === 'link' && !url.trim()}
-            className="w-full mt-6 py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] border border-[#5bb84f] text-black font-bold transition-colors shadow-[0_0_15px_rgba(114,213,101,0.3)] hover:shadow-[0_0_20px_rgba(114,213,101,0.5)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {t('desktop.save')}
-          </button>
+          <div className={`flex gap-3 ${duplicateWarning ? 'mt-3' : 'mt-6'}`}>
+            {duplicateWarning && (
+              <button
+                onClick={handleForceAdd}
+                className="flex-1 py-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 font-bold text-[13px] transition-colors"
+              >
+                {t('desktop.addAnyway')}
+              </button>
+            )}
+            <button 
+              onClick={handleSave}
+              disabled={mode === 'link' && !url.trim()}
+              className={`${duplicateWarning ? 'flex-1' : 'w-full'} py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] border border-[#5bb84f] text-black font-bold transition-colors shadow-[0_0_15px_rgba(114,213,101,0.3)] hover:shadow-[0_0_20px_rgba(114,213,101,0.5)] disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              {duplicateWarning ? t('desktop.save') : t('desktop.save')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

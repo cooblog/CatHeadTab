@@ -20,11 +20,12 @@ type PresetCategory struct {
 
 // PresetSite represents a single preset website within a category.
 type PresetSite struct {
-	ID         uuid.UUID `json:"id"`
-	CategoryID uuid.UUID `json:"category_id"`
-	Title      string    `json:"title"`
-	URL        string    `json:"url"`
-	Icon       string    `json:"icon"`
-	SortOrder  int       `json:"sort_order"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID          uuid.UUID `json:"id"`
+	CategoryID  uuid.UUID `json:"category_id"`
+	Title       string    `json:"title"`
+	URL         string    `json:"url"`
+	Icon        string    `json:"icon"`
+	Description string    `json:"description"`
+	SortOrder   int       `json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
 }

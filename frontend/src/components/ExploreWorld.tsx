@@ -5,11 +5,24 @@ import { useConfigStore } from '../store/configStore';
 import { DesktopItem, useLayoutStore } from '../store/layoutStore';
 import { getSmartFaviconUrl } from '../utils/favicon';
 
+// --- Helper: normalise URL for comparison (mirrors layoutStore logic) ---
+function normalizeUrlForCompare(url: string): string {
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    const host = u.hostname.replace(/^www\./, '').toLowerCase();
+    const path = u.pathname.replace(/\/+$/, '') || '';
+    return `${host}${path}${u.search}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
 interface PresetSite {
   id: string;
   title: string;
   url: string;
   icon: string;
+  description: string;
   sort_order: number;
 }
 
@@ -42,7 +55,7 @@ function sortCategories(categories: PresetCategory[]): PresetCategory[] {
 export function ExploreWorld({ onClose }: ExploreWorldProps) {
   const { t } = useTranslation();
   const { serverUrl } = useConfigStore();
-  const { addDesktopItem } = useLayoutStore();
+  const { addDesktopItem, layout } = useLayoutStore();
 
   const [categories, setCategories] = useState<PresetCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +64,20 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Collect all URLs already on the desktop for dedup detection
+  const existingUrls = useMemo(() => {
+    const urls = new Set<string>();
+    const collect = (items: DesktopItem[]) => {
+      for (const item of items) {
+        if (item.url) urls.add(normalizeUrlForCompare(item.url));
+        if (item.children) collect(item.children);
+      }
+    };
+    layout.pages.forEach(p => collect(p));
+    collect(layout.dock);
+    return urls;
+  }, [layout]);
 
   // Fetch preset data
   useEffect(() => {
@@ -103,7 +130,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     const results: ExploreSiteResult[] = [];
     categories.forEach((cat) => {
       cat.sites.forEach((site) => {
-        if (site.title.toLowerCase().includes(q) || site.url.toLowerCase().includes(q)) {
+        if (site.title.toLowerCase().includes(q) || site.url.toLowerCase().includes(q) || (site.description && site.description.toLowerCase().includes(q))) {
           results.push({ ...site, categoryName: cat.name, categoryIcon: cat.icon });
         }
       });
@@ -186,6 +213,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
   // Site row — uses same structure as BookmarkBrowser rows
   function renderSiteRow(site: ExploreSiteResult | PresetSite) {
     const isAdded = addedSites.has(site.id);
+    const existsOnDesktop = existingUrls.has(normalizeUrlForCompare(site.url));
     const categoryLabel = 'categoryName' in site ? getCategoryDisplayName(site.categoryName) : null;
     const categoryIcon = 'categoryIcon' in site ? site.categoryIcon : null;
 
@@ -211,6 +239,11 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
             <span className="text-[13px] font-semibold text-white/90 truncate explore-title transition-colors">
               {site.title}
             </span>
+            {site.description && (
+              <span className="text-[11px] text-white/45 truncate mt-0.5">
+                {site.description}
+              </span>
+            )}
             <span className="text-[11px] text-white/30 truncate mt-0.5">
               {site.url}
             </span>
@@ -239,11 +272,15 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
               e.stopPropagation();
               handleAddSite(site);
             }}
-            disabled={isAdded}
-            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isAdded ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default' : 'bg-blue-500/15 hover:bg-blue-500/90 text-blue-400 hover:text-white border border-blue-500/25 hover:border-blue-500'}`}
-            title={isAdded ? t('explore.added') : t('explore.addToDesktop')}
+            disabled={isAdded || existsOnDesktop}
+            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+              isAdded || existsOnDesktop
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default'
+                : 'bg-blue-500/15 hover:bg-blue-500/90 text-blue-400 hover:text-white border border-blue-500/25 hover:border-blue-500'
+            }`}
+            title={isAdded ? t('explore.added') : existsOnDesktop ? t('explore.alreadyOnDesktop') : t('explore.addToDesktop')}
           >
-            {isAdded ? (
+            {isAdded || existsOnDesktop ? (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             ) : (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>

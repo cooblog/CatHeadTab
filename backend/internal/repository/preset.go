@@ -51,7 +51,7 @@ func (r *postgresPresetRepository) ListCategories() ([]model.PresetCategory, err
 // ListSitesByCategory returns all preset sites for a given category.
 func (r *postgresPresetRepository) ListSitesByCategory(categoryID uuid.UUID) ([]model.PresetSite, error) {
 	rows, err := r.db.Query(`
-		SELECT id, category_id, title, url, icon, sort_order, created_at
+		SELECT id, category_id, title, url, icon, description, sort_order, created_at
 		FROM preset_sites
 		WHERE category_id = $1
 		ORDER BY sort_order ASC
@@ -64,7 +64,7 @@ func (r *postgresPresetRepository) ListSitesByCategory(categoryID uuid.UUID) ([]
 	var sites []model.PresetSite
 	for rows.Next() {
 		var s model.PresetSite
-		if err := rows.Scan(&s.ID, &s.CategoryID, &s.Title, &s.URL, &s.Icon, &s.SortOrder, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.CategoryID, &s.Title, &s.URL, &s.Icon, &s.Description, &s.SortOrder, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		sites = append(sites, s)
@@ -80,7 +80,7 @@ func (r *postgresPresetRepository) ListAllWithSites() ([]model.PresetCategory, e
 	}
 
 	rows, err := r.db.Query(`
-		SELECT id, category_id, title, url, icon, sort_order, created_at
+		SELECT id, category_id, title, url, icon, description, sort_order, created_at
 		FROM preset_sites
 		ORDER BY sort_order ASC
 	`)
@@ -92,7 +92,7 @@ func (r *postgresPresetRepository) ListAllWithSites() ([]model.PresetCategory, e
 	siteMap := make(map[uuid.UUID][]model.PresetSite)
 	for rows.Next() {
 		var s model.PresetSite
-		if err := rows.Scan(&s.ID, &s.CategoryID, &s.Title, &s.URL, &s.Icon, &s.SortOrder, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.CategoryID, &s.Title, &s.URL, &s.Icon, &s.Description, &s.SortOrder, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		siteMap[s.CategoryID] = append(siteMap[s.CategoryID], s)
