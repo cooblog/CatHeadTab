@@ -50,6 +50,11 @@ services:
       # Create at: https://console.cloud.google.com/apis/credentials
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+
+      # ---- Wallpaper Source: Wallhaven (optional) ----
+      # Get your API key at: https://wallhaven.cc/settings/account
+      # Without a key the provider still works (SFW only); with a key you also get Sketchy content.
+      - WALLHAVEN_API_KEY=${WALLHAVEN_API_KEY:-}
     depends_on:
       catheadtab-db:
         condition: service_healthy

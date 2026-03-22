@@ -28,6 +28,9 @@ type Config struct {
 	// Google OAuth
 	GoogleClientID     string
 	GoogleClientSecret string
+
+	// Wallpaper source: Wallhaven
+	WallhavenAPIKey string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -51,6 +54,8 @@ func Load() *Config {
 
 		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+
+		WallhavenAPIKey: getEnv("WALLHAVEN_API_KEY", ""),
 	}
 }
 

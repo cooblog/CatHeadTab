@@ -39,6 +39,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Initialize preset repository
 	presetRepo := repository.NewPresetRepository(repository.DB)
 
+	// Initialize wallpaper service (provider-based, no DB needed)
+	wallhavenProvider := service.NewWallhavenProvider(cfg.WallhavenAPIKey)
+	wallpaperSvc := service.NewWallpaperService(wallhavenProvider)
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userRepo, verifyRepo, oauthRepo, emailService, cfg)
 	bookmarkHandler := handler.NewBookmarkHandler(repository.NewBookmarkRepository())
@@ -47,12 +51,17 @@ func Setup(cfg *config.Config) *gin.Engine {
 	bgHandler := handler.NewBackgroundHandler(bgRepo)
 	presetHandler := handler.NewPresetHandler(presetRepo)
 	faviconHandler := handler.NewFaviconHandler()
+	wallpaperHandler := handler.NewWallpaperHandler(wallpaperSvc)
 
 	// Public routes (no auth) — Preset sites (available to all users)
 	r.GET("/api/v1/preset-sites", presetHandler.ListAll)
 
 	// Public routes (no auth) — Favicon proxy with disk caching
 	r.GET("/api/v1/favicon", faviconHandler.Get)
+
+	// Public routes (no auth) — Wallpaper source browsing
+	r.GET("/api/v1/wallpapers/providers", wallpaperHandler.ListProviders)
+	r.GET("/api/v1/wallpapers/search", wallpaperHandler.Search)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")
