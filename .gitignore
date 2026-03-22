@@ -30,7 +30,7 @@ Thumbs.db
 /backend/tmp/
 /backend/cmd/server/server
 /backend/cmd/server/server.exe
-/backend/data/favicon_cache/
+/backend/data/
 
 # Frontend
 /frontend/.vite/
@@ -41,3 +41,5 @@ pgdata/
 
 # Logs
 *.log
+
+.codebuddy/
