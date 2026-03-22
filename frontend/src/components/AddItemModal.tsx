@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLayoutStore, DesktopItem } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
+import { getSmartFaviconUrl, extractDomain } from '../utils/favicon';
 
 // Fetch website title from URL (works in Chrome extension context)
 const fetchWebsiteTitle = async (rawUrl: string): Promise<string | null> => {
@@ -46,10 +47,10 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   // Auto-fetch favicon when URL changes
   useEffect(() => {
     if (mode === 'link' && url.trim()) {
-      try {
-        const u = new URL(url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`);
-        setFaviconPreview(`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(u.origin)}&sz=128`);
-      } catch {
+      const domain = extractDomain(url.trim());
+      if (domain) {
+        setFaviconPreview(getSmartFaviconUrl(domain, 128));
+      } else {
         setFaviconPreview('');
       }
     } else {

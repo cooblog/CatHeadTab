@@ -9,6 +9,7 @@ import { BookmarkBrowser } from '../components/apps/BookmarkBrowser';
 import { AddItemModal } from '../components/AddItemModal';
 import { ExploreWorld } from '../components/ExploreWorld';
 import { useTranslation } from '../i18n/useTranslation';
+import { getSmartFaviconUrl } from '../utils/favicon';
 import {
   DndContext,
   DragOverlay,
@@ -129,7 +130,7 @@ const DesktopIconContent: React.FC<{
             {miniIcons.map((url, i) => (
               <div key={i} className="rounded-sm overflow-hidden bg-white/10 flex items-center justify-center">
                 <img 
-                  src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=64`}
+                  src={getSmartFaviconUrl(url, 64)}
                   className="w-full h-full object-cover"
                   alt=""
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -156,7 +157,7 @@ const DesktopIconContent: React.FC<{
               )
             ) : item.url ? (
               <img 
-                src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(item.url || '')}&sz=128`}
+                src={getSmartFaviconUrl(item.url, 128)}
                 className="w-full h-full object-cover"
                 alt={item.title}
                 onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}

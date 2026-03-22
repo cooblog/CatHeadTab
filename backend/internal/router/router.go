@@ -46,9 +46,13 @@ func Setup(cfg *config.Config) *gin.Engine {
 	userHandler := handler.NewUserHandler(userRepo)
 	bgHandler := handler.NewBackgroundHandler(bgRepo)
 	presetHandler := handler.NewPresetHandler(presetRepo)
+	faviconHandler := handler.NewFaviconHandler()
 
 	// Public routes (no auth) — Preset sites (available to all users)
 	r.GET("/api/v1/preset-sites", presetHandler.ListAll)
+
+	// Public routes (no auth) — Favicon proxy with disk caching
+	r.GET("/api/v1/favicon", faviconHandler.Get)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")

@@ -30,6 +30,7 @@ Thumbs.db
 /backend/tmp/
 /backend/cmd/server/server
 /backend/cmd/server/server.exe
+/backend/data/favicon_cache/
 
 # Frontend
 /frontend/.vite/

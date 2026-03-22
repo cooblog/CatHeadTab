@@ -3,6 +3,7 @@ import client from '../api/client';
 import { useTranslation, TranslationKeys } from '../i18n/useTranslation';
 import { useConfigStore } from '../store/configStore';
 import { DesktopItem, useLayoutStore } from '../store/layoutStore';
+import { getSmartFaviconUrl } from '../utils/favicon';
 
 interface PresetSite {
   id: string;
@@ -197,7 +198,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
             <img
-              src={`https://s2.googleusercontent.com/s2/favicons?domain_url=${encodeURIComponent(site.url)}&sz=64`}
+              src={getSmartFaviconUrl(site.url, 64)}
               alt=""
               className="w-4.5 h-4.5 object-contain"
               onError={(e) => {
