@@ -126,12 +126,12 @@ const DesktopIconContent: React.FC<{
             }`
       }`}>
         {isFolder ? (
-          <div className="grid grid-cols-3 grid-rows-3 gap-0.5 p-2 w-full h-full">
+          <div className="grid grid-cols-3 grid-rows-3 gap-1 p-2.5 w-full h-full">
             {miniIcons.map((url, i) => (
-              <div key={i} className="rounded-sm overflow-hidden bg-white/10 flex items-center justify-center">
+              <div key={i} className="rounded-[3px] overflow-hidden bg-white/10 flex items-center justify-center">
                 <img 
                   src={getSmartFaviconUrl(url, 64)}
-                  className="w-full h-full object-cover"
+                  className="w-[88%] h-[88%] object-contain"
                   alt=""
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
