@@ -178,3 +178,31 @@ body {
     background: rgba(255, 255, 255, 0.25);
   }
 }
+
+/* 桌面图标网格：固定列宽 + 固定间距，居中显示，窗口缩小先压两侧空白再减列数 */
+.desktop-icon-grid {
+  grid-template-columns: repeat(auto-fit, 72px) !important;
+  gap: 24px !important;
+  justify-content: center !important;
+}
+
+@media (min-width: 768px) {
+  .desktop-icon-grid {
+    grid-template-columns: repeat(auto-fit, 90px) !important;
+    gap: 60px !important;
+  }
+}
+
+/* 文件夹内图标网格：手机端列宽更大，一行3个 */
+.folder-icon-grid {
+  grid-template-columns: repeat(auto-fit, 90px) !important;
+  gap: 24px !important;
+  justify-content: center !important;
+}
+
+@media (min-width: 768px) {
+  .folder-icon-grid {
+    grid-template-columns: repeat(auto-fit, 90px) !important;
+    gap: 60px !important;
+  }
+}

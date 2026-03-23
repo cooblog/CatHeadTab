@@ -108,7 +108,7 @@ const DesktopIconContent: React.FC<{
   );
   
   return (
-    <div className={`flex flex-col items-center ${isDock ? 'w-auto' : 'w-[78px] md:w-[90px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
+    <div className={`flex flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[90px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
       <div className={`${iconSize} rounded-[18px] overflow-hidden transition-all duration-200 relative ${
         hasImageIcon
           ? `shadow-lg ${isDraggedOver && isFolder
@@ -608,8 +608,8 @@ export const Desktop: React.FC = () => {
 
   // For the Add (+) icon
   const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
-    <div className="flex flex-col items-center w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
-      <div className="w-[72px] h-[72px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-all duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
+    <div className="flex flex-col items-center w-[72px] md:w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
+      <div className="w-[60px] h-[60px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-all duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
           <path d="M12 5v14M5 12h14" />
         </svg>
@@ -712,8 +712,11 @@ export const Desktop: React.FC = () => {
         }}
       >
         {isLocalSearchActive ? (
-          <div className="h-full overflow-y-auto no-scrollbar px-6 md:px-12 pt-4">
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-y-6 gap-x-2 md:gap-x-4 justify-items-center content-start">
+          <div className="h-full overflow-y-auto no-scrollbar pt-4 flex justify-center">
+            <div
+              className="desktop-icon-grid grid content-start w-full md:px-4"
+              style={{ justifyContent: 'center', justifyItems: 'center' }}
+            >
               {searchResults.length > 0 ? (
                 searchResults.map(item => (
                   <div key={item.id} className="cursor-pointer group" onClick={() => handleItemClick(item)}>
@@ -739,10 +742,13 @@ export const Desktop: React.FC = () => {
             {layout.pages.map((page, pageIdx) => (
               <div 
                 key={pageIdx} 
-                className="min-w-full h-full snap-center px-6 md:px-16 lg:px-24 pt-4 flex flex-col"
+                className="min-w-full h-full snap-center pt-4 flex flex-col items-center"
               >
                 <SortableContext items={pageItemIds[pageIdx] || []} strategy={rectSortingStrategy}>
-                  <div className="grid grid-cols-4 md:grid-cols-8 gap-y-6 md:gap-y-8 gap-x-2 md:gap-x-4 justify-items-center content-start">
+                  <div
+                    className="desktop-icon-grid grid content-start w-full md:px-4"
+                    style={{ justifyContent: 'center', justifyItems: 'center' }}
+                  >
                     {page.map(item => (
                       <SortableDesktopIcon 
                         key={item.id} 
@@ -872,11 +878,11 @@ export const Desktop: React.FC = () => {
             <div 
               className="w-full max-h-[75vh] bg-white/[0.12] backdrop-blur-3xl border border-white/20 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden transform animate-scaleIn"
             >
-            <div className="flex-1 overflow-y-auto w-full px-6 sm:px-8 md:px-10 lg:px-14 py-8 sm:py-10 no-scrollbar">
+            <div className="flex-1 overflow-y-auto w-full px-1 sm:px-6 md:px-10 lg:px-14 py-6 sm:py-10 no-scrollbar">
               <SortableContext items={folderItemIds} strategy={rectSortingStrategy}>
                 <div 
-                  className="grid gap-y-6 gap-x-4 sm:gap-x-6 md:gap-y-10 md:gap-x-10 lg:gap-y-12 lg:gap-x-16 justify-items-center content-start"
-                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', maxWidth: '900px', margin: '0 auto' }}
+                  className="folder-icon-grid grid content-start"
+                  style={{ maxWidth: '900px', margin: '0 auto', justifyContent: 'center', justifyItems: 'center' }}
                 >
                   {openedFolder.children?.map(item => (
                     <SortableDesktopIcon
