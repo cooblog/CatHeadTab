@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useConfigStore } from '../store/configStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { saveImageBlob, loadImageBlob, compressImageToWebP, getRawBlob } from '../utils/imageStore';
+import { saveImageBlob, loadImageBlob, compressImageToWebP, getRawBlob, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
 import client from '../api/client';
-import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter } from '../api/wallhavenTypes';
+import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 
-type Tab = 'wallpaper' | 'language' | 'system';
+type Tab = 'wallpaper' | 'system';
 type WallpaperSubTab = 'current' | 'browse';
 type WallpaperSource = 'builtin' | 'local' | 'wallhaven';
 
@@ -37,8 +37,6 @@ const IDB_BG_KEY = 'bg-custom';
 // Max original file size allowed before compression (20 MB)
 const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
-// LocalStorage key for persisting the local wallpaper folder path
-const LOCAL_WP_PATH_KEY = 'catheadtab-local-wp-path';
 
 export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage } = useConfigStore();
@@ -58,15 +56,28 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [wpSourceDropdownOpen, setWpSourceDropdownOpen] = useState(false);
   const wpSourceRef = useRef<HTMLDivElement>(null);
 
-  // --- Local wallpaper folder path ---
-  const [localWpPath, setLocalWpPath] = useState(() => {
-    try { return localStorage.getItem(LOCAL_WP_PATH_KEY) || ''; } catch { return ''; }
-  });
+
+  // --- Local folder browsing state ---
+  const LOCAL_PAGE_SIZE = 30;
+  const [localFolderName, setLocalFolderName] = useState('');
+  const [localFileHandles, setLocalFileHandles] = useState<{ name: string; handle: FileSystemFileHandle }[]>([]);
+  const [localPageImages, setLocalPageImages] = useState<{ name: string; thumbUrl: string; handle: FileSystemFileHandle }[]>([]);
+  const [localPage, setLocalPage] = useState(0);
+  const [localLoading, setLocalLoading] = useState(false);
+  const [localPageLoading, setLocalPageLoading] = useState(false);
+  // Full-size preview for local images
+  const [localPreview, setLocalPreview] = useState<{ name: string; handle: FileSystemFileHandle; url: string } | null>(null);
+  const [localPreviewLoading, setLocalPreviewLoading] = useState(false);
 
   // --- Online Wallpaper state (Wallhaven) ---
   const [wpQuery, setWpQuery] = useState('');
   const [wpSorting, setWpSorting] = useState<WallpaperSorting>('toplist');
   const [wpCategories, setWpCategories] = useState<Set<WallpaperCategoryFilter>>(new Set(['general', 'anime', 'people']));
+  // Purity filter state — populated from backend config API
+  const [wpAllowedPurity, setWpAllowedPurity] = useState<WallpaperPurityFilter[]>(['sfw']);
+  const [wpHasApiKey, setWpHasApiKey] = useState(false);
+  const [wpPurity, setWpPurity] = useState<Set<WallpaperPurityFilter>>(new Set(['sfw']));
+  const wpConfigLoaded = useRef(false);
   const [wpResult, setWpResult] = useState<WallpaperSearchResult | null>(null);
   const [wpPage, setWpPage] = useState(1);
   const [wpLoading, setWpLoading] = useState(false);
@@ -125,7 +136,29 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
   }, [wpSourceDropdownOpen]);
 
-  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, append = false) => {
+  // Fetch provider config (allowed purity, hasApiKey) when switching to wallhaven source
+  useEffect(() => {
+    if (wpSource !== 'wallhaven' || wpConfigLoaded.current) return;
+    const { serverUrl: srvUrl } = useConfigStore.getState();
+    if (!srvUrl) return;
+    (async () => {
+      try {
+        const resp = await client.get<WallpaperProviderConfig>('/api/v1/wallpapers/config?provider=wallhaven');
+        const cfg = resp.data;
+        setWpHasApiKey(cfg.hasApiKey);
+        if (cfg.allowedPurity && cfg.allowedPurity.length > 0) {
+          setWpAllowedPurity(cfg.allowedPurity);
+          // Default selection: all allowed purities
+          setWpPurity(new Set(cfg.allowedPurity));
+        }
+        wpConfigLoaded.current = true;
+      } catch {
+        // Config fetch failed — use safe defaults (sfw only)
+      }
+    })();
+  }, [wpSource]);
+
+  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false) => {
     const { serverUrl: srvUrl } = useConfigStore.getState();
     if (!srvUrl) {
       setWpError(t('settings.wpNeedServer'));
@@ -151,6 +184,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       }
       if (cats.size > 0 && cats.size < 3) {
         params.set('categories', Array.from(cats).join(','));
+      }
+      // Send purity filter (only when not all selected or when explicitly filtered)
+      if (purities.size > 0) {
+        params.set('purity', Array.from(purities).join(','));
       }
       const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
       const data = resp.data;
@@ -179,21 +216,34 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   useEffect(() => {
     if (activeTab === 'wallpaper' && wpSubTab === 'browse' && wpSource === 'wallhaven' && !wpInitialLoadDone.current) {
       wpInitialLoadDone.current = true;
-      fetchWallpapers(1, wpQuery, wpSorting, wpCategories);
+      fetchWallpapers(1, wpQuery, wpSorting, wpCategories, wpPurity);
     }
-  }, [activeTab, wpSubTab, wpSource, fetchWallpapers, wpQuery, wpSorting, wpCategories]);
+  }, [activeTab, wpSubTab, wpSource, fetchWallpapers, wpQuery, wpSorting, wpCategories, wpPurity]);
+
+  // Auto-refresh when sorting changes (only after initial load)
+  const prevSorting = useRef(wpSorting);
+  useEffect(() => {
+    const sortChanged = prevSorting.current !== wpSorting;
+    prevSorting.current = wpSorting;
+    if (!wpInitialLoadDone.current) return;
+    if (!sortChanged) return;
+    if (activeTab !== 'wallpaper' || wpSubTab !== 'browse' || wpSource !== 'wallhaven') return;
+    setWpMobileItems([]);
+    setWpHasMore(true);
+    fetchWallpapers(1, wpQuery, wpSorting, wpCategories, wpPurity);
+  }, [wpSorting, activeTab, wpSubTab, wpSource, wpQuery, wpCategories, wpPurity, fetchWallpapers]);
 
   const handleWpSearch = () => {
     setWpMobileItems([]);
     setWpHasMore(true);
-    fetchWallpapers(1, wpQuery, wpSorting, wpCategories);
+    fetchWallpapers(1, wpQuery, wpSorting, wpCategories, wpPurity);
   };
 
   const handleWpLoadMore = useCallback(() => {
     if (wpLoadingMore || wpLoading || !wpHasMore || !wpResult) return;
     const nextPage = wpPage + 1;
-    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, true);
-  }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, fetchWallpapers]);
+    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, wpPurity, true);
+  }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, wpPurity, fetchWallpapers]);
 
   // Infinite scroll: observe sentinel element
   useEffect(() => {
@@ -242,6 +292,19 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     });
   };
 
+  const toggleWpPurity = (p: WallpaperPurityFilter) => {
+    setWpPurity(prev => {
+      const next = new Set(prev);
+      if (next.has(p)) {
+        // Must keep at least one selected
+        if (next.size > 1) next.delete(p);
+      } else {
+        next.add(p);
+      }
+      return next;
+    });
+  };
+
   // Resolve idb:// reference to an Object URL on mount
   useEffect(() => {
     if (backgroundImage.startsWith('idb://')) {
@@ -285,6 +348,167 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
   };
 
+  // Scan a directory handle for image files (shared by both pick-new and restore-saved)
+  const scanDirHandle = async (dirHandle: FileSystemDirectoryHandle) => {
+    setLocalFolderName(dirHandle.name);
+    setLocalLoading(true);
+    // Clean up previous page thumbnail URLs
+    localPageImages.forEach(img => URL.revokeObjectURL(img.thumbUrl));
+    setLocalPageImages([]);
+    const handles: { name: string; handle: FileSystemFileHandle }[] = [];
+    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg', '.avif']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TS DOM types lack FileSystemDirectoryHandle async iteration
+    for await (const entry of (dirHandle as any).values() as AsyncIterable<FileSystemHandle>) {
+      if (entry.kind !== 'file') continue;
+      const ext = entry.name.lastIndexOf('.') >= 0 ? entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase() : '';
+      if (!imageExts.has(ext)) continue;
+      handles.push({ name: entry.name, handle: entry as FileSystemFileHandle });
+    }
+    // Sort by name
+    handles.sort((a, b) => a.name.localeCompare(b.name));
+    setLocalFileHandles(handles);
+    setLocalPage(0);
+    setLocalLoading(false);
+  };
+
+  // Open a local folder — only scan file handles (no file content loaded yet)
+  const handleSelectFolder = async () => {
+    if (!('showDirectoryPicker' in window)) {
+      alert(t('settings.wpLocalNotSupported'));
+      return;
+    }
+    try {
+      const dirHandle = await (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker();
+      // Persist the handle so we can restore it next time
+      await saveDirHandle(dirHandle);
+      await scanDirHandle(dirHandle);
+    } catch {
+      // User cancelled the picker — do nothing
+    }
+  };
+
+  // Restore the last used folder from IndexedDB (called when switching to local source)
+  const restoreLastFolder = useCallback(async () => {
+    // Only restore if we don't already have files loaded
+    if (localFileHandles.length > 0 || localFolderName) return;
+    try {
+      const savedHandle = await loadDirHandle();
+      if (!savedHandle) return;
+      // Must re-request permission after page reload
+      const perm = await (savedHandle as FileSystemDirectoryHandle & {
+        requestPermission: (opts: { mode: string }) => Promise<string>;
+      }).requestPermission({ mode: 'read' });
+      if (perm !== 'granted') return;
+      await scanDirHandle(savedHandle);
+    } catch {
+      // Permission denied or handle invalid — silently ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localFileHandles.length, localFolderName]);
+
+  // Load images for a specific page (lazy: generate small thumbnails for display)
+  const loadLocalPage = useCallback(async (page: number, handles: { name: string; handle: FileSystemFileHandle }[]) => {
+    setLocalPageLoading(true);
+    // Revoke old page thumbnail URLs
+    localPageImages.forEach(img => URL.revokeObjectURL(img.thumbUrl));
+    const start = page * LOCAL_PAGE_SIZE;
+    const end = Math.min(start + LOCAL_PAGE_SIZE, handles.length);
+    const pageHandles = handles.slice(start, end);
+    const images: { name: string; thumbUrl: string; handle: FileSystemFileHandle }[] = [];
+    for (const h of pageHandles) {
+      try {
+        const file = await h.handle.getFile();
+        const thumbBlob = await generateThumbnail(file);
+        images.push({ name: h.name, thumbUrl: URL.createObjectURL(thumbBlob), handle: h.handle });
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+    setLocalPageImages(images);
+    setLocalPageLoading(false);
+  }, [localPageImages]);
+
+  // When page or file handles change, load the corresponding page
+  useEffect(() => {
+    if (localFileHandles.length > 0) {
+      loadLocalPage(localPage, localFileHandles);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPage, localFileHandles]);
+
+  // Auto-restore last used folder when switching to local source
+  useEffect(() => {
+    if (wpSource === 'local') {
+      restoreLastFolder();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wpSource]);
+
+  const localTotalPages = Math.max(1, Math.ceil(localFileHandles.length / LOCAL_PAGE_SIZE));
+
+  // Open full-size preview for a local image (reads original file from handle)
+  const openLocalPreview = async (name: string, handle: FileSystemFileHandle) => {
+    setLocalPreviewLoading(true);
+    setLocalPreview({ name, handle, url: '' });
+    try {
+      const file = await handle.getFile();
+      const url = URL.createObjectURL(file);
+      setLocalPreview({ name, handle, url });
+    } catch {
+      // Failed to read — close preview
+      setLocalPreview(null);
+    } finally {
+      setLocalPreviewLoading(false);
+    }
+  };
+
+  const closeLocalPreview = () => {
+    if (localPreview?.url) URL.revokeObjectURL(localPreview.url);
+    setLocalPreview(null);
+  };
+
+  // Apply a local image as wallpaper — reads original file on demand from handle
+  const handleLocalImageSelect = async (handle: FileSystemFileHandle) => {
+    setIsCompressing(true);
+    let file: File | null = null;
+    try {
+      file = await handle.getFile();
+      if (file.size > MAX_ORIGINAL_SIZE) {
+        alert(t('settings.bgTooLarge'));
+        setIsCompressing(false);
+        return;
+      }
+      const compressed = await compressImageToWebP(file);
+      await saveImageBlob(IDB_BG_KEY, compressed);
+      const objUrl = URL.createObjectURL(compressed);
+      setBgPreview(objUrl);
+      const idbUrl = `idb://${IDB_BG_KEY}?t=${Date.now()}`;
+      setBg(idbUrl);
+      applyBackground(idbUrl);
+    } catch (err) {
+      console.error('Failed to compress image', err);
+      if (file) {
+        await saveImageBlob(IDB_BG_KEY, file);
+        const objUrl = URL.createObjectURL(file);
+        setBgPreview(objUrl);
+        const idbUrl = `idb://${IDB_BG_KEY}?t=${Date.now()}`;
+        setBg(idbUrl);
+        applyBackground(idbUrl);
+      }
+    } finally {
+      setIsCompressing(false);
+      closeLocalPreview();
+    }
+  };
+
+  // Clean up local page thumbnail URLs on unmount
+  useEffect(() => {
+    return () => {
+      localPageImages.forEach(img => URL.revokeObjectURL(img.thumbUrl));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Immediately apply and sync background whenever it changes
   const applyBackground = useCallback(async (newBg: string) => {
     const trimmed = newBg.trim();
@@ -318,10 +542,6 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     setServerUrl(newUrl.trim());
   }, [setServerUrl]);
 
-  // Save local wallpaper path
-  const saveLocalWpPath = () => {
-    try { localStorage.setItem(LOCAL_WP_PATH_KEY, localWpPath); } catch { /* ignore */ }
-  };
 
   // Resolve display URL for the current wallpaper preview image
   const currentPreviewUrl = bg.startsWith('idb://') ? bgPreview : bg;
@@ -352,15 +572,15 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <div className="flex items-center gap-2 w-auto md:w-20">
             {/* Desktop traffic lights */}
             <div className="hidden md:flex gap-2.5">
-              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20">
+              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
-              <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20">
+              <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
               </button>
               <button
                 onClick={() => setIsFullscreen(f => !f)}
-                className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20"
+                className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default"
               >
                 {isFullscreen ? (
                   <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>
@@ -396,13 +616,6 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 onClick={() => setActiveTab('wallpaper')}
               >
                  {t('settings.wallpaper')}
-              </button>
-              <button
-                type="button"
-                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${activeTab === 'language' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
-                onClick={() => setActiveTab('language')}
-              >
-                 {t('settings.language')}
               </button>
               <button
                 type="button"
@@ -600,30 +813,130 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                       {/* === Source: Local folder === */}
                       {wpSource === 'local' && (
                         <div className="space-y-4 fade-in">
-                          <div>
-                            <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('settings.wpLocalPathLabel')}</label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={localWpPath}
-                                onChange={e => setLocalWpPath(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') saveLocalWpPath(); }}
-                                className="flex-1 bg-black/40 border border-white/10 hover:border-white/30 rounded-lg px-3 py-2 text-[13px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all font-mono"
-                                placeholder={t('settings.wpLocalPathPlaceholder')}
-                              />
+                          {/* Folder picker bar */}
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={handleSelectFolder}
+                              disabled={localLoading}
+                              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#72d565] hover:bg-[#5bb84f] text-black font-semibold text-[13px] transition-colors disabled:opacity-50"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                              </svg>
+                              {t('settings.wpLocalSelectFolder')}
+                            </button>
+                            {localFolderName && (
+                              <span className="text-[12px] text-white/50 truncate">
+                                📂 {localFolderName}
+                                <span className="ml-2 text-white/30">({localFileHandles.length} {t('settings.wpLocalImageCount')})</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Loading */}
+                          {localLoading && (
+                            <div className="flex items-center justify-center py-12">
+                              <svg className="animate-spin w-8 h-8 text-white/60" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            </div>
+                          )}
+
+                          {/* Empty state — no folder selected yet */}
+                          {!localLoading && localFileHandles.length === 0 && !localFolderName && (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-white/15 mb-4">
+                                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                              </svg>
+                              <p className="text-[13px] text-white/30 text-center">{t('settings.wpLocalEmptyHint')}</p>
+                            </div>
+                          )}
+
+                          {/* Empty state — folder selected but no images */}
+                          {!localLoading && localFileHandles.length === 0 && localFolderName && (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <p className="text-[13px] text-white/40 text-center">{t('settings.wpLocalNoImages')}</p>
+                            </div>
+                          )}
+
+                          {/* Page loading indicator */}
+                          {localPageLoading && (
+                            <div className="flex items-center justify-center py-8">
+                              <svg className="animate-spin w-6 h-6 text-white/50" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            </div>
+                          )}
+
+                          {/* Image grid — current page only (thumbnails for fast rendering) */}
+                          {!localLoading && !localPageLoading && localPageImages.length > 0 && (
+                            <div className={`grid gap-2.5 sm:gap-3.5 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
+                              {localPageImages.map(img => (
+                                <div
+                                  key={img.name}
+                                  className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
+                                  onClick={() => openLocalPreview(img.name, img.handle)}
+                                >
+                                  <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[68%] sm:pb-[62%]'} />
+                                  <img
+                                    src={img.thumbUrl}
+                                    alt={img.name}
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                  />
+                                  {/* Hover overlay */}
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 text-white/80 text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                      {t('settings.wpLocalPreview')}
+                                    </div>
+                                  </div>
+                                  {/* File name badge */}
+                                  <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/60 to-transparent">
+                                    <p className="text-[9px] text-white/60 truncate">{img.name}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Pagination controls */}
+                          {!localLoading && localFileHandles.length > LOCAL_PAGE_SIZE && (
+                            <div className="flex items-center justify-center gap-3 pt-2">
                               <button
                                 type="button"
-                                onClick={saveLocalWpPath}
-                                className="px-4 py-2 rounded-lg bg-[#72d565] hover:bg-[#5bb84f] text-black font-semibold text-[13px] transition-colors"
+                                onClick={() => setLocalPage(p => Math.max(0, p - 1))}
+                                disabled={localPage === 0 || localPageLoading}
+                                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-[12px] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                               >
-                                {t('settings.wpLocalPathSave')}
+                                ← {t('settings.wpLocalPrev')}
+                              </button>
+                              <span className="text-[12px] text-white/40 min-w-[80px] text-center">
+                                {localPage + 1} / {localTotalPages}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setLocalPage(p => Math.min(localTotalPages - 1, p + 1))}
+                                disabled={localPage >= localTotalPages - 1 || localPageLoading}
+                                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-[12px] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                {t('settings.wpLocalNext')} →
                               </button>
                             </div>
-                            <p className="text-[11px] text-white/30 mt-2 ml-1">{t('settings.wpLocalPathHint')}</p>
-                          </div>
-                          <div className="flex items-center justify-center py-6">
-                            <p className="text-[12px] text-white/40 text-center max-w-sm">{t('settings.wpLocalNotSupported')}</p>
-                          </div>
+                          )}
+
+                          {/* Compressing indicator */}
+                          {isCompressing && (
+                            <div className="flex items-center justify-center gap-2 py-3">
+                              <svg className="animate-spin w-4 h-4 text-[#72d565]" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              <span className="text-[12px] text-white/50">{t('settings.wpLocalApplying')}</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -713,6 +1026,31 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                                 </button>
                               ))}
                             </div>
+
+                            {/* Purity toggles — only shown when backend has API key and allows multiple purity levels */}
+                            {wpHasApiKey && wpAllowedPurity.length > 1 && (
+                              <div className="flex gap-1.5 sm:gap-1 items-center">
+                                <span className="text-[11px] text-white/30 mr-0.5">{t('settings.wpPurityLabel')}:</span>
+                                {wpAllowedPurity.map(p => {
+                                  const colorMap: Record<WallpaperPurityFilter, { active: string; inactive: string }> = {
+                                    sfw: { active: 'bg-green-500/30 text-green-300 border-green-500/40', inactive: 'bg-white/5 text-white/40 hover:text-white/60 border-transparent' },
+                                    sketchy: { active: 'bg-yellow-500/30 text-yellow-300 border-yellow-500/40', inactive: 'bg-white/5 text-white/40 hover:text-white/60 border-transparent' },
+                                    nsfw: { active: 'bg-red-500/30 text-red-300 border-red-500/40', inactive: 'bg-white/5 text-white/40 hover:text-white/60 border-transparent' },
+                                  };
+                                  const isActive = wpPurity.has(p);
+                                  return (
+                                    <button
+                                      key={p}
+                                      type="button"
+                                      onClick={() => toggleWpPurity(p)}
+                                      className={`px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md text-[12px] sm:text-[11px] font-medium transition-all border ${isActive ? colorMap[p].active : colorMap[p].inactive}`}
+                                    >
+                                      {t(`settings.wpPurity_${p}`)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
 
                           {/* Error */}
@@ -797,12 +1135,13 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 </div>
               )}
 
-              {/* ============ LANGUAGE TAB ============ */}
-              {activeTab === 'language' && (
+              {/* ============ SYSTEM TAB ============ */}
+              {activeTab === 'system' && (
                 <div className="space-y-6 fade-in">
+                  {/* Language section */}
                   <div>
                     <h3 className="text-xl font-bold text-white mb-2">{t('settings.langTitle')}</h3>
-                    <p className="text-[13px] text-white/50 mb-5">{t('settings.langDesc')}</p>
+                    <p className="text-[13px] text-white/50 mb-3">{t('settings.langDesc')}</p>
 
                     <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
                       <button
@@ -821,12 +1160,11 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                       </button>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* ============ SYSTEM TAB ============ */}
-              {activeTab === 'system' && (
-                <div className="space-y-6 fade-in">
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* Server connection section */}
                   <div>
                     <h3 className="text-xl font-bold text-white mb-2">{t('settings.sysTitle')}</h3>
                     <p className="text-[13px] text-white/50 mb-5">{t('settings.sysDesc')}</p>
@@ -908,6 +1246,21 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </button>
             <button
               type="button"
+              onClick={() => {
+                const a = document.createElement('a');
+                a.href = wpPreviewItem.fullUrl;
+                a.download = `wallpaper-${wpPreviewItem.id}.${wpPreviewItem.fileType || 'jpg'}`;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.click();
+              }}
+              className="px-5 sm:px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium text-[13px] sm:text-[14px] transition-colors active:scale-95 flex items-center gap-1.5"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              {t('settings.wpDownload')}
+            </button>
+            <button
+              type="button"
               onClick={() => setWpPreviewItem(null)}
               className="px-5 sm:px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium text-[13px] sm:text-[14px] transition-colors active:scale-95"
             >
@@ -936,6 +1289,63 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             className="max-w-[95vw] max-h-[95vh] rounded-lg shadow-2xl object-contain"
             onClick={e => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* === Fullscreen local image preview overlay === */}
+      {localPreview && (
+        <div
+          className="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-md pointer-events-auto"
+          onClick={closeLocalPreview}
+        >
+          {/* Top bar with file name & close */}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0" onClick={e => e.stopPropagation()}>
+            <span className="text-[11px] sm:text-[13px] text-white/50 truncate mr-3 font-mono">
+              {localPreview.name}
+            </span>
+            <button
+              type="button"
+              onClick={closeLocalPreview}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors shrink-0"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          {/* Full image area */}
+          <div className="flex-1 flex items-center justify-center px-2 sm:px-4 min-h-0" onClick={e => e.stopPropagation()}>
+            {localPreviewLoading || !localPreview.url ? (
+              <svg className="animate-spin w-8 h-8 text-white/40" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <img
+                src={localPreview.url}
+                alt={localPreview.name}
+                className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+              />
+            )}
+          </div>
+
+          {/* Bottom action bar */}
+          <div className="flex items-center justify-center gap-3 px-4 py-4 sm:py-5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => handleLocalImageSelect(localPreview.handle)}
+              disabled={isCompressing}
+              className="px-6 sm:px-8 py-2.5 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] text-black font-bold text-[13px] sm:text-[14px] transition-colors shadow-lg shadow-[#72d565]/20 active:scale-95 disabled:opacity-50"
+            >
+              {isCompressing ? t('settings.wpLocalApplying') : t('settings.wpLocalApply')}
+            </button>
+            <button
+              type="button"
+              onClick={closeLocalPreview}
+              className="px-5 sm:px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium text-[13px] sm:text-[14px] transition-colors active:scale-95"
+            >
+              {t('settings.cancel')}
+            </button>
+          </div>
         </div>
       )}
     </div>

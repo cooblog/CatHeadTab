@@ -32,3 +32,11 @@ export interface WallpaperSearchResult {
 
 export type WallpaperSorting = 'toplist' | 'date_added' | 'random' | 'views' | 'favorites' | 'relevance';
 export type WallpaperCategoryFilter = 'general' | 'anime' | 'people';
+export type WallpaperPurityFilter = 'sfw' | 'sketchy' | 'nsfw';
+
+/** Response from GET /api/v1/wallpapers/config */
+export interface WallpaperProviderConfig {
+  provider: string;
+  hasApiKey: boolean;
+  allowedPurity: WallpaperPurityFilter[];
+}

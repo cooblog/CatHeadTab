@@ -1,8 +1,12 @@
 package router
 
 import (
+	"log"
+	"time"
+
 	"github.com/gin-gonic/gin"
 
+	"github.com/CatHeadTab/backend/internal/cache"
 	"github.com/CatHeadTab/backend/internal/config"
 	"github.com/CatHeadTab/backend/internal/handler"
 	"github.com/CatHeadTab/backend/internal/middleware"
@@ -39,9 +43,36 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Initialize preset repository
 	presetRepo := repository.NewPresetRepository(repository.DB)
 
-	// Initialize wallpaper service (provider-based, no DB needed)
+	// Initialize wallpaper service (provider-based) with two-level cache:
+	// L1: in-memory (ristretto, short TTL) for all requests
+	// L2: PostgreSQL (long TTL) for slow-changing sorting types (toplist, views, favorites)
 	wallhavenProvider := service.NewWallhavenProvider(cfg.WallhavenAPIKey, cfg.WallhavenPurity)
-	wallpaperSvc := service.NewWallpaperService(wallhavenProvider)
+	wpCacheRepo := repository.NewWallpaperCacheRepository(repository.DB)
+	wpCache := cache.NewWallpaperCache(
+		cache.WithTTL(cache.DefaultTTL),
+		cache.WithMaxEntries(cache.DefaultMaxEntries),
+		cache.WithDBStore(wpCacheRepo),
+		cache.WithDBTTL(cache.DefaultDBTTL),
+	)
+	wallpaperSvc := service.NewWallpaperService(wpCache, wallhavenProvider)
+
+	// Start background goroutine that extends the refresh deadline for stale
+	// L2 entries that haven't been accessed recently. Entries accessed via
+	// GetOrFetch are refreshed on-the-fly (compare & update); this job catches
+	// entries sitting stale without being requested and keeps them alive.
+	// Runs every hour, processes up to 100 stale entries per tick.
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			processed, err := wpCache.RefreshStale(wallpaperSvc.FetchFromProvider(), 100)
+			if err != nil {
+				log.Printf("[wallpaper-cache] refresh error: %v", err)
+			} else if processed > 0 {
+				log.Printf("[wallpaper-cache] refresh completed: %d stale entries processed", processed)
+			}
+		}
+	}()
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userRepo, verifyRepo, oauthRepo, emailService, cfg)
@@ -63,6 +94,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	r.GET("/api/v1/wallpapers/providers", wallpaperHandler.ListProviders)
 	r.GET("/api/v1/wallpapers/config", wallpaperHandler.GetConfig)
 	r.GET("/api/v1/wallpapers/search", wallpaperHandler.Search)
+	r.GET("/api/v1/wallpapers/cache/stats", wallpaperHandler.CacheStats)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")

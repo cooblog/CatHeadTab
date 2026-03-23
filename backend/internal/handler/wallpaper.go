@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -49,10 +50,29 @@ func (h *WallpaperHandler) GetConfig(c *gin.Context) {
 	})
 }
 
-// Search queries a wallpaper provider and returns paginated results.
-// Purity is controlled by the server-side WALLHAVEN_PURITY environment variable.
+// CacheStats returns current wallpaper cache statistics.
 //
-//	GET /api/v1/wallpapers/search?provider=wallhaven&q=nature&page=1&sorting=toplist&categories=general,anime
+//	GET /api/v1/wallpapers/cache/stats
+func (h *WallpaperHandler) CacheStats(c *gin.Context) {
+	stats := h.svc.CacheStats()
+	if stats == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"enabled": false,
+			"message": "cache is not enabled",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"enabled": true,
+		"stats":   stats,
+	})
+}
+
+// Search queries a wallpaper provider and returns paginated results.
+// The frontend may pass a `purity` query param (comma-separated: sfw,sketchy,nsfw).
+// The service layer validates it against the server-side allowed purity set.
+//
+//	GET /api/v1/wallpapers/search?provider=wallhaven&q=nature&page=1&sorting=toplist&categories=general,anime&purity=sfw,sketchy
 func (h *WallpaperHandler) Search(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "wallhaven")
 
@@ -72,6 +92,7 @@ func (h *WallpaperHandler) Search(c *gin.Context) {
 		Page:       page,
 		Seed:       c.Query("seed"),
 		Categories: parseCategories(c.Query("categories")),
+		Purity:     parsePurity(c.Query("purity")),
 	}
 
 	result, err := h.svc.Search(provider, params)
@@ -85,6 +106,13 @@ func (h *WallpaperHandler) Search(c *gin.Context) {
 		}
 		c.JSON(http.StatusBadGateway, gin.H{"error": errMsg})
 		return
+	}
+
+	// For random sorting the cache returns a stable result set; we shuffle a
+	// shallow copy of the Wallpapers slice so each request feels random without
+	// invalidating the cached pointer.
+	if params.Sorting == "random" {
+		result = shuffleWallpapers(result)
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -107,6 +135,48 @@ func parseCategories(raw string) []model.WallpaperCategory {
 		}
 	}
 	return cats
+}
+
+// parsePurity converts a comma-separated purity string to a slice.
+// Unrecognised values are silently dropped.
+func parsePurity(raw string) []model.WallpaperPurity {
+	if raw == "" {
+		return nil
+	}
+	var purities []model.WallpaperPurity
+	for _, s := range strings.Split(raw, ",") {
+		switch strings.TrimSpace(strings.ToLower(s)) {
+		case "sfw":
+			purities = append(purities, model.PuritySFW)
+		case "sketchy":
+			purities = append(purities, model.PuritySketchy)
+		case "nsfw":
+			purities = append(purities, model.PurityNSFW)
+		}
+	}
+	return purities
+}
+
+// shuffleWallpapers returns a shallow copy of the search result with the
+// Wallpapers slice randomly shuffled. This avoids mutating the cached original
+// while providing per-request randomness for random-sorted queries.
+func shuffleWallpapers(src *model.WallpaperSearchResult) *model.WallpaperSearchResult {
+	if src == nil || len(src.Wallpapers) <= 1 {
+		return src
+	}
+	shuffled := make([]model.Wallpaper, len(src.Wallpapers))
+	copy(shuffled, src.Wallpapers)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+	return &model.WallpaperSearchResult{
+		Wallpapers:  shuffled,
+		CurrentPage: src.CurrentPage,
+		LastPage:    src.LastPage,
+		PerPage:     src.PerPage,
+		Total:       src.Total,
+		Seed:        src.Seed,
+	}
 }
 
 

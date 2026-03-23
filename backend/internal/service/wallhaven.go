@@ -79,9 +79,16 @@ func (w *WallhavenProvider) HasAPIKey() bool {
 	return w.apiKey != ""
 }
 
+// PurityKey returns the purity bitmask string (e.g. "110" for sfw+sketchy).
+// This is injected into WallpaperSearchParams.PurityKey before caching so
+// that different purity configurations produce distinct cache keys.
+func (w *WallhavenProvider) PurityKey() string {
+	return w.buildPurityBitmask()
+}
+
 // Search queries wallhaven.cc with the given parameters.
-// Purity is controlled entirely by the server-side WALLHAVEN_PURITY environment
-// variable — the frontend does not pass a purity parameter.
+// The effective purity is read from params.Purity (already validated and
+// intersected with the server config by the service layer).
 func (w *WallhavenProvider) Search(params model.WallpaperSearchParams) (*model.WallpaperSearchResult, error) {
 	u, err := url.Parse(wallhavenBaseURL + "/search")
 	if err != nil {
@@ -103,8 +110,14 @@ func (w *WallhavenProvider) Search(params model.WallpaperSearchParams) (*model.W
 	// Categories bitmask: General=1xx, Anime=x1x, People=xx1
 	q.Set("categories", buildCategoryBitmask(params.Categories))
 
-	// Purity bitmask — fully controlled by server environment variable
-	q.Set("purity", w.buildPurityBitmask())
+	// Purity bitmask — uses the effective purity from params (already
+	// intersected with server config by the service layer). Falls back to
+	// the full server-allowed set if params.Purity is empty.
+	if len(params.Purity) > 0 {
+		q.Set("purity", buildPurityBitmaskFromSlice(params.Purity))
+	} else {
+		q.Set("purity", w.buildPurityBitmask())
+	}
 
 	// Sorting
 	sorting := params.Sorting
@@ -234,6 +247,28 @@ func (w *WallhavenProvider) buildPurityBitmask() string {
 	}
 	if w.allowedPurity[model.PurityNSFW] {
 		bits[2] = '1'
+	}
+	// Fallback: if nothing is set, default to SFW
+	if bits[0] == '0' && bits[1] == '0' && bits[2] == '0' {
+		bits[0] = '1'
+	}
+	return string(bits[:])
+}
+
+// buildPurityBitmaskFromSlice creates the 3-digit purity bitmask from a slice
+// of WallpaperPurity values. This is used when the service layer has already
+// computed the effective (validated) purity selection.
+func buildPurityBitmaskFromSlice(purities []model.WallpaperPurity) string {
+	bits := [3]byte{'0', '0', '0'}
+	for _, p := range purities {
+		switch p {
+		case model.PuritySFW:
+			bits[0] = '1'
+		case model.PuritySketchy:
+			bits[1] = '1'
+		case model.PurityNSFW:
+			bits[2] = '1'
+		}
 	}
 	// Fallback: if nothing is set, default to SFW
 	if bits[0] == '0' && bits[1] == '0' && bits[2] == '0' {

@@ -45,11 +45,14 @@ type Wallpaper struct {
 }
 
 // WallpaperSearchParams holds the parameters for searching wallpapers.
-// Note: Purity is not included here — it is controlled entirely by the
-// server-side WALLHAVEN_PURITY environment variable.
+//
+// Purity can now be requested by the frontend (Purity field). The service
+// layer intersects the requested values with the server-side allowed set
+// (WALLHAVEN_PURITY env var) and computes PurityKey for cache keying.
 type WallpaperSearchParams struct {
 	Query      string              `json:"query"`
 	Categories []WallpaperCategory `json:"categories,omitempty"`
+	Purity     []WallpaperPurity   `json:"purity,omitempty"` // Requested by frontend; validated against server config
 	Sorting    string              `json:"sorting"`
 	Order      string              `json:"order"`
 	TopRange   string              `json:"topRange,omitempty"` // Required when sorting=toplist: 1d,3d,1w,1M,3M,6M,1y
@@ -58,6 +61,11 @@ type WallpaperSearchParams struct {
 	Colors     string              `json:"colors,omitempty"`
 	Page       int                 `json:"page"`
 	Seed       string              `json:"seed,omitempty"`
+
+	// PurityKey is a cache discriminator computed by the service layer from
+	// the effective purity (intersection of frontend request and server config).
+	// It ensures different purity selections produce distinct cache keys.
+	PurityKey string `json:"purityKey,omitempty"`
 }
 
 // WallpaperSearchResult holds the paginated result of a wallpaper search.

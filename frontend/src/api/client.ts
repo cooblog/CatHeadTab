@@ -28,9 +28,12 @@ client.interceptors.response.use((response) => {
   return response;
 }, (error) => {
   if (error.response && error.response.status === 401) {
-    // Clear token
-    useConfigStore.getState().logout();
-    console.warn("Unauthorized request. Token cleared.");
+    // Don't logout for password-change requests — wrong current password is not a session issue
+    const url = error.config?.url || '';
+    if (!url.includes('/change-password')) {
+      useConfigStore.getState().logout();
+      console.warn("Unauthorized request. Token cleared.");
+    }
   }
   return Promise.reject(error);
 });

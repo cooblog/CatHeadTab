@@ -56,6 +56,41 @@ export async function deleteImageBlob(key: string): Promise<void> {
   });
 }
 
+// --- Directory Handle persistence (for remembering last-used local folder) ---
+
+const DIR_HANDLE_KEY = 'local-wallpaper-dir';
+
+/**
+ * saveDirHandle persists a FileSystemDirectoryHandle into IndexedDB
+ * so the user's last-selected local wallpaper folder can be restored.
+ */
+export async function saveDirHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(handle, DIR_HANDLE_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * loadDirHandle retrieves the previously saved FileSystemDirectoryHandle.
+ * Returns null if no handle was saved or if IndexedDB read fails.
+ */
+export async function loadDirHandle(): Promise<FileSystemDirectoryHandle | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(DIR_HANDLE_KEY);
+    req.onsuccess = () => {
+      const handle = req.result as FileSystemDirectoryHandle | undefined;
+      resolve(handle || null);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
 // --- Raw Blob access (for cloud upload) ---
 
 export async function getRawBlob(key: string): Promise<Blob | null> {
@@ -69,6 +104,43 @@ export async function getRawBlob(key: string): Promise<Blob | null> {
     };
     req.onerror = () => reject(req.error);
   });
+}
+
+// --- Thumbnail Generation ---
+
+// Thumbnail max dimensions (big enough to look sharp on fullscreen 2x/3x screens)
+const THUMB_MAX_W = 480;
+const THUMB_MAX_H = 360;
+
+/**
+ * generateThumbnail creates a small WebP thumbnail from a File/Blob.
+ * Uses createImageBitmap (no DOM needed, works off-main-thread friendly)
+ * + OffscreenCanvas for fast GPU-accelerated resizing.
+ * Returns a tiny Blob (typically 5-20 KB) suitable for grid display.
+ */
+export async function generateThumbnail(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const { width, height } = calculateDimensions(
+    bitmap.width, bitmap.height, THUMB_MAX_W, THUMB_MAX_H
+  );
+
+  // Prefer OffscreenCanvas (no DOM, faster) with fallback to regular canvas
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const oc = new OffscreenCanvas(width, height);
+    const ctx = oc.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    return oc.convertToBlob({ type: 'image/webp', quality: 0.6 });
+  }
+
+  // Fallback for older browsers
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  return canvasToWebP(canvas, 0.72);
 }
 
 // --- Image Compression ---

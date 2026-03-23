@@ -271,7 +271,7 @@ async function fetchAndCache(domain: string, sz: number): Promise<string | null>
  */
 export function preloadFavicon(urlOrDomain: string, sz: number = 64): void {
   const domain = urlOrDomain.includes('://') ? extractDomain(urlOrDomain) : urlOrDomain;
-  if (domain) loadFaviconAsync(domain, sz);
+  if (domain) fetchAndCache(domain, sz);
 }
 
 /**
