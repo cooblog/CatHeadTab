@@ -3,7 +3,7 @@
 /* 
   液态玻璃 (Glassmorphism) 主题与变量预设
 */
-@theme {
+:root {
   --color-glass-base: rgba(255, 255, 255, 0.1);
   --color-glass-border: rgba(255, 255, 255, 0.2);
   --color-glass-bg-light: rgba(255, 255, 255, 0.15);
@@ -60,42 +60,93 @@ body {
 @layer components {
   /* 基础玻璃面板 (用于顶栏、大卡片、Dock等) */
   .glass-panel {
-    @apply bg-white/10 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] rounded-2xl;
+    background-color: rgba(255, 255, 255, 0.1);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    border-radius: 1rem;
   }
-  
+
   .glass-panel-dark {
-    @apply bg-black/30 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] rounded-2xl;
+    background-color: rgba(0, 0, 0, 0.3);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    border-radius: 1rem;
   }
 
   /* 悬浮互动式玻璃卡片 (用于应用图标、小组件) */
   .glass-card {
-    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300;
+    background-color: rgba(255, 255, 255, 0.05);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    transition: all 0.3s;
   }
-  
+
   .glass-card:hover {
-    @apply bg-white/10 border-white/30 shadow-[0_8px_24px_rgba(255,255,255,0.1)] -translate-y-1;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.1);
+    transform: translateY(-0.25rem);
   }
-  
+
   .glass-card-active {
-    @apply bg-white/20 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.2)] scale-105;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
   }
-  
+
   /* 交互按钮 */
   .glass-button {
-    @apply px-4 py-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white font-medium transition-all;
+    padding: 0.5rem 1rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    color: #fff;
+    font-weight: 500;
+    transition: all 0.15s;
   }
-  
+
   .glass-button:hover {
-    @apply bg-white/20 border-white/40 shadow-lg cursor-pointer;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
   }
-  
+
   .glass-button:active {
-    @apply scale-95 bg-white/5;
+    transform: scale(0.95);
+    background-color: rgba(255, 255, 255, 0.05);
   }
-  
+
   /* 文本输入框 */
   .glass-input {
-    @apply w-full px-4 py-2 bg-black/20 backdrop-blur-sm border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/50 transition-all;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    background-color: rgba(0, 0, 0, 0.2);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    color: #fff;
+    transition: all 0.15s;
+  }
+
+  .glass-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .glass-input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
   }
 
   .window-sidebar {
