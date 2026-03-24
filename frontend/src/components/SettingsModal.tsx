@@ -563,7 +563,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
       {/* App Window container */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-5xl sm:h-[85vh] md:h-[80vh]'}`}
+        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-6xl sm:h-[70vh] md:h-[68vh]'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
@@ -873,14 +873,14 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
                           {/* Image grid — current page only (thumbnails for fast rendering) */}
                           {!localLoading && !localPageLoading && localPageImages.length > 0 && (
-                            <div className={`grid gap-2.5 sm:gap-3.5 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
+                            <div className={`grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
                               {localPageImages.map(img => (
                                 <div
                                   key={img.name}
                                   className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
                                   onClick={() => openLocalPreview(img.name, img.handle)}
                                 >
-                                  <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[68%] sm:pb-[62%]'} />
+                                  <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[72%] sm:pb-[66%]'} />
                                   <img
                                     src={img.thumbUrl}
                                     alt={img.name}
@@ -1073,14 +1073,14 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                           {/* Wallpaper grid */}
                           {!wpLoading && wpResult && wpResult.wallpapers.length > 0 && (
                             <>
-                            <div className={`grid gap-2.5 sm:gap-3.5 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
+                            <div className={`grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
                               {wpMobileItems.map(item => (
                                 <div
                                   key={item.id}
                                   className={`relative group cursor-pointer rounded-lg overflow-hidden border ${purityBorderClass(item.purity)} transition-all`}
                                   onClick={() => setWpPreviewItem(item)}
                                 >
-                                  <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[68%] sm:pb-[62%]'} />
+                                  <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[72%] sm:pb-[66%]'} />
                                   <img
                                     src={item.thumbSmall}
                                     alt={`Wallpaper ${item.id}`}
@@ -1189,7 +1189,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <button
                 type="button"
                 onClick={scrollToTop}
-                className="absolute bottom-4 right-8 md:bottom-5 md:right-10 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 border border-white/15 hover:border-white/30 text-white/70 hover:text-white flex items-center justify-center shadow-lg backdrop-blur-sm transition-all active:scale-90 z-10 animate-fadeIn"
+                className="absolute bottom-4 right-12 md:bottom-5 md:right-14 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 border border-white/15 hover:border-white/30 text-white/70 hover:text-white flex items-center justify-center shadow-lg backdrop-blur-sm transition-all active:scale-90 z-10 animate-fadeIn"
                 title="Back to top"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
