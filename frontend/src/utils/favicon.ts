@@ -109,7 +109,7 @@ export function extractDomain(urlStr: string): string {
  * Build the backend favicon proxy URL.
  */
 export function getFaviconProxyUrl(domain: string, sz: number = 64): string {
-  const serverUrl = useConfigStore.getState().serverUrl;
+  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
   if (!serverUrl || !domain) return '';
 
   const base = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
@@ -286,7 +286,7 @@ export function getGoogleFaviconUrl(urlOrDomain: string, sz: number = 64): strin
  * Smart favicon URL: uses backend proxy if server is configured, falls back to Google S2.
  */
 export function getSmartFaviconUrl(urlOrDomain: string, sz: number = 64): string {
-  const serverUrl = useConfigStore.getState().serverUrl;
+  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
 
   // If server is configured, use the proxy (with local caching)
   if (serverUrl) {

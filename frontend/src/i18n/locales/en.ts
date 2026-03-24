@@ -29,6 +29,7 @@ export const en = {
   'desktop.duplicateInFolderHint': '"{title}" already exists in this folder',
   'desktop.addAnyway': 'Add Anyway',
   'desktop.openBookmarks': 'Bookmark Browser',
+  'desktop.wallpaperSettings': 'Wallpaper',
   // Search Modes
   'search.google': 'Google Search',
   'search.bing': 'Bing Search',
@@ -47,6 +48,7 @@ export const en = {
   'settings.sysTitle': 'Backend Server connection',
   'settings.sysDesc': 'Connect CatHeadTab to your custom self-hosted Go backend for heavy-lifting cloud sync features.',
   'settings.sysLabel': 'Server URL payload path',
+  'settings.sysEnvConfigured': 'Set via environment variable',
   'settings.cancel': 'Cancel',
   // Wallpaper sub-tabs
   'settings.wpTabCurrent': 'Current Wallpaper',
@@ -96,7 +98,7 @@ export const en = {
   'settings.wpPurityLabel': 'Purity',
   'settings.wpPreview': 'Preview',
   'settings.wpUse': 'Use this wallpaper',
-  'settings.wpUseThis': 'Use This Wallpaper',
+  'settings.wpUseThis': 'Apply',
   'settings.wpDownload': 'Download',
   'settings.wpNoResults': 'No matching wallpapers found',
   'settings.wpNoMore': 'No more wallpapers',

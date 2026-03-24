@@ -1,6 +1,22 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
+/**
+ * ENV_API_URL is the backend API base URL injected at build time via the
+ * `VITE_API_URL` environment variable. When set, it takes precedence over
+ * the user-configured serverUrl and the server-address input is hidden.
+ *
+ * Example `.env`:
+ *   VITE_API_URL=https://api.catheadtab.com
+ */
+export const ENV_API_URL: string = (import.meta.env.VITE_API_URL as string || '').replace(/\/+$/, '');
+
+/**
+ * Whether the backend API URL is pre-configured via environment variable.
+ * When true, users don't need to manually enter a server address.
+ */
+export const isEnvConfigured: boolean = !!ENV_API_URL;
+
 export interface UserProfile {
   username: string;
   email: string;
@@ -23,6 +39,8 @@ interface ConfigState {
   setUserProfile: (profile: UserProfile | null) => void
   logout: () => void
   isConfigured: () => boolean
+  /** Returns the effective API URL (env variable takes precedence over user input). */
+  getEffectiveServerUrl: () => string
 }
 
 // Custom storage combining localStorage (web fallback) and chrome.storage if available
@@ -64,7 +82,8 @@ export const useConfigStore = create<ConfigState>()(
       setBackgroundImage: (url) => set({ backgroundImage: url }),
       setUserProfile: (profile) => set({ userProfile: profile }),
       logout: () => set({ jwtToken: null, userProfile: null }),
-      isConfigured: () => !!get().serverUrl,
+      isConfigured: () => !!(ENV_API_URL || get().serverUrl),
+      getEffectiveServerUrl: () => ENV_API_URL || get().serverUrl,
     }),
     {
       name: 'catheadtab-config',

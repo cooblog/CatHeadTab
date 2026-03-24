@@ -7,12 +7,15 @@ const client = axios.create({
 
 // Request interceptor: Dynamic Base URL and JWT Authorization
 client.interceptors.request.use((config) => {
-  const { serverUrl, jwtToken } = useConfigStore.getState();
+  const state = useConfigStore.getState();
+  const effectiveUrl = state.getEffectiveServerUrl();
   
-  if (serverUrl) {
-    // Ensure Base URL is dynamic for every request
-    config.baseURL = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
+  if (effectiveUrl) {
+    // Ensure Base URL is dynamic for every request (env var takes precedence)
+    config.baseURL = effectiveUrl.endsWith('/') ? effectiveUrl.slice(0, -1) : effectiveUrl;
   }
+  
+  const { jwtToken } = state;
   
   if (jwtToken && config.headers) {
     config.headers.Authorization = `Bearer ${jwtToken}`;

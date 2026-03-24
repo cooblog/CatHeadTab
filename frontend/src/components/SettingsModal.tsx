@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useConfigStore } from '../store/configStore';
+import { useConfigStore, isEnvConfigured, ENV_API_URL } from '../store/configStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { saveImageBlob, loadImageBlob, compressImageToWebP, getRawBlob, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
 import client from '../api/client';
@@ -38,11 +38,11 @@ const IDB_BG_KEY = 'bg-custom';
 const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
 
-export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> = ({ onClose, initialTab = 'wallpaper' }) => {
   const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage } = useConfigStore();
   const { t } = useTranslation();
 
-  const [activeTab, setActiveTab] = useState<Tab>('wallpaper');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [wpSubTab, setWpSubTab] = useState<WallpaperSubTab>('current');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [url, setUrl] = useState(serverUrl);
@@ -139,7 +139,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   // Fetch provider config (allowed purity, hasApiKey) when switching to wallhaven source
   useEffect(() => {
     if (wpSource !== 'wallhaven' || wpConfigLoaded.current) return;
-    const { serverUrl: srvUrl } = useConfigStore.getState();
+    const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
     if (!srvUrl) return;
     (async () => {
       try {
@@ -159,7 +159,7 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   }, [wpSource]);
 
   const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false) => {
-    const { serverUrl: srvUrl } = useConfigStore.getState();
+    const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
     if (!srvUrl) {
       setWpError(t('settings.wpNeedServer'));
       return;
@@ -1170,15 +1170,22 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                     <p className="text-[13px] text-white/50 mb-5">{t('settings.sysDesc')}</p>
 
                     <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('settings.sysLabel')}</label>
-                    <input
-                      type="url"
-                      value={url}
-                      onChange={e => setUrl(e.target.value)}
-                      onBlur={() => applyServerUrl(url)}
-                      onKeyDown={e => { if (e.key === 'Enter') { applyServerUrl(url); (e.target as HTMLInputElement).blur(); } }}
-                      className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3.5 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 focus:bg-black/60 transition-all shadow-inner"
-                      placeholder="http://localhost:8080"
-                    />
+                    {isEnvConfigured ? (
+                      <div className="w-full bg-black/20 border border-white/5 rounded-xl px-4 py-3.5 text-[14px] text-white/50 cursor-not-allowed select-all">
+                        {ENV_API_URL}
+                        <span className="ml-2 text-[11px] text-[#72d565]/70 font-medium">({t('settings.sysEnvConfigured')})</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="url"
+                        value={url}
+                        onChange={e => setUrl(e.target.value)}
+                        onBlur={() => applyServerUrl(url)}
+                        onKeyDown={e => { if (e.key === 'Enter') { applyServerUrl(url); (e.target as HTMLInputElement).blur(); } }}
+                        className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3.5 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 focus:bg-black/60 transition-all shadow-inner"
+                        placeholder="http://localhost:8080"
+                      />
+                    )}
                   </div>
                 </div>
               )}

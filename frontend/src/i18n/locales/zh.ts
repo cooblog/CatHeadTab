@@ -29,6 +29,7 @@ export const zh = {
   'desktop.duplicateInFolderHint': '「{title}」已存在于该文件夹中',
   'desktop.addAnyway': '仍然添加',
   'desktop.openBookmarks': '书签浏览器',
+  'desktop.wallpaperSettings': '壁纸设置',
   // Search Modes
   'search.google': '谷歌搜索',
   'search.bing': '必应搜索',
@@ -47,6 +48,7 @@ export const zh = {
   'settings.sysTitle': '后端云端连接',
   'settings.sysDesc': '连接到您自建的 Go 后端，开启强力云端同步功能。',
   'settings.sysLabel': '服务器 API 连接地址',
+  'settings.sysEnvConfigured': '已通过环境变量配置',
   'settings.cancel': '取消',
   // Wallpaper sub-tabs
   'settings.wpTabCurrent': '当前壁纸',

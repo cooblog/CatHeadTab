@@ -54,7 +54,7 @@ function sortCategories(categories: PresetCategory[]): PresetCategory[] {
 
 export function ExploreWorld({ onClose }: ExploreWorldProps) {
   const { t } = useTranslation();
-  const { serverUrl } = useConfigStore();
+  const effectiveServerUrl = useConfigStore(s => s.getEffectiveServerUrl());
   const { addDesktopItem, layout } = useLayoutStore();
 
   const [categories, setCategories] = useState<PresetCategory[]>([]);
@@ -95,7 +95,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
       }
     }
     fetchPresets();
-  }, [serverUrl]);
+  }, [effectiveServerUrl]);
 
   // Keep active category in sync
   useEffect(() => {

@@ -2,30 +2,62 @@
 package handler
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	// Register image decoders for size detection.
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/semaphore"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
 	faviconCacheDir     = "data/favicon_cache"
 	faviconMaxSize      = 512 * 1024 // 512 KB max per icon
 	faviconFetchTimeout = 8 * time.Second
+
+	// faviconMinDesiredSize is the minimum acceptable dimension (width or height)
+	// for the primary source (Google S2). If the returned icon is smaller than
+	// this threshold, we fall through to alternative sources.
+	faviconMinDesiredSize = 32
+
+	// faviconMaxConcurrentFetches limits the number of concurrent outbound HTTP
+	// requests to external favicon APIs to prevent goroutine explosion.
+	faviconMaxConcurrentFetches = 10
+
+	// faviconSemaphoreTimeout is how long we wait to acquire a semaphore slot
+	// before giving up on this particular fetch attempt.
+	faviconSemaphoreTimeout = 5 * time.Second
 )
+
+// faviconResult holds the result of a favicon fetch for singleflight sharing.
+type faviconResult struct {
+	data        []byte
+	contentType string
+}
 
 // FaviconHandler handles HTTP requests for favicon proxy with disk caching.
 type FaviconHandler struct {
 	cacheDir   string
 	httpClient *http.Client
+	sfGroup    singleflight.Group        // deduplicates concurrent fetches for the same domain+size
+	sem        *semaphore.Weighted       // limits concurrent outbound HTTP requests
 }
 
 // NewFaviconHandler creates a new FaviconHandler and ensures the cache directory exists.
@@ -41,6 +73,7 @@ func NewFaviconHandler() *FaviconHandler {
 				return nil
 			},
 		},
+		sem: semaphore.NewWeighted(faviconMaxConcurrentFetches),
 	}
 
 	if err := os.MkdirAll(h.cacheDir, 0755); err != nil {
@@ -52,6 +85,7 @@ func NewFaviconHandler() *FaviconHandler {
 
 // Get handles GET /api/v1/favicon?domain=example.com&sz=64
 // It returns a cached favicon or fetches one from multiple sources.
+// Concurrent requests for the same domain+size are deduplicated via singleflight.
 func (h *FaviconHandler) Get(c *gin.Context) {
 	domain := c.Query("domain")
 	if domain == "" {
@@ -81,8 +115,26 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 		return
 	}
 
-	// Cache miss — try fetching from multiple sources
-	data, contentType, err := h.fetchFavicon(domain, sz)
+	// Cache miss — use singleflight to deduplicate concurrent requests for the same key
+	sfKey := domain + "_" + sz
+	v, err, _ := h.sfGroup.Do(sfKey, func() (any, error) {
+		// Double-check disk cache inside singleflight (another goroutine may have written it)
+		if data, contentType, cacheErr := h.readCache(cachePath); cacheErr == nil {
+			return &faviconResult{data: data, contentType: contentType}, nil
+		}
+		data, contentType, fetchErr := h.fetchFavicon(domain, sz)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		// Write to disk cache (best-effort, don't block response)
+		go func() {
+			if writeErr := h.writeCache(cachePath, data, contentType); writeErr != nil {
+				log.Printf("⚠️  Failed to write favicon cache for %s: %v", domain, writeErr)
+			}
+		}()
+		return &faviconResult{data: data, contentType: contentType}, nil
+	})
+
 	if err != nil {
 		// Return a 1x1 transparent PNG as fallback
 		c.Header("Cache-Control", "public, max-age=86400") // cache fallback for 1 day
@@ -91,45 +143,103 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 		return
 	}
 
-	// Write to disk cache (best-effort, don't block response)
-	go func() {
-		if writeErr := h.writeCache(cachePath, data, contentType); writeErr != nil {
-			log.Printf("⚠️  Failed to write favicon cache for %s: %v", domain, writeErr)
-		}
-	}()
-
+	result := v.(*faviconResult)
 	c.Header("Cache-Control", "public, max-age=31536000, immutable")
 	c.Header("X-Favicon-Cache", "MISS")
-	c.Data(http.StatusOK, contentType, data)
+	c.Data(http.StatusOK, result.contentType, result.data)
 }
 
-// fetchFavicon tries multiple sources to get a favicon for the domain.
+// fetchFavicon tries multiple sources in priority order to get a favicon for the domain.
+//
+// Source priority:
+//  1. Google S2 — with size validation (reject if returned image is smaller than desired)
+//  2. DuckDuckGo API — fast response, ico format
+//  3. Favicone (Vercel) — modern API with smart fallback, supports size parameter
+//  4. Direct /favicon.ico from the website
+//  5. HTML <link rel="icon"> parsing
 func (h *FaviconHandler) fetchFavicon(domain, sz string) ([]byte, string, error) {
-	sources := []string{
-		// Source 1: Google S2 service (works well from servers, even if blocked for end users)
-		fmt.Sprintf("https://s2.googleusercontent.com/s2/favicons?domain_url=https://%s&sz=%s", url.QueryEscape(domain), sz),
-		// Source 2: Direct /favicon.ico from the website
-		fmt.Sprintf("https://%s/favicon.ico", domain),
-		// Source 3: Try parsing the HTML for <link rel="icon">
-		// (handled separately below)
-	}
+	desiredSize := parseDesiredSize(sz)
 
-	for _, src := range sources {
-		data, contentType, err := h.fetchURL(src)
-		if err == nil && len(data) > 0 && isValidImage(data) {
-			return data, contentType, nil
+	// Source 1: Google S2 — validate returned image dimensions
+	googleURL := fmt.Sprintf(
+		"https://s2.googleusercontent.com/s2/favicons?domain_url=https://%s&sz=%s",
+		url.QueryEscape(domain), sz,
+	)
+	if data, ct, err := h.fetchWithSemaphore(googleURL); err == nil && len(data) > 0 && isValidImage(data) {
+		if isImageLargeEnough(data, desiredSize) {
+			return data, ct, nil
 		}
+		log.Printf("ℹ️  Google S2 returned small icon for %s (%s), trying fallback sources", domain, sz)
 	}
 
-	// Source 3: Parse HTML <link rel="icon"> tag
+	// Source 2: DuckDuckGo API — fast, returns ico format
+	duckURL := fmt.Sprintf("https://icons.duckduckgo.com/ip3/%s.ico", domain)
+	if data, ct, err := h.fetchWithSemaphore(duckURL); err == nil && len(data) > 0 && isValidImage(data) {
+		return data, ct, nil
+	}
+
+	// Source 3: Favicone (Vercel) — supports size parameter, smart fallback
+	faviconeURL := fmt.Sprintf("https://favicone.com/%s?s=%s", domain, sz)
+	if data, ct, err := h.fetchWithSemaphore(faviconeURL); err == nil && len(data) > 0 && isValidImage(data) {
+		return data, ct, nil
+	}
+
+	// Source 4: Direct /favicon.ico from the website
+	directURL := fmt.Sprintf("https://%s/favicon.ico", domain)
+	if data, ct, err := h.fetchWithSemaphore(directURL); err == nil && len(data) > 0 && isValidImage(data) {
+		return data, ct, nil
+	}
+
+	// Source 5: Parse HTML <link rel="icon"> tag
 	if iconURL := h.parseHTMLFavicon(domain); iconURL != "" {
-		data, contentType, err := h.fetchURL(iconURL)
-		if err == nil && len(data) > 0 && isValidImage(data) {
-			return data, contentType, nil
+		if data, ct, err := h.fetchWithSemaphore(iconURL); err == nil && len(data) > 0 && isValidImage(data) {
+			return data, ct, nil
 		}
 	}
 
 	return nil, "", fmt.Errorf("all favicon sources failed for %s", domain)
+}
+
+// fetchWithSemaphore wraps fetchURL with semaphore-based concurrency control.
+// It prevents goroutine explosion when many domains are fetched simultaneously.
+func (h *FaviconHandler) fetchWithSemaphore(rawURL string) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), faviconSemaphoreTimeout)
+	defer cancel()
+
+	if err := h.sem.Acquire(ctx, 1); err != nil {
+		return nil, "", fmt.Errorf("semaphore acquire timeout for %s: %w", rawURL, err)
+	}
+	defer h.sem.Release(1)
+
+	return h.fetchURL(rawURL)
+}
+
+// parseDesiredSize converts the sz query parameter to an integer.
+// Returns faviconMinDesiredSize as a safe default.
+func parseDesiredSize(sz string) int {
+	n, err := strconv.Atoi(sz)
+	if err != nil || n <= 0 {
+		return faviconMinDesiredSize
+	}
+	return n
+}
+
+// isImageLargeEnough decodes the image header and checks whether both
+// dimensions meet the desired minimum size. ICO files that fail standard
+// Go image decoding are accepted optimistically (they often contain
+// multiple sizes).
+func isImageLargeEnough(data []byte, desiredSize int) bool {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		// ICO and some other formats are not supported by Go's standard
+		// image package. Accept them optimistically rather than rejecting.
+		return true
+	}
+	minDim := faviconMinDesiredSize
+	if desiredSize > 0 && desiredSize < minDim {
+		minDim = desiredSize
+	}
+	return cfg.Width >= minDim && cfg.Height >= minDim
 }
 
 // fetchURL fetches raw bytes from a URL.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useConfigStore } from '../store/configStore';
+import { useConfigStore, isEnvConfigured } from '../store/configStore';
 import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
 
@@ -10,8 +10,8 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { serverUrl, setServerUrl, setJwtToken } = useConfigStore();
   const { t } = useTranslation();
 
-  // If serverUrl is already configured, skip the server step
-  const [step, setStep] = useState<ModalStep>(serverUrl ? 'auth' : 'server');
+  // Skip server step if env variable is set OR serverUrl is already configured
+  const [step, setStep] = useState<ModalStep>((isEnvConfigured || serverUrl) ? 'auth' : 'server');
   const [serverInput, setServerInput] = useState(serverUrl);
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');

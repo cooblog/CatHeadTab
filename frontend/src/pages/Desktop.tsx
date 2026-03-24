@@ -281,6 +281,7 @@ export const Desktop: React.FC = () => {
   const [searchMode, setSearchMode] = useState<SearchMode>('google');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'wallpaper' | 'system'>('wallpaper');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isBookmarkBrowserOpen, setIsBookmarkBrowserOpen] = useState(false);
@@ -922,7 +923,7 @@ export const Desktop: React.FC = () => {
       </DragOverlay>
 
       {/* Modals */}
-      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />}
       {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
       {isProfileOpen && <ProfileModal onClose={() => setIsProfileOpen(false)} />}
       {isBookmarkBrowserOpen && <BookmarkBrowser onClose={() => setIsBookmarkBrowserOpen(false)} />}
@@ -939,25 +940,25 @@ export const Desktop: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[200]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div 
-            className="fixed z-[210] bg-[#1c1c1e]/80 backdrop-blur-[40px] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[180px] animate-scaleIn"
+            className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[180px] animate-scaleIn"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
           >
             {contextMenu.item.type !== 'app' && (
               <>
                 <button 
-                  className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
                   onClick={() => handleEdit(contextMenu.item)}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                   {t('desktop.editItem')}
                 </button>
-                <div className="h-[1px] bg-white/10 mx-2 my-1" />
+                <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
               </>
             )}
             
             {contextMenu.inDock ? (
               <button 
-                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
                 onClick={() => { moveItemFromDock(contextMenu.item.id); setContextMenu(null); }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
@@ -965,7 +966,7 @@ export const Desktop: React.FC = () => {
               </button>
             ) : (
               <button 
-                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
                 onClick={() => { moveItemToDock(contextMenu.item.id); setContextMenu(null); }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
@@ -975,9 +976,9 @@ export const Desktop: React.FC = () => {
 
             {contextMenu.item.type !== 'app' && (
               <>
-                <div className="h-[1px] bg-white/10 mx-2 my-1" />
+                <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
                 <button 
-                  className="w-full text-left px-4 py-2.5 text-[13px] text-red-400 hover:bg-red-500/10 flex items-center gap-3 transition-colors"
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-red-400 hover:bg-red-500/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
                   onClick={() => handleDelete(contextMenu.item)}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
@@ -994,37 +995,45 @@ export const Desktop: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[200]" onClick={() => setBlankContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setBlankContextMenu(null); }} />
           <div 
-            className="fixed z-[210] bg-[#1c1c1e]/80 backdrop-blur-[40px] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-scaleIn"
+            className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[200px] animate-scaleIn"
             style={{ left: Math.min(blankContextMenu.x, window.innerWidth - 220), top: Math.min(blankContextMenu.y, window.innerHeight - 200) }}
           >
             <button 
-              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
               onClick={() => { setBlankContextMenu(null); openAddModal(currentPage, undefined); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
               {t('desktop.addLink')}
             </button>
             <button 
-              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
               onClick={() => { setBlankContextMenu(null); setIsAddModalOpen(true); setAddToPageIndex(currentPage); setEditingItem({ id: '', type: 'folder', title: '' }); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               {t('desktop.addFolder')}
             </button>
-            <div className="h-[1px] bg-white/10 mx-2 my-1" />
+            <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
             <button 
-              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
               onClick={() => { setBlankContextMenu(null); setIsBookmarkBrowserOpen(true); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
               {t('desktop.openBookmarks')}
             </button>
             <button 
-              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/10 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
               onClick={() => { setBlankContextMenu(null); setIsExploreOpen(true); }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
               {t('explore.title')}
+            </button>
+            <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
+            <button 
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+              onClick={() => { setBlankContextMenu(null); setSettingsInitialTab('wallpaper'); setIsSettingsOpen(true); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M2 10h20"/><path d="M10 2v8"/></svg>
+              {t('desktop.wallpaperSettings')}
             </button>
           </div>
         </>
