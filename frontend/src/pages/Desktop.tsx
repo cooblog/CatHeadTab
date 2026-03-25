@@ -483,6 +483,14 @@ export const Desktop: React.FC = () => {
 
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Track whether the currently dragged item originally came from the dock.
+  // This is needed because after a cross-container move during dragOver,
+  // the item is already in pages but still needs manual reordering calls
+  // (SortableContext can't auto-sort items that were added mid-drag).
+  const dragStartedInDockRef = useRef(false);
+  // Guard against infinite re-render loops: track the last reorder source→target
+  // pair so we never fire the same cross-container move twice in a row.
+  const lastReorderRef = useRef<string | null>(null);
   const folderHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   // Track the last folder we hovered over (survives brief flickers away)
@@ -609,7 +617,12 @@ export const Desktop: React.FC = () => {
     _stableOverId = null;
     _pendingOverId = null;
     _pendingTimestamp = 0;
-    setActiveId(event.active.id as string);
+    const id = event.active.id as string;
+    setActiveId(id);
+    // Remember whether the item started in the dock so we can continue
+    // manually reordering it after a cross-container move (see handleDragOver).
+    dragStartedInDockRef.current = layout.dock.some(item => item.id === id);
+    lastReorderRef.current = null;
     setContextMenu(null);
     // Freeze the page scroller during drag to prevent touch-drag from being
     // interpreted as a page-swipe on mobile.
@@ -617,7 +630,7 @@ export const Desktop: React.FC = () => {
       pagesContainerRef.current.style.overflow = 'hidden';
       pagesContainerRef.current.style.scrollSnapType = 'none';
     }
-  }, []);
+  }, [layout.dock]);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event;
@@ -727,8 +740,15 @@ export const Desktop: React.FC = () => {
       const overData = over?.data.current as { isDock?: boolean } | undefined;
       const targetIsDock = !!overData?.isDock;
 
-      if (sourceInDock !== targetIsDock) {
-        // Cross-container: move item in real-time so sortable can animate
+      const reorderKey = `${active.id}->${newOverId}`;
+      const shouldReorder =
+        (sourceInDock !== targetIsDock) ||
+        (!sourceInDock && !targetIsDock && dragStartedInDockRef.current);
+
+      if (shouldReorder && lastReorderRef.current !== reorderKey) {
+        // Record this pair so we don't fire the same move again when
+        // @dnd-kit re-measures and re-fires handleDragOver synchronously.
+        lastReorderRef.current = reorderKey;
         reorderDesktopItem(active.id as string, newOverId);
       }
     }
@@ -819,6 +839,8 @@ export const Desktop: React.FC = () => {
     }
 
     setActiveId(null);
+    dragStartedInDockRef.current = false;
+    lastReorderRef.current = null;
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
@@ -835,6 +857,8 @@ export const Desktop: React.FC = () => {
       pagesContainerRef.current.style.scrollSnapType = '';
     }
     setActiveId(null);
+    dragStartedInDockRef.current = false;
+    lastReorderRef.current = null;
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);

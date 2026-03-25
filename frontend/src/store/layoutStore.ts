@@ -363,6 +363,13 @@ export const useLayoutStore = create<LayoutState>()(
           insertIdx = targetIdx;
         }
 
+        // Early exit: if source would end up exactly where it was, skip the
+        // state update to prevent infinite re-render loops during drag.
+        // In same-container moves the insertIdx already accounts for removal,
+        // so we can compare directly; in cross-container moves, sourceIdx is
+        // in a different list so there's no overlap to check.
+        if (sameContainer && insertIdx === sourceIdx) return;
+
         // 4. Insert source at the calculated position
         if (targetLocation === 'page') {
           layout.pages[targetPageIdx] = [
