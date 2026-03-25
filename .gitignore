@@ -32,6 +32,10 @@ Thumbs.db
 /backend/cmd/server/server.exe
 /backend/data/
 
+# Temporary tools (not needed in production)
+/backend/tools/sqlexec/
+/backend/tools/dbcheck/
+
 # Frontend
 /frontend/.vite/
 /frontend/node_modules/
