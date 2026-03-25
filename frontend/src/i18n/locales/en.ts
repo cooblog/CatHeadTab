@@ -9,6 +9,7 @@ export const en = {
   'desktop.noIcons': 'Cannot find desktop icons.',
   'desktop.checkBookmarks': 'Please check your Chrome Bookmarks Bar or add items.',
   'desktop.emptyFolder': 'Empty Folder',
+  'desktop.dropOutOfFolder': 'Drop here to move out of folder',
   'desktop.addLink': 'Add Link',
   'desktop.addFolder': 'Add Folder',
   'desktop.editItem': 'Edit',

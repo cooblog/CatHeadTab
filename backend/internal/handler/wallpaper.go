@@ -72,7 +72,12 @@ func (h *WallpaperHandler) CacheStats(c *gin.Context) {
 // The frontend may pass a `purity` query param (comma-separated: sfw,sketchy,nsfw).
 // The service layer validates it against the server-side allowed purity set.
 //
-//	GET /api/v1/wallpapers/search?provider=wallhaven&q=nature&page=1&sorting=toplist&categories=general,anime&purity=sfw,sketchy
+// An optional `exclude` query param accepts a comma-separated list of wallpaper
+// IDs that the client has already loaded (e.g. from previous pages). Any matching
+// IDs are removed from the response so the client never sees duplicates even when
+// upstream data shifts between cached pages.
+//
+//	GET /api/v1/wallpapers/search?provider=wallhaven&q=nature&page=1&sorting=toplist&categories=general,anime&purity=sfw,sketchy&exclude=id1,id2
 func (h *WallpaperHandler) Search(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "wallhaven")
 
@@ -113,6 +118,13 @@ func (h *WallpaperHandler) Search(c *gin.Context) {
 	// invalidating the cached pointer.
 	if params.Sorting == "random" {
 		result = shuffleWallpapers(result)
+	}
+
+	// Deduplicate: remove wallpapers whose IDs the client already has.
+	// This handles the case where page 1 was refreshed but page 2+ still
+	// contains stale cached data with overlapping entries.
+	if excludeRaw := c.Query("exclude"); excludeRaw != "" {
+		result = excludeWallpapers(result, excludeRaw)
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -171,6 +183,50 @@ func shuffleWallpapers(src *model.WallpaperSearchResult) *model.WallpaperSearchR
 	})
 	return &model.WallpaperSearchResult{
 		Wallpapers:  shuffled,
+		CurrentPage: src.CurrentPage,
+		LastPage:    src.LastPage,
+		PerPage:     src.PerPage,
+		Total:       src.Total,
+		Seed:        src.Seed,
+	}
+}
+
+// excludeWallpapers returns a shallow copy of the search result with any
+// wallpapers whose IDs appear in the comma-separated excludeCSV removed.
+// This allows the frontend to pass the IDs it has already loaded (from
+// previously fetched pages) so the response contains no duplicates, even
+// when upstream data has shifted between cached pages.
+func excludeWallpapers(src *model.WallpaperSearchResult, excludeCSV string) *model.WallpaperSearchResult {
+	if src == nil || len(src.Wallpapers) == 0 || excludeCSV == "" {
+		return src
+	}
+
+	// Build a set of IDs to exclude.
+	parts := strings.Split(excludeCSV, ",")
+	excludeSet := make(map[string]struct{}, len(parts))
+	for _, id := range parts {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			excludeSet[trimmed] = struct{}{}
+		}
+	}
+	if len(excludeSet) == 0 {
+		return src
+	}
+
+	filtered := make([]model.Wallpaper, 0, len(src.Wallpapers))
+	for _, wp := range src.Wallpapers {
+		if _, skip := excludeSet[wp.ID]; !skip {
+			filtered = append(filtered, wp)
+		}
+	}
+
+	// If nothing was filtered, return the original to avoid an unnecessary copy.
+	if len(filtered) == len(src.Wallpapers) {
+		return src
+	}
+
+	return &model.WallpaperSearchResult{
+		Wallpapers:  filtered,
 		CurrentPage: src.CurrentPage,
 		LastPage:    src.LastPage,
 		PerPage:     src.PerPage,

@@ -18,11 +18,11 @@ import {
   PointerSensor,
   TouchSensor,
   closestCenter,
-  pointerWithin,
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
   CollisionDetection,
+  useDroppable,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -200,9 +200,10 @@ const SortableDesktopIcon: React.FC<{
     data: { item, isDock, isFolder: item.type === 'folder' },
   });
 
-  // When a folder drop is pending (user is dragging an icon toward a folder),
-  // freeze sortable transforms for ALL non-dragging items so the grid stays stable
-  // and the folder icon doesn't slide around.
+  // When the folder hover timer has fired (folderDropTargetId is set),
+  // freeze sortable transforms so the grid stays stable and the user can
+  // clearly see which folder they're about to drop into.
+  // Before the timer fires, normal reordering continues unhindered.
   const shouldFreezeTransform = isFolderDropPending && !isDragging;
 
   const style: React.CSSProperties = {
@@ -218,7 +219,7 @@ const SortableDesktopIcon: React.FC<{
       style={style}
       {...attributes}
       {...listeners}
-      className={`touch-manipulation ${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
+      className={`touch-none ${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
       data-desktop-icon="true"
       onClick={(e) => {
         if (!isDragging) {
@@ -240,6 +241,72 @@ const SortableDesktopIcon: React.FC<{
   );
 };
 
+// === Droppable zone: page background (catch drops on blank areas) ===
+const PAGE_DROP_PREFIX = '__page-drop-';
+const PageDropZone: React.FC<{ pageIdx: number; children: React.ReactNode }> = ({ pageIdx, children }) => {
+  const { setNodeRef } = useDroppable({
+    id: `${PAGE_DROP_PREFIX}${pageIdx}`,
+    data: { isPageDrop: true, pageIdx },
+  });
+  return (
+    <div ref={setNodeRef} className="min-w-full h-full snap-center pt-4 flex flex-col items-center">
+      {children}
+    </div>
+  );
+};
+
+// === Droppable zone: "Move out of folder" ===
+// Shown at the bottom of the folder overlay when the user starts dragging an item
+// inside the folder. Dropping here moves the item back to the desktop page.
+const FOLDER_DROP_OUT_ID = '__folder-drop-out__';
+
+const FolderDropOutZone: React.FC<{ isActive: boolean }> = ({ isActive }) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: FOLDER_DROP_OUT_ID,
+    data: { isFolderDropOut: true },
+  });
+  const { t } = useTranslation();
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`
+        transition-all duration-300 ease-out overflow-hidden
+        ${isActive ? 'max-h-24 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
+      `}
+    >
+      <div
+        className={`
+          flex items-center justify-center gap-2 py-4 px-6 mx-4 sm:mx-8 rounded-2xl
+          border-2 border-dashed transition-all duration-200
+          ${isOver
+            ? 'border-white/60 bg-white/20 scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.15)]'
+            : 'border-white/20 bg-white/[0.06]'
+          }
+        `}
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`transition-colors duration-200 ${isOver ? 'text-white' : 'text-white/40'}`}
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </svg>
+        <span className={`text-sm font-medium transition-colors duration-200 ${isOver ? 'text-white' : 'text-white/40'}`}>
+          {t('desktop.dropOutOfFolder')}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 
 // === Search Modes ===
 type SearchMode = 'google' | 'bing' | 'bookmarks' | 'history' | 'desktop';
@@ -253,27 +320,131 @@ const SEARCH_MODES = [
 ] as const;
 
 
-// === Custom collision detection: folders get priority when pointer is within them ===
-const folderAwareCollision: CollisionDetection = (args) => {
-  // First, check if the pointer is directly within any folder droppable
-  const pointerCollisions = pointerWithin(args);
-  const folderHit = pointerCollisions.find(
-    c => c.data?.droppableContainer?.data?.current?.isFolder
-  );
-  if (folderHit) {
-    return [folderHit];
-  }
+// === Custom collision detection: debounce reordering so icons don't swap too eagerly ===
+//
+// Problem: closestCenter triggers a reorder the moment the dragged item's center is
+// closer to a neighbour than its own slot. This is too sensitive — the user can't hover
+// over a folder for 500ms because the icon gets swapped away almost immediately.
+//
+// Solution: we add TWO layers of protection:
+// 1. Distance threshold: ignore collisions whose centre-distance exceeds a generous limit.
+// 2. Time-based debounce: a new "over" target must persist for SORT_DEBOUNCE_MS before
+//    we actually report it. While the debounce timer is running we keep reporting the
+//    *previous* stable target, giving the user time to pause on a folder.
+//
+// The debounce state lives outside the function so it persists across calls.
+const SORT_DEBOUNCE_MS = 300; // ms the pointer must stay on a new target before swapping
+let _stableOverId: string | number | null = null;
+let _pendingOverId: string | number | null = null;
+let _pendingTimestamp = 0;
 
-  // Fallback to closestCenter for normal sortable reordering
-  return closestCenter(args);
-};
+function createFolderAwareCollision(_draggedItem: DesktopItem | null): CollisionDetection {
+  return (args) => {
+    const collisions = closestCenter(args);
+    if (!collisions || collisions.length === 0) {
+      // Nothing nearby — reset debounce and report empty
+      _stableOverId = null;
+      _pendingOverId = null;
+      return collisions;
+    }
+
+    // Always keep special droppable zones in the results —
+    // they should not be subject to distance filtering or debounce.
+    const isSpecialZone = (id: string | number) => {
+      const idStr = String(id);
+      return idStr === FOLDER_DROP_OUT_ID || idStr.startsWith(PAGE_DROP_PREFIX);
+    };
+    const specialCollisions = collisions.filter((c) => isSpecialZone(c.id));
+
+    // --- Distance filter ---
+    const activeRect = args.active.rect.current.translated;
+    if (!activeRect) return collisions;
+
+    // Keep only collisions that are within a generous distance.
+    // We use 0.75× the cell-to-cell centre distance as the threshold.
+    // For desktop: cell dist ≈ 150px → threshold ≈ 112px
+    // For mobile:  cell dist ≈  96px → threshold ≈  72px
+    // This filters out far-away items while still allowing natural reordering.
+    const iconSize = Math.min(activeRect.width, activeRect.height);
+    const threshold = iconSize * 1.25;
+
+    const close = collisions.filter((c) => {
+      if (isSpecialZone(c.id)) return false; // handled separately
+      const d = typeof c.data?.value === 'number' ? c.data.value : 0;
+      return d <= threshold;
+    });
+
+    // Helper: append special zone collisions (page drop zones, folder drop-out)
+    // to any result set, ensuring they are always reachable.
+    // Special zones are appended at the END so regular icon collisions take
+    // priority; page drop zones only kick in when no icon is close enough.
+    const withSpecialZones = (result: typeof collisions) => {
+      if (specialCollisions.length === 0) return result;
+      const filtered = result.filter((c) => !isSpecialZone(c.id));
+      // If no normal collisions, special zones become the fallback
+      if (filtered.length === 0) return specialCollisions;
+      return [...filtered, ...specialCollisions];
+    };
+
+    if (close.length === 0) {
+      // No close collision — if we have special zones, return those as fallback
+      if (specialCollisions.length > 0) {
+        return specialCollisions;
+      }
+      // Otherwise keep the stable target so the grid doesn't jitter
+      if (_stableOverId != null) {
+        // Return the previous stable collision so SortableContext keeps its state
+        const kept = collisions.find((c) => c.id === _stableOverId);
+        return withSpecialZones(kept ? [kept] : []);
+      }
+      return withSpecialZones([]);
+    }
+
+    // --- Time-based debounce ---
+    const topId = close[0].id;
+    const now = Date.now();
+
+    if (topId === _stableOverId) {
+      // Same as the current stable target — no change needed
+      _pendingOverId = null;
+      return withSpecialZones(close);
+    }
+
+    if (topId !== _pendingOverId) {
+      // New candidate — start the debounce timer
+      _pendingOverId = topId;
+      _pendingTimestamp = now;
+      // Keep reporting the previous stable target in the meantime
+      if (_stableOverId != null) {
+        const kept = collisions.find((c) => c.id === _stableOverId);
+        return withSpecialZones(kept ? [kept] : close);
+      }
+      return withSpecialZones(close);
+    }
+
+    // Same candidate as pending — check if debounce time has elapsed
+    if (now - _pendingTimestamp >= SORT_DEBOUNCE_MS) {
+      // Debounce complete — accept the new target
+      _stableOverId = topId;
+      _pendingOverId = null;
+      return withSpecialZones(close);
+    }
+
+    // Still waiting — keep reporting the old stable target
+    if (_stableOverId != null) {
+      const kept = collisions.find((c) => c.id === _stableOverId);
+      return withSpecialZones(kept ? [kept] : close);
+    }
+    return withSpecialZones(close);
+  };
+}
 
 
 // === Main Desktop Page ===
 
 export const Desktop: React.FC = () => {
   const { fetchBookmarks } = useBookmarkStore();
-  const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem } = useLayoutStore();
+  const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem } = useLayoutStore();
   const { jwtToken } = useConfigStore();
   const { t } = useTranslation();
 
@@ -316,7 +487,6 @@ export const Desktop: React.FC = () => {
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   // Track the last folder we hovered over (survives brief flickers away)
   const lastFolderOverRef = useRef<string | null>(null);
-  const lastFolderOverTimeRef = useRef<number>(0);
   // When true, sortable transforms are frozen so the grid doesn't reorder while hovering a folder
   const [isFolderDropPending, setIsFolderDropPending] = useState(false);
 
@@ -342,6 +512,9 @@ export const Desktop: React.FC = () => {
   }, [layout]);
 
   const activeItem = activeId ? findItemById(activeId) : null;
+
+  // Collision detection: when dragging a folder, skip folder-priority so folders reorder normally
+  const collisionDetection = useMemo(() => createFolderAwareCollision(activeItem), [activeItem]);
 
   // Sensors: delay to distinguish click from drag
   const sensors = useSensors(
@@ -432,72 +605,194 @@ export const Desktop: React.FC = () => {
 
   // === DnD Handlers ===
   const handleDragStart = useCallback((event: DragStartEvent) => {
+    // Reset collision debounce state for the new drag session
+    _stableOverId = null;
+    _pendingOverId = null;
+    _pendingTimestamp = 0;
     setActiveId(event.active.id as string);
     setContextMenu(null);
+    // Freeze the page scroller during drag to prevent touch-drag from being
+    // interpreted as a page-swipe on mobile.
+    if (pagesContainerRef.current) {
+      pagesContainerRef.current.style.overflow = 'hidden';
+      pagesContainerRef.current.style.scrollSnapType = 'none';
+    }
   }, []);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { over } = event;
+    const { active, over } = event;
     const newOverId = over?.id as string | null;
 
-    // Folder hover detection — tolerant of brief flickers caused by sortable reordering
-    if (newOverId && newOverId !== activeId) {
-      const overItem = findItemById(newOverId);
-      if (overItem?.type === 'folder') {
-        // We're over a folder — freeze the grid so icons don't shuffle
-        setIsFolderDropPending(true);
+    // If the dragged item itself is a folder, skip folder-hover detection entirely
+    // so that folders can be reordered freely via normal sortable logic.
+    const activeItem_ = activeId ? findItemById(activeId) : null;
+    const isDraggingFolder = activeItem_?.type === 'folder';
 
+    // --- Helper: compute overlap ratio between the dragged icon and the over element ---
+    // Returns a value between 0 and 1, representing how much of the smaller rect
+    // is overlapping with the over rect. This is more reliable than pointer-based
+    // detection because the dragged overlay has real size.
+    const getOverlapRatio = (): number => {
+      // active.rect.current.translated is the real-time rect of the dragged item
+      const activeRect = active.rect.current.translated;
+      const overRect = over?.rect;
+      if (!activeRect || !overRect) return 0;
+
+      const overlapLeft = Math.max(activeRect.left, overRect.left);
+      const overlapRight = Math.min(activeRect.right, overRect.right);
+      const overlapTop = Math.max(activeRect.top, overRect.top);
+      const overlapBottom = Math.min(activeRect.bottom, overRect.bottom);
+
+      if (overlapLeft >= overlapRight || overlapTop >= overlapBottom) return 0;
+
+      const overlapArea = (overlapRight - overlapLeft) * (overlapBottom - overlapTop);
+      // Use the smaller rect's area as denominator so ratio is meaningful
+      const activeArea = activeRect.width * activeRect.height;
+      const overArea = overRect.width * overRect.height;
+      const smallerArea = Math.min(activeArea, overArea);
+
+      return smallerArea > 0 ? overlapArea / smallerArea : 0;
+    };
+
+    // Overlap threshold: the dragged icon must overlap ≥50% of the folder to trigger
+    const FOLDER_OVERLAP_THRESHOLD = 0.5;
+
+    // --- Folder hover detection ---
+    // When the dragged icon overlaps a folder enough AND stays there long enough (500ms),
+    // we mark it as a drop target. While the overlap is sufficient, we PAUSE normal
+    // reordering so the icon doesn't get pushed away before the timer fires.
+    let isOverFolder = false;
+
+    if (!isDraggingFolder && newOverId && newOverId !== activeId) {
+      const overItem = findItemById(newOverId);
+      const overlapRatio = getOverlapRatio();
+
+      if (overItem?.type === 'folder' && overlapRatio >= FOLDER_OVERLAP_THRESHOLD) {
+        // Sufficient overlap with a folder — start/continue hover timer
+        isOverFolder = true;
         if (lastFolderOverRef.current !== newOverId) {
           // Switched to a different folder — restart timer
           lastFolderOverRef.current = newOverId;
-          lastFolderOverTimeRef.current = Date.now();
           if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
           setFolderDropTargetId(null);
+          setIsFolderDropPending(true); // Freeze grid immediately to prevent reorder
           folderHoverTimerRef.current = setTimeout(() => {
             setFolderDropTargetId(newOverId);
-          }, 300);
+          }, 500);
         }
-        // Same folder as before — keep the timer running, don't reset
-        return;
-      }
-    }
-
-    // Over a non-folder item or nothing:
-    // Only reset if we've been away from the last folder for a while (debounce flicker)
-    // The sortable algorithm may briefly report a non-folder neighbor during reorder animation
-    if (lastFolderOverRef.current) {
-      // Give a 150ms grace period before clearing the folder target
-      // This prevents sortable position-swap flickers from resetting the timer
-      setTimeout(() => {
-        // If after the grace period we still haven't returned to a folder, clear it
-        if (lastFolderOverRef.current && Date.now() - lastFolderOverTimeRef.current > 250) {
+        // Same folder as before — keep the timer running, stay frozen
+      } else {
+        // Over a non-folder item, or not enough overlap — clear folder hover state
+        if (lastFolderOverRef.current) {
           if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
           lastFolderOverRef.current = null;
           setFolderDropTargetId(null);
           setIsFolderDropPending(false);
         }
-      }, 150);
+      }
+    } else if (!newOverId || newOverId === activeId) {
+      // Not over anything meaningful — clear folder hover state
+      if (lastFolderOverRef.current) {
+        if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
+        lastFolderOverRef.current = null;
+        setFolderDropTargetId(null);
+        setIsFolderDropPending(false);
+      }
     }
-  }, [activeId, findItemById]);
+
+    // --- Normal reordering (skip when hovering a folder) ---
+    // When the icon is sufficiently overlapping a folder, we pause reordering
+    // so the icon stays in place and the user has time to trigger folder drop.
+    if (isOverFolder) return;
+
+    // --- Cross-container drag (Desktop ↔ Dock) ---
+    // @dnd-kit's SortableContext only animates items within the SAME context.
+    // To get smooth reorder animations when dragging between Desktop and Dock,
+    // we must move the item between containers in real-time during dragOver.
+    if (newOverId && newOverId !== activeId && !openedFolder) {
+      const overIdStr = String(newOverId);
+
+      // If hovering over a page drop zone (blank area), move dock item to that page
+      if (overIdStr.startsWith(PAGE_DROP_PREFIX)) {
+        const sourceInDock = layout.dock.some(item => item.id === activeId);
+        if (sourceInDock && activeId) {
+          const pageIdx = parseInt(overIdStr.slice(PAGE_DROP_PREFIX.length), 10);
+          moveItemToPage(activeId, pageIdx);
+        }
+        return;
+      }
+
+      // Determine where source currently lives by checking layout data (not stale active.data)
+      const sourceInDock = layout.dock.some(item => item.id === activeId);
+      const overData = over?.data.current as { isDock?: boolean } | undefined;
+      const targetIsDock = !!overData?.isDock;
+
+      if (sourceInDock !== targetIsDock) {
+        // Cross-container: move item in real-time so sortable can animate
+        reorderDesktopItem(active.id as string, newOverId);
+      }
+    }
+  }, [activeId, findItemById, openedFolder, reorderDesktopItem, moveItemToPage, layout]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
+    // Reset collision debounce state
+    _stableOverId = null;
+    _pendingOverId = null;
+    _pendingTimestamp = 0;
+    // Restore page scroller after drag
+    if (pagesContainerRef.current) {
+      pagesContainerRef.current.style.overflow = '';
+      pagesContainerRef.current.style.scrollSnapType = '';
+    }
 
     const sourceId = active.id as string;
     const targetId = over?.id as string | null;
 
+    // --- Drop onto the "move out of folder" zone ---
+    if (targetId === FOLDER_DROP_OUT_ID && openedFolder) {
+      const isSourceInFolder = openedFolder.children?.some(c => c.id === sourceId);
+      if (isSourceInFolder) {
+        moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
+        setActiveId(null);
+        setFolderDropTargetId(null);
+        lastFolderOverRef.current = null;
+        setIsFolderDropPending(false);
+        return;
+      }
+    }
+
+    // --- Drop onto a page blank area ---
+    // If the item was dropped on the page droppable zone (not on a specific icon),
+    // move it to that page. This handles Dock→Desktop drag to empty areas.
+    if (targetId && typeof targetId === 'string' && targetId.startsWith(PAGE_DROP_PREFIX)) {
+      // The item was already moved during dragOver, just clean up
+      const sourceStillInDock = layout.dock.some(item => item.id === sourceId);
+      if (sourceStillInDock) {
+        const pageIdx = parseInt(targetId.slice(PAGE_DROP_PREFIX.length), 10);
+        moveItemToPage(sourceId, pageIdx);
+      }
+      setActiveId(null);
+      setFolderDropTargetId(null);
+      lastFolderOverRef.current = null;
+      setIsFolderDropPending(false);
+      return;
+    }
+
     if (targetId && sourceId !== targetId) {
       const targetItem = findItemById(targetId);
+      const sourceItem_ = findItemById(sourceId);
 
       // --- Drop into folder ---
-      // Accept the drop into a folder if EITHER:
-      //   (a) folderDropTargetId is set (user hovered long enough), OR
-      //   (b) the over target is a folder AND we've been tracking it as the last folder hover
-      const shouldDropIntoFolder = targetItem?.type === 'folder' && (
-        folderDropTargetId === targetId ||
-        lastFolderOverRef.current === targetId
-      );
+      // Only accept the drop into a folder when folderDropTargetId is set,
+      // which means the user hovered over the folder long enough (≥500ms).
+      // If the user just passed through quickly, treat it as a normal reorder.
+      // Never drop a folder INTO another folder — folders should only reorder.
+      const isDraggingFolder = sourceItem_?.type === 'folder';
+      const shouldDropIntoFolder = !isDraggingFolder
+        && targetItem?.type === 'folder'
+        && folderDropTargetId === targetId;
 
       if (shouldDropIntoFolder) {
         moveItemToFolder(sourceId, targetId);
@@ -527,10 +822,18 @@ export const Desktop: React.FC = () => {
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
-  }, [folderDropTargetId, findItemById, moveItemToFolder, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage]);
+  }, [folderDropTargetId, findItemById, moveItemToFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout]);
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
+    _stableOverId = null;
+    _pendingOverId = null;
+    _pendingTimestamp = 0;
+    // Restore page scroller after drag
+    if (pagesContainerRef.current) {
+      pagesContainerRef.current.style.overflow = '';
+      pagesContainerRef.current.style.scrollSnapType = '';
+    }
     setActiveId(null);
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
@@ -634,7 +937,7 @@ export const Desktop: React.FC = () => {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={folderAwareCollision}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -741,10 +1044,7 @@ export const Desktop: React.FC = () => {
             onScroll={handlePageScroll}
           >
             {layout.pages.map((page, pageIdx) => (
-              <div 
-                key={pageIdx} 
-                className="min-w-full h-full snap-center pt-4 flex flex-col items-center"
-              >
+              <PageDropZone key={pageIdx} pageIdx={pageIdx}>
                 <SortableContext items={pageItemIds[pageIdx] || []} strategy={rectSortingStrategy}>
                   <div
                     className="desktop-icon-grid grid content-start w-full md:px-4"
@@ -764,7 +1064,7 @@ export const Desktop: React.FC = () => {
                     <AddButton pageIdx={pageIdx} />
                   </div>
                 </SortableContext>
-              </div>
+              </PageDropZone>
             ))}
           </div>
         )}
@@ -907,6 +1207,8 @@ export const Desktop: React.FC = () => {
                 </div>
               </SortableContext>
             </div>
+            {/* Drop-out zone: visible only when dragging a folder item */}
+            <FolderDropOutZone isActive={!!activeId && !!openedFolder?.children?.some(c => c.id === activeId)} />
             </div>
           </div>
         </div>

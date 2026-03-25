@@ -9,6 +9,7 @@ export const zh = {
   'desktop.noIcons': '没有找到桌面图标。',
   'desktop.checkBookmarks': '请检查您的 Chrome 书签栏或添加项目。',
   'desktop.emptyFolder': '空文件夹',
+  'desktop.dropOutOfFolder': '拖到此处移出文件夹',
   'desktop.addLink': '添加链接',
   'desktop.addFolder': '添加文件夹',
   'desktop.editItem': '编辑',

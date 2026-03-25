@@ -158,7 +158,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     })();
   }, [wpSource]);
 
-  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false) => {
+  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false, existingIds?: string[]) => {
     const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
     if (!srvUrl) {
       setWpError(t('settings.wpNeedServer'));
@@ -188,6 +188,11 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
       // Send purity filter (only when not all selected or when explicitly filtered)
       if (purities.size > 0) {
         params.set('purity', Array.from(purities).join(','));
+      }
+      // Deduplication: when loading more pages, send already-loaded IDs so the
+      // backend can exclude them from the response (handles cache staleness).
+      if (append && existingIds && existingIds.length > 0) {
+        params.set('exclude', existingIds.join(','));
       }
       const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
       const data = resp.data;
@@ -242,8 +247,10 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const handleWpLoadMore = useCallback(() => {
     if (wpLoadingMore || wpLoading || !wpHasMore || !wpResult) return;
     const nextPage = wpPage + 1;
-    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, wpPurity, true);
-  }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, wpPurity, fetchWallpapers]);
+    // Collect IDs of already-loaded wallpapers for server-side deduplication.
+    const existingIds = wpMobileItems.map(item => item.id);
+    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, wpPurity, true, existingIds);
+  }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, wpPurity, wpMobileItems, fetchWallpapers]);
 
   // Infinite scroll: observe sentinel element
   useEffect(() => {
