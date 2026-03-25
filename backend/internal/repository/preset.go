@@ -12,8 +12,10 @@ import (
 // PresetRepository defines the interface for preset site data operations.
 type PresetRepository interface {
 	ListCategories() ([]model.PresetCategory, error)
+	ListCategoriesWithCount() ([]model.PresetCategorySummary, error)
 	ListSitesByCategory(categoryID uuid.UUID) ([]model.PresetSite, error)
 	ListAllWithSites() ([]model.PresetCategory, error)
+	SearchSites(query string, limit int) ([]model.PresetSiteSearchResult, error)
 }
 
 type postgresPresetRepository struct {
@@ -41,6 +43,31 @@ func (r *postgresPresetRepository) ListCategories() ([]model.PresetCategory, err
 	for rows.Next() {
 		var c model.PresetCategory
 		if err := rows.Scan(&c.ID, &c.Name, &c.Icon, &c.SortOrder, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		categories = append(categories, c)
+	}
+	return categories, rows.Err()
+}
+
+// ListCategoriesWithCount returns all categories with site count (no site details).
+func (r *postgresPresetRepository) ListCategoriesWithCount() ([]model.PresetCategorySummary, error) {
+	rows, err := r.db.Query(`
+		SELECT pc.id, pc.name, pc.icon, pc.sort_order, COUNT(ps.id) AS site_count
+		FROM preset_categories pc
+		LEFT JOIN preset_sites ps ON ps.category_id = pc.id
+		GROUP BY pc.id, pc.name, pc.icon, pc.sort_order
+		ORDER BY pc.sort_order ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []model.PresetCategorySummary
+	for rows.Next() {
+		var c model.PresetCategorySummary
+		if err := rows.Scan(&c.ID, &c.Name, &c.Icon, &c.SortOrder, &c.SiteCount); err != nil {
 			return nil, err
 		}
 		categories = append(categories, c)
@@ -109,4 +136,48 @@ func (r *postgresPresetRepository) ListAllWithSites() ([]model.PresetCategory, e
 	}
 
 	return categories, nil
+}
+
+// SearchSites performs a fuzzy search across title, url, and description fields.
+// Results are ordered by relevance (similarity score) and limited.
+// Requires pg_trgm extension to be enabled for similarity() ranking.
+func (r *postgresPresetRepository) SearchSites(query string, limit int) ([]model.PresetSiteSearchResult, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	pattern := "%" + query + "%"
+
+	rows, err := r.db.Query(`
+		SELECT ps.id, ps.title, ps.url, ps.icon, ps.description, ps.sort_order,
+		       pc.id AS category_id, pc.name AS category_name, pc.icon AS category_icon
+		FROM preset_sites ps
+		JOIN preset_categories pc ON pc.id = ps.category_id
+		WHERE ps.title ILIKE $1
+		   OR ps.url ILIKE $1
+		   OR ps.description ILIKE $1
+		ORDER BY
+			GREATEST(
+				similarity(ps.title, $2),
+				similarity(ps.description, $2)
+			) DESC,
+			ps.sort_order ASC
+		LIMIT $3
+	`, pattern, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []model.PresetSiteSearchResult
+	for rows.Next() {
+		var r model.PresetSiteSearchResult
+		if err := rows.Scan(
+			&r.ID, &r.Title, &r.URL, &r.Icon, &r.Description, &r.SortOrder,
+			&r.CategoryID, &r.CategoryName, &r.CategoryIcon,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
 }

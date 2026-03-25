@@ -1,9 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import client from '../api/client';
 import { useTranslation, TranslationKeys } from '../i18n/useTranslation';
 import { useConfigStore } from '../store/configStore';
 import { DesktopItem, DesktopItemType, useLayoutStore } from '../store/layoutStore';
 import { getSmartFaviconUrl } from '../utils/favicon';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const INITIAL_RENDER_COUNT = 30;
+const RENDER_INCREMENT = 40;
 
 // --- Helper: normalise URL for comparison (mirrors layoutStore logic) ---
 function normalizeUrlForCompare(url: string): string {
@@ -26,30 +32,137 @@ interface PresetSite {
   sort_order: number;
 }
 
-interface PresetCategory {
+// Lightweight category summary (from /api/v1/preset-categories)
+interface CategorySummary {
   id: string;
   name: string;
   icon: string;
   sort_order: number;
-  sites: PresetSite[];
+  site_count: number;
 }
 
-interface ExploreSiteResult extends PresetSite {
-  categoryName: string;
-  categoryIcon: string;
+// Search result from backend (includes category info)
+interface SearchResult {
+  id: string;
+  title: string;
+  url: string;
+  icon: string;
+  description: string;
+  sort_order: number;
+  category_id: string;
+  category_name: string;
+  category_icon: string;
 }
+
+// ---------------------------------------------------------------------------
+// Memoised site row — avoids re-rendering every row on parent state change
+// ---------------------------------------------------------------------------
+interface SiteRowProps {
+  site: PresetSite | SearchResult;
+  isAdded: boolean;
+  existsOnDesktop: boolean;
+  onAdd: (site: PresetSite | SearchResult) => void;
+  getCategoryDisplayName: (name: string) => string;
+  copyLabel: string;
+  addedLabel: string;
+  alreadyOnDesktopLabel: string;
+  addToDesktopLabel: string;
+}
+
+const SiteRow = memo(function SiteRow({
+  site,
+  isAdded,
+  existsOnDesktop,
+  onAdd,
+  getCategoryDisplayName,
+  copyLabel,
+  addedLabel,
+  alreadyOnDesktopLabel,
+  addToDesktopLabel,
+}: SiteRowProps) {
+  const categoryLabel = 'category_name' in site ? getCategoryDisplayName(site.category_name) : null;
+  const categoryIcon = 'category_icon' in site ? site.category_icon : null;
+
+  return (
+    <div
+      className="explore-row flex items-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl hover:bg-white/[0.08] transition-all cursor-pointer border border-transparent hover:border-white/5 active:scale-[0.99]"
+      onClick={() => window.open(site.url, '_blank')}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+          <img
+            src={getSmartFaviconUrl(site.url, 64)}
+            alt=""
+            loading="lazy"
+            className="w-4.5 h-4.5 object-contain"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+              e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';
+            }}
+          />
+        </div>
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-[13px] font-semibold text-white/90 truncate explore-title transition-colors">
+            {site.title}
+          </span>
+          {site.description && (
+            <span className="text-[11px] text-white/45 truncate mt-0.5">
+              {site.description}
+            </span>
+          )}
+          <span className="text-[11px] text-white/30 truncate mt-0.5">
+            {site.url}
+          </span>
+          {categoryLabel && (
+            <span className="text-[11px] text-white/35 truncate mt-0.5">
+              {categoryIcon} {categoryLabel}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Action Buttons (Hover) */}
+      <div className="explore-actions flex items-center gap-1.5 shrink-0 ml-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(site.url);
+          }}
+          className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/20 text-white/50 hover:text-white flex items-center justify-center transition-colors"
+          title={copyLabel}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd(site);
+          }}
+          disabled={isAdded || existsOnDesktop}
+          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+            isAdded || existsOnDesktop
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default'
+              : 'bg-blue-500/15 hover:bg-blue-500/90 text-blue-400 hover:text-white border border-blue-500/25 hover:border-blue-500'
+          }`}
+          title={isAdded ? addedLabel : existsOnDesktop ? alreadyOnDesktopLabel : addToDesktopLabel}
+        >
+          {isAdded || existsOnDesktop ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 interface ExploreWorldProps {
   onClose: () => void;
-}
-
-function sortCategories(categories: PresetCategory[]): PresetCategory[] {
-  return [...categories]
-    .map((category) => ({
-      ...category,
-      sites: [...(category.sites || [])].sort((a, b) => a.sort_order - b.sort_order),
-    }))
-    .sort((a, b) => a.sort_order - b.sort_order);
 }
 
 export function ExploreWorld({ onClose }: ExploreWorldProps) {
@@ -57,13 +170,30 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
   const effectiveServerUrl = useConfigStore(s => s.getEffectiveServerUrl());
   const { addDesktopItem, layout } = useLayoutStore();
 
-  const [categories, setCategories] = useState<PresetCategory[]>([]);
+  // Category list (lightweight, loaded first)
+  const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategoryID, setActiveCategoryID] = useState('');
+
+  // Per-category sites cache: categoryID -> PresetSite[]
+  const siteCacheRef = useRef<Map<string, PresetSite[]>>(new Map());
+  const [activeSites, setActiveSites] = useState<PresetSite[]>([]);
+  const [sitesLoading, setSitesLoading] = useState(false);
+
+  // Search state (powered by backend API)
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [addedSites, setAddedSites] = useState<Set<string>>(new Set());
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Progressive rendering: only render a slice to avoid heavy DOM mount
+  const [visibleCount, setVisibleCount] = useState(INITIAL_RENDER_COUNT);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Collect all URLs already on the desktop for dedup detection
   const existingUrls = useMemo(() => {
@@ -79,23 +209,102 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     return urls;
   }, [layout]);
 
-  // Fetch preset data
+  // Step 1: Load category list (lightweight) + first category sites
   useEffect(() => {
-    async function fetchPresets() {
+    let cancelled = false;
+    async function fetchCategories() {
       try {
-        const response = await client.get('/api/v1/preset-sites');
-        const nextCategories = sortCategories(response.data?.categories || []);
-        setCategories(nextCategories);
-        setActiveCategoryID((prev) => prev || nextCategories[0]?.id || '');
+        const res = await client.get('/api/v1/preset-categories');
+        const cats: CategorySummary[] = (res.data?.categories || [])
+          .sort((a: CategorySummary, b: CategorySummary) => a.sort_order - b.sort_order);
+        if (cancelled) return;
+        setCategories(cats);
+        if (cats.length > 0) {
+          const firstID = cats[0].id;
+          setActiveCategoryID(firstID);
+          // Immediately load first category's sites
+          fetchSitesForCategory(firstID);
+        }
       } catch {
-        setCategories([]);
-        setActiveCategoryID('');
+        if (!cancelled) setCategories([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
-    fetchPresets();
+    fetchCategories();
+    return () => { cancelled = true; };
   }, [effectiveServerUrl]);
+
+  // Fetch sites for a single category (with cache)
+  const fetchSitesForCategory = useCallback(async (categoryID: string) => {
+    const cached = siteCacheRef.current.get(categoryID);
+    if (cached) {
+      setActiveSites(cached);
+      return;
+    }
+    setSitesLoading(true);
+    try {
+      const res = await client.get(`/api/v1/preset-categories/${categoryID}/sites`);
+      const sites: PresetSite[] = (res.data?.sites || [])
+        .sort((a: PresetSite, b: PresetSite) => a.sort_order - b.sort_order);
+      siteCacheRef.current.set(categoryID, sites);
+      setActiveSites(sites);
+    } catch {
+      setActiveSites([]);
+    } finally {
+      setSitesLoading(false);
+    }
+  }, []);
+
+  // When active category changes, load its sites
+  useEffect(() => {
+    if (!activeCategoryID) return;
+    fetchSitesForCategory(activeCategoryID);
+  }, [activeCategoryID, fetchSitesForCategory]);
+
+  // Debounced search via backend API
+  useEffect(() => {
+    const q = searchQuery.trim();
+
+    // Clear previous timer and abort
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+
+    if (!q) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      setVisibleCount(INITIAL_RENDER_COUNT);
+      return;
+    }
+
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+      try {
+        const res = await client.get(`/api/v1/preset-sites/search`, {
+          params: { q, limit: 50 },
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) {
+          setSearchResults(res.data?.results || []);
+          setVisibleCount(INITIAL_RENDER_COUNT);
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name !== 'AbortError' && err.name !== 'CanceledError') {
+          setSearchResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSearchLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Keep active category in sync
   useEffect(() => {
@@ -123,30 +332,33 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     return categories.find((c) => c.id === activeCategoryID) || categories[0] || null;
   }, [activeCategoryID, categories]);
 
-  // Search across all categories
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    const q = searchQuery.trim().toLowerCase();
-    const results: ExploreSiteResult[] = [];
-    categories.forEach((cat) => {
-      cat.sites.forEach((site) => {
-        if (site.title.toLowerCase().includes(q) || site.url.toLowerCase().includes(q) || (site.description && site.description.toLowerCase().includes(q))) {
-          results.push({ ...site, categoryName: cat.name, categoryIcon: cat.icon });
-        }
-      });
-    });
-    return results;
-  }, [categories, searchQuery]);
+  // displaySites: search results or current category sites
+  const displaySites: (PresetSite | SearchResult)[] = searchResults ?? activeSites;
 
-  const displaySites = searchResults ?? activeCategory?.sites ?? [];
+  // Progressive rendering: only mount a visible slice of sites
+  const visibleSites = useMemo(
+    () => displaySites.slice(0, visibleCount),
+    [displaySites, visibleCount],
+  );
+  const hasMore = visibleCount < displaySites.length;
 
-  function getCategoryDisplayName(name: string): string {
+  // Scroll handler: load more rows when user scrolls near the bottom
+  const handleContentScroll = useCallback(() => {
+    const el = contentRef.current;
+    if (!el || !hasMore) return;
+    // Trigger when within 200px of the bottom
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      setVisibleCount((prev) => Math.min(prev + RENDER_INCREMENT, displaySites.length));
+    }
+  }, [hasMore, displaySites.length]);
+
+  const getCategoryDisplayName = useCallback((name: string): string => {
     const key = `explore.cat_${name.toLowerCase()}` as TranslationKeys;
     const translated = t(key);
     return translated === key ? name : translated;
-  }
+  }, [t]);
 
-  function handleAddSite(site: PresetSite) {
+  const handleAddSite = useCallback((site: PresetSite | SearchResult) => {
     const newItem: DesktopItem = {
       id: `preset-${site.id}-${Date.now()}`,
       type: 'link',
@@ -156,14 +368,15 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     };
     addDesktopItem(newItem);
     setAddedSites((prev) => new Set(prev).add(site.id));
-  }
+  }, [addDesktopItem]);
 
   // Add all sites in a category as a folder to the desktop
   const [folderAdded, setFolderAdded] = useState<Set<string>>(new Set());
 
-  function handleAddCategoryAsFolder(category: PresetCategory) {
+  function handleAddCategoryAsFolder(category: CategorySummary) {
     const categoryName = getCategoryDisplayName(category.name);
-    const children: DesktopItem[] = category.sites.map((site) => ({
+    const sites = siteCacheRef.current.get(category.id) || activeSites;
+    const children: DesktopItem[] = sites.map((site) => ({
       id: `preset-${site.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type: 'link' as DesktopItemType,
       title: site.title,
@@ -184,6 +397,9 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     setActiveCategoryID(categoryID);
     setSearchQuery('');
     setShowSidebar(false);
+    setVisibleCount(INITIAL_RENDER_COUNT);
+    // Reset scroll position
+    contentRef.current?.scrollTo({ top: 0 });
   }
 
   const headerTitle = searchResults
@@ -210,7 +426,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
   );
 
   // Category sidebar item
-  function renderCategoryItem(category: PresetCategory) {
+  function renderCategoryItem(category: CategorySummary) {
     const isActive = category.id === activeCategory?.id && !searchResults;
     return (
       <button
@@ -227,92 +443,12 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
           </span>
         </div>
         <span className={`text-[12px] font-semibold ${isActive ? 'text-black/60' : 'text-white/30 group-hover:text-white/50'}`}>
-          {category.sites.length}
+          {category.site_count}
         </span>
       </button>
     );
   }
 
-  // Site row — uses same structure as BookmarkBrowser rows
-  function renderSiteRow(site: ExploreSiteResult | PresetSite) {
-    const isAdded = addedSites.has(site.id);
-    const existsOnDesktop = existingUrls.has(normalizeUrlForCompare(site.url));
-    const categoryLabel = 'categoryName' in site ? getCategoryDisplayName(site.categoryName) : null;
-    const categoryIcon = 'categoryIcon' in site ? site.categoryIcon : null;
-
-    return (
-      <div
-        key={site.id}
-        className="explore-row flex items-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl hover:bg-white/[0.08] transition-all cursor-pointer border border-transparent hover:border-white/5 active:scale-[0.99]"
-        onClick={() => window.open(site.url, '_blank')}
-      >
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
-            <img
-              src={getSmartFaviconUrl(site.url, 64)}
-              alt=""
-              className="w-4.5 h-4.5 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-                e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';
-              }}
-            />
-          </div>
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-[13px] font-semibold text-white/90 truncate explore-title transition-colors">
-              {site.title}
-            </span>
-            {site.description && (
-              <span className="text-[11px] text-white/45 truncate mt-0.5">
-                {site.description}
-              </span>
-            )}
-            <span className="text-[11px] text-white/30 truncate mt-0.5">
-              {site.url}
-            </span>
-            {categoryLabel && (
-              <span className="text-[11px] text-white/35 truncate mt-0.5">
-                {categoryIcon} {categoryLabel}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Action Buttons (Hover) */}
-        <div className="explore-actions flex items-center gap-1.5 shrink-0 ml-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigator.clipboard.writeText(site.url);
-            }}
-            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/20 text-white/50 hover:text-white flex items-center justify-center transition-colors"
-            title={t('bookmark.copyUrl')}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAddSite(site);
-            }}
-            disabled={isAdded || existsOnDesktop}
-            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-              isAdded || existsOnDesktop
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default'
-                : 'bg-blue-500/15 hover:bg-blue-500/90 text-blue-400 hover:text-white border border-blue-500/25 hover:border-blue-500'
-            }`}
-            title={isAdded ? t('explore.added') : existsOnDesktop ? t('explore.alreadyOnDesktop') : t('explore.addToDesktop')}
-          >
-            {isAdded || existsOnDesktop ? (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            )}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4 sm:p-12">
@@ -418,7 +554,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
           </div>
 
           {/* Right Main List View — same as BookmarkBrowser */}
-          <div className="window-content flex-1 overflow-y-auto">
+          <div ref={contentRef} onScroll={handleContentScroll} className="window-content flex-1 overflow-y-auto">
             {/* Mobile: inline search */}
             <div className="md:hidden p-3 pb-0">
               {renderSearchInput()}
@@ -472,13 +608,31 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                   <p className="text-[15px] font-medium text-white/40">{t('explore.noData')}</p>
                   <p className="text-[13px] mt-2">{t('explore.connectServer')}</p>
                 </div>
+              ) : sitesLoading || searchLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="animate-spin w-6 h-6 border-2 border-white/20 border-t-white rounded-full" />
+                </div>
               ) : displaySites.length > 0 ? (
                 <div className="flex flex-col gap-1 w-full">
-                  {displaySites.map((site) => (
-                    <React.Fragment key={site.id}>
-                      {renderSiteRow(site)}
-                    </React.Fragment>
+                  {visibleSites.map((site) => (
+                    <SiteRow
+                      key={site.id}
+                      site={site}
+                      isAdded={addedSites.has(site.id)}
+                      existsOnDesktop={existingUrls.has(normalizeUrlForCompare(site.url))}
+                      onAdd={handleAddSite}
+                      getCategoryDisplayName={getCategoryDisplayName}
+                      copyLabel={t('bookmark.copyUrl')}
+                      addedLabel={t('explore.added')}
+                      alreadyOnDesktopLabel={t('explore.alreadyOnDesktop')}
+                      addToDesktopLabel={t('explore.addToDesktop')}
+                    />
                   ))}
+                  {hasMore && (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin w-5 h-5 border-2 border-white/15 border-t-white/50 rounded-full" />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="w-full h-[60%] flex flex-col items-center justify-center text-white/20">

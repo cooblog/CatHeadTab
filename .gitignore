@@ -35,6 +35,7 @@ Thumbs.db
 # Temporary tools (not needed in production)
 /backend/tools/sqlexec/
 /backend/tools/dbcheck/
+/backend/tools/dbquery/
 
 # Frontend
 /frontend/.vite/

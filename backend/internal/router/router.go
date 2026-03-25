@@ -85,7 +85,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 	wallpaperHandler := handler.NewWallpaperHandler(wallpaperSvc)
 
 	// Public routes (no auth) — Preset sites (available to all users)
-	r.GET("/api/v1/preset-sites", presetHandler.ListAll)
+	r.GET("/api/v1/preset-sites", presetHandler.ListAll)                       // Legacy: returns everything
+	r.GET("/api/v1/preset-sites/search", presetHandler.SearchSites)            // New: search sites by keyword
+	r.GET("/api/v1/preset-categories", presetHandler.ListCategories)            // New: categories with site count
+	r.GET("/api/v1/preset-categories/:id/sites", presetHandler.ListSitesByCategory) // New: sites for one category
 
 	// Public routes (no auth) — Favicon proxy with disk caching
 	r.GET("/api/v1/favicon", faviconHandler.Get)

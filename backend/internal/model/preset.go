@@ -18,6 +18,15 @@ type PresetCategory struct {
 	UpdatedAt time.Time    `json:"updated_at"`
 }
 
+// PresetCategorySummary is a lightweight category with site count (no site details).
+type PresetCategorySummary struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Icon      string    `json:"icon"`
+	SortOrder int       `json:"sort_order"`
+	SiteCount int       `json:"site_count"`
+}
+
 // PresetSite represents a single preset website within a category.
 type PresetSite struct {
 	ID          uuid.UUID `json:"id"`
@@ -28,4 +37,17 @@ type PresetSite struct {
 	Description string    `json:"description"`
 	SortOrder   int       `json:"sort_order"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// PresetSiteSearchResult is a search result containing site info and its category context.
+type PresetSiteSearchResult struct {
+	ID           uuid.UUID `json:"id"`
+	Title        string    `json:"title"`
+	URL          string    `json:"url"`
+	Icon         string    `json:"icon"`
+	Description  string    `json:"description"`
+	SortOrder    int       `json:"sort_order"`
+	CategoryID   uuid.UUID `json:"category_id"`
+	CategoryName string    `json:"category_name"`
+	CategoryIcon string    `json:"category_icon"`
 }
