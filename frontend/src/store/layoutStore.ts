@@ -70,6 +70,9 @@ interface LayoutState {
   mergeLayoutWithCloud: () => Promise<void>;
 }
 
+/** Maximum number of items allowed in the Dock. */
+export const MAX_DOCK_ITEMS = 8;
+
 const defaultDock: DesktopItem[] = [
   { id: 'app-bookmarks', type: 'app', title: 'Bookmarks', icon: '🔖' },
 ];
@@ -293,6 +296,8 @@ export const useLayoutStore = create<LayoutState>()(
 
       moveItemToDock: (id) => {
         const layout = { ...get().layout };
+        // Limit Dock to MAX_DOCK_ITEMS icons to prevent overflow on mobile
+        if (layout.dock.length >= MAX_DOCK_ITEMS) return;
         const pr = removeFromPages(layout.pages, id);
         if (pr.removed) {
           layout.pages = pr.pages;
@@ -385,11 +390,22 @@ export const useLayoutStore = create<LayoutState>()(
             ...layout.pages[targetPageIdx].slice(insertIdx)
           ];
         } else if (targetLocation === 'dock') {
-          layout.dock = [
-            ...layout.dock.slice(0, insertIdx),
-            sourceItem,
-            ...layout.dock.slice(insertIdx)
-          ];
+          // If crossing from page → dock, check Dock capacity
+          if (sourceLocation === 'page' && layout.dock.length >= MAX_DOCK_ITEMS) {
+            // Dock full — put item back on source page instead of into dock
+            const fallbackPage = sourcePageIdx >= 0 ? sourcePageIdx : layout.pages.length - 1;
+            layout.pages[fallbackPage] = [
+              ...layout.pages[fallbackPage].slice(0, sourceIdx),
+              sourceItem,
+              ...layout.pages[fallbackPage].slice(sourceIdx)
+            ];
+          } else {
+            layout.dock = [
+              ...layout.dock.slice(0, insertIdx),
+              sourceItem,
+              ...layout.dock.slice(insertIdx)
+            ];
+          }
         }
 
         set({ layout });

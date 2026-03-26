@@ -189,7 +189,7 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const getLinked = (provider: string) => linkedAccounts.find(a => a.provider === provider);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 sm:p-12">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => e.preventDefault()}>
       {/* Dimmed Background Overlay */}
       <div 
         className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"

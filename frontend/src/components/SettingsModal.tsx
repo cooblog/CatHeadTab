@@ -545,7 +545,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   ];
 
   return (
-    <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`}>
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`} onContextMenu={(e) => e.preventDefault()}>
       {/* Dimmed Background Overlay */}
       <div
         className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"

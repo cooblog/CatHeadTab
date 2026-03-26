@@ -60,7 +60,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4 sm:p-12">
+    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => e.preventDefault()}>
       {/* Dimmed Background Overlay */}
       <div 
         className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity"

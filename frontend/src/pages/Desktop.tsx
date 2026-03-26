@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
 import { useBookmarkStore } from '../store/bookmarkStore';
-import { useLayoutStore, DesktopItem, getAllDesktopItems } from '../store/layoutStore';
+import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS } from '../store/layoutStore';
 import { useConfigStore } from '../store/configStore';
 import { SettingsModal } from '../components/SettingsModal';
 import { AuthModal } from '../components/AuthModal';
@@ -86,7 +86,9 @@ const DesktopIconContent: React.FC<{
   isDock?: boolean;
   isOverlay?: boolean;
   isDraggedOver?: boolean;
-}> = ({ item, isDock, isOverlay, isDraggedOver }) => {
+  /** Override Dock icon size in px (for adaptive scaling when Dock has many items) */
+  dockIconSize?: number;
+}> = ({ item, isDock, isOverlay, isDraggedOver, dockIconSize }) => {
   const isFolder = item.type === 'folder';
   
   const getMiniIcons = (nodes: DesktopItem[]): string[] => {
@@ -100,7 +102,13 @@ const DesktopIconContent: React.FC<{
   };
 
   const miniIcons = isFolder && item.children ? getMiniIcons(item.children).slice(0, 9) : [];
-  const iconSize = isDock ? 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]' : 'w-[60px] h-[60px] md:w-[68px] md:h-[68px]';
+  // When a custom dockIconSize is provided, use inline styles; otherwise use Tailwind classes
+  const iconSize = (isDock && dockIconSize)
+    ? '' // will use inline style instead
+    : isDock ? 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]' : 'w-[60px] h-[60px] md:w-[68px] md:h-[68px]';
+  const iconSizeStyle: React.CSSProperties = (isDock && dockIconSize)
+    ? { width: dockIconSize, height: dockIconSize }
+    : {};
 
   // Check if the icon should use a bare image style (iOS-like, no wrapper background)
   const hasImageIcon = !isFolder && item.type !== 'app' && (
@@ -109,7 +117,7 @@ const DesktopIconContent: React.FC<{
   
   return (
     <div className={`flex flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
-      <div className={`${iconSize} rounded-[18px] overflow-hidden transition-all duration-200 relative ${
+      <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-all duration-200 relative ${
         hasImageIcon
           ? `shadow-lg ${isDraggedOver
               ? 'scale-125 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
@@ -187,7 +195,9 @@ const SortableDesktopIcon: React.FC<{
   isDraggedOver?: boolean;
   activeId?: string | null;
   isFolderDropPending?: boolean;
-}> = ({ item, onClick, onContextMenu, isDock, isDraggedOver, activeId, isFolderDropPending }) => {
+  /** Override Dock icon size in px (for adaptive scaling) */
+  dockIconSize?: number;
+}> = ({ item, onClick, onContextMenu, isDock, isDraggedOver, activeId, isFolderDropPending, dockIconSize }) => {
   const {
     attributes,
     listeners,
@@ -234,7 +244,7 @@ const SortableDesktopIcon: React.FC<{
     >
       <div className={`group ${isDock ? '' : ''}`}>
         <div className={`transition-transform duration-200 ${isDraggedOver ? 'scale-110' : 'group-hover:scale-110 group-active:scale-95'}`}>
-          <DesktopIconContent item={item} isDock={isDock} isDraggedOver={isDraggedOver} />
+          <DesktopIconContent item={item} isDock={isDock} isDraggedOver={isDraggedOver} dockIconSize={dockIconSize} />
         </div>
       </div>
     </div>
@@ -1158,6 +1168,54 @@ export const Desktop: React.FC = () => {
   const dockItemIds = useMemo(() => layout.dock.map(item => item.id), [layout.dock]);
   const folderItemIds = useMemo(() => openedFolder?.children?.map(item => item.id) ?? [], [openedFolder]);
 
+  // --- Adaptive Dock sizing ---
+  // On mobile (< 768px), the viewport is narrow. We compute how many icons
+  // can fit and scale down icon size + gap when there are many items.
+  // On desktop (≥ 768px), we use larger base sizes with the same logic.
+  const dockAdaptive = useMemo(() => {
+    const count = layout.dock.length;
+    const isMobile = containerWidth > 0 && containerWidth < 768;
+
+    // Base values
+    const baseIconSize = isMobile ? 56 : 60;
+    const baseGap = isMobile ? 20 : 24;
+    const basePx = isMobile ? 20 : 28; // horizontal padding
+    const basePy = isMobile ? 10 : 12; // vertical padding
+
+    if (count <= 4) {
+      // Few icons: use default sizes (no override needed)
+      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false };
+    }
+
+    // Available width: viewport minus some safe margin (16px each side)
+    const availableWidth = (containerWidth || window.innerWidth) - 32;
+    // Total needed = count * iconSize + (count - 1) * gap + 2 * px
+    const neededWidth = count * baseIconSize + (count - 1) * baseGap + 2 * basePx;
+
+    if (neededWidth <= availableWidth) {
+      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false };
+    }
+
+    // Scale down: find the ratio to fit everything
+    const ratio = availableWidth / neededWidth;
+    const minIconSize = isMobile ? 36 : 42;
+    const minGap = isMobile ? 8 : 10;
+    const minPx = isMobile ? 10 : 14;
+
+    const scaledIconSize = Math.max(minIconSize, Math.round(baseIconSize * ratio));
+    const scaledGap = Math.max(minGap, Math.round(baseGap * ratio));
+    const scaledPx = Math.max(minPx, Math.round(basePx * ratio));
+    const scaledPy = Math.max(isMobile ? 6 : 8, Math.round(basePy * ratio));
+
+    return {
+      iconSize: scaledIconSize,
+      gap: scaledGap,
+      px: scaledPx,
+      py: scaledPy,
+      useAdaptive: true,
+    };
+  }, [layout.dock.length, containerWidth]);
+
   // For the Add (+) icon
   const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
     <div className="flex flex-col items-center w-[72px] md:w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
@@ -1383,8 +1441,17 @@ export const Desktop: React.FC = () => {
       )}
 
       {/* 4. Dock Bar */}
-      <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30">
-        <div className="flex items-center gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3 bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
+        <div
+          className={`flex items-center bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300 ${!dockAdaptive.useAdaptive ? 'gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3' : ''}`}
+          style={dockAdaptive.useAdaptive ? {
+            gap: dockAdaptive.gap,
+            paddingLeft: dockAdaptive.px,
+            paddingRight: dockAdaptive.px,
+            paddingTop: dockAdaptive.py,
+            paddingBottom: dockAdaptive.py,
+          } : undefined}
+        >
           <SortableContext items={dockItemIds} strategy={rectSortingStrategy}>
             {layout.dock.map(item => (
               <SortableDesktopIcon 
@@ -1396,6 +1463,7 @@ export const Desktop: React.FC = () => {
                 isDraggedOver={folderDropTargetId === item.id}
                 activeId={activeId}
                 isFolderDropPending={isFolderDropPending}
+                dockIconSize={dockAdaptive.useAdaptive ? dockAdaptive.iconSize : undefined}
               />
             ))}
           </SortableContext>
@@ -1427,6 +1495,7 @@ export const Desktop: React.FC = () => {
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
           onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <div className="w-full max-w-5xl flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             {/* Folder name - outside the rounded container, at top-left */}
@@ -1567,11 +1636,13 @@ export const Desktop: React.FC = () => {
               </button>
             ) : (
               <button 
-                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
-                onClick={() => { moveItemToDock(contextMenu.item.id); setContextMenu(null); }}
+                className={`w-full text-left px-4 py-2.5 text-[13px] flex items-center gap-3 transition-colors rounded-lg mx-0 ${layout.dock.length >= MAX_DOCK_ITEMS ? 'text-white/30 cursor-not-allowed' : 'text-white/90 hover:bg-white/[0.12]'}`}
+                onClick={() => { if (layout.dock.length < MAX_DOCK_ITEMS) { moveItemToDock(contextMenu.item.id); setContextMenu(null); } }}
+                disabled={layout.dock.length >= MAX_DOCK_ITEMS}
+                title={layout.dock.length >= MAX_DOCK_ITEMS ? `Dock is full (max ${MAX_DOCK_ITEMS})` : undefined}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-                {t('desktop.moveToDock')}
+                {t('desktop.moveToDock')}{layout.dock.length >= MAX_DOCK_ITEMS ? ` (${MAX_DOCK_ITEMS}/${MAX_DOCK_ITEMS})` : ''}
               </button>
             )}
 
