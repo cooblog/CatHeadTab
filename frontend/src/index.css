@@ -251,8 +251,17 @@ body {
 
 @media (min-width: 768px) {
   .desktop-icon-grid {
-    grid-template-columns: repeat(auto-fit, 90px) !important;
+    grid-template-columns: repeat(auto-fit, 80px) !important;
     gap: 60px !important;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+@media (min-width: 1536px) {
+  .desktop-icon-grid {
+    max-width: 1600px;
   }
 }
 

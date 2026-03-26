@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
 import { useBookmarkStore } from '../store/bookmarkStore';
 import { useLayoutStore, DesktopItem, getAllDesktopItems } from '../store/layoutStore';
 import { useConfigStore } from '../store/configStore';
@@ -15,7 +15,7 @@ import {
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCenter,
   DragStartEvent,
@@ -100,7 +100,7 @@ const DesktopIconContent: React.FC<{
   };
 
   const miniIcons = isFolder && item.children ? getMiniIcons(item.children).slice(0, 9) : [];
-  const iconSize = isDock ? 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]' : 'w-[60px] h-[60px] md:w-[78px] md:h-[78px]';
+  const iconSize = isDock ? 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]' : 'w-[60px] h-[60px] md:w-[68px] md:h-[68px]';
 
   // Check if the icon should use a bare image style (iOS-like, no wrapper background)
   const hasImageIcon = !isFolder && item.type !== 'app' && (
@@ -108,17 +108,17 @@ const DesktopIconContent: React.FC<{
   );
   
   return (
-    <div className={`flex flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[90px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
+    <div className={`flex flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
       <div className={`${iconSize} rounded-[18px] overflow-hidden transition-all duration-200 relative ${
         hasImageIcon
-          ? `shadow-lg ${isDraggedOver && isFolder
+          ? `shadow-lg ${isDraggedOver
               ? 'scale-125 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
               : isOverlay
                 ? 'shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
                 : ''
             }`
           : `bg-white/[0.12] backdrop-blur-xl border shadow-lg flex items-center justify-center ${
-              isDraggedOver && isFolder
+              isDraggedOver
                 ? 'scale-125 bg-white/30 border-white/50 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
                 : isOverlay
                   ? 'border-white/30 shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
@@ -219,7 +219,7 @@ const SortableDesktopIcon: React.FC<{
       style={style}
       {...attributes}
       {...listeners}
-      className={`touch-none ${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
+      className={`${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
       data-desktop-icon="true"
       onClick={(e) => {
         if (!isDragging) {
@@ -233,7 +233,7 @@ const SortableDesktopIcon: React.FC<{
       }}
     >
       <div className={`group ${isDock ? '' : ''}`}>
-        <div className={`transition-transform duration-200 ${isDraggedOver && item.type === 'folder' ? 'scale-110' : 'group-hover:scale-110 group-active:scale-95'}`}>
+        <div className={`transition-transform duration-200 ${isDraggedOver ? 'scale-110' : 'group-hover:scale-110 group-active:scale-95'}`}>
           <DesktopIconContent item={item} isDock={isDock} isDraggedOver={isDraggedOver} />
         </div>
       </div>
@@ -243,14 +243,20 @@ const SortableDesktopIcon: React.FC<{
 
 // === Droppable zone: page background (catch drops on blank areas) ===
 const PAGE_DROP_PREFIX = '__page-drop-';
-const PageDropZone: React.FC<{ pageIdx: number; children: React.ReactNode }> = ({ pageIdx, children }) => {
+const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: React.ReactNode }> = ({ pageIdx, totalPages, children }) => {
   const { setNodeRef } = useDroppable({
     id: `${PAGE_DROP_PREFIX}${pageIdx}`,
     data: { isPageDrop: true, pageIdx },
   });
+  // Each page must be exactly 1/totalPages of the flex container (= 1 viewport width)
+  const pageWidthPercent = 100 / totalPages;
   return (
-    <div ref={setNodeRef} className="min-w-full h-full snap-center pt-4 flex flex-col items-center">
-      {children}
+    <div ref={setNodeRef} className="flex-shrink-0 h-full pt-4 flex flex-col items-center" style={{ width: `${pageWidthPercent}%` }}>
+      <div className="w-full h-full overflow-y-auto no-scrollbar pt-2">
+        {children}
+        {/* Bottom padding to prevent last row being hidden behind Dock */}
+        <div className="h-8 md:h-12 shrink-0" />
+      </div>
     </div>
   );
 };
@@ -444,7 +450,7 @@ function createFolderAwareCollision(_draggedItem: DesktopItem | null): Collision
 
 export const Desktop: React.FC = () => {
   const { fetchBookmarks } = useBookmarkStore();
-  const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem } = useLayoutStore();
+  const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem, mergeItemsToNewFolder } = useLayoutStore();
   const { jwtToken } = useConfigStore();
   const { t } = useTranslation();
 
@@ -475,9 +481,24 @@ export const Desktop: React.FC = () => {
   const [editingFolderName, setEditingFolderName] = useState('');
   const folderNameInputRef = useRef<HTMLInputElement>(null);
 
-  // Pagination
+  // Pagination — iOS-style swipe gesture
   const [currentPage, setCurrentPage] = useState(0);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
+  // translateX offset applied to the pages track (px, negative = left)
+  const [pageOffset, setPageOffset] = useState(0);
+  // Whether a CSS transition should be active (false during finger-tracking)
+  const [pageTransition, setPageTransition] = useState(false);
+  // Container width (recalculated on resize)
+  const [containerWidth, setContainerWidth] = useState(0);
+  // Touch/mouse gesture tracking refs (not state, to avoid re-render on every move)
+  const swipeRef = useRef<{
+    startX: number;
+    startY: number;
+    startTime: number;
+    currentX: number;
+    isDragging: boolean;
+    isHorizontal: boolean | null; // null = undecided, true = horizontal swipe, false = vertical
+  }>({ startX: 0, startY: 0, startTime: 0, currentX: 0, isDragging: false, isHorizontal: null });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -524,13 +545,15 @@ export const Desktop: React.FC = () => {
   // Collision detection: when dragging a folder, skip folder-priority so folders reorder normally
   const collisionDetection = useMemo(() => createFolderAwareCollision(activeItem), [activeItem]);
 
-  // Sensors: delay to distinguish click from drag
+  // Sensors: MouseSensor for desktop (distance-based), TouchSensor for mobile (long-press).
+  // Separating them avoids the need for touch-action:none on icons, allowing native
+  // scroll/swipe for page navigation while still supporting long-press-to-drag.
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 5 },
+      activationConstraint: { delay: 500, tolerance: 10 },
     })
   );
 
@@ -624,12 +647,6 @@ export const Desktop: React.FC = () => {
     dragStartedInDockRef.current = layout.dock.some(item => item.id === id);
     lastReorderRef.current = null;
     setContextMenu(null);
-    // Freeze the page scroller during drag to prevent touch-drag from being
-    // interpreted as a page-swipe on mobile.
-    if (pagesContainerRef.current) {
-      pagesContainerRef.current.style.overflow = 'hidden';
-      pagesContainerRef.current.style.scrollSnapType = 'none';
-    }
   }, [layout.dock]);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
@@ -680,11 +697,14 @@ export const Desktop: React.FC = () => {
       const overItem = findItemById(newOverId);
       const overlapRatio = getOverlapRatio();
 
-      if (overItem?.type === 'folder' && overlapRatio >= FOLDER_OVERLAP_THRESHOLD) {
-        // Sufficient overlap with a folder — start/continue hover timer
+      // Allow merging into folders AND onto regular link items (not app items)
+      const isDroppableTarget = overItem?.type === 'folder' || (overItem?.type === 'link');
+
+      if (isDroppableTarget && overlapRatio >= FOLDER_OVERLAP_THRESHOLD) {
+        // Sufficient overlap with a folder or link — start/continue hover timer
         isOverFolder = true;
         if (lastFolderOverRef.current !== newOverId) {
-          // Switched to a different folder — restart timer
+          // Switched to a different target — restart timer
           lastFolderOverRef.current = newOverId;
           if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
           setFolderDropTargetId(null);
@@ -693,7 +713,7 @@ export const Desktop: React.FC = () => {
             setFolderDropTargetId(newOverId);
           }, 500);
         }
-        // Same folder as before — keep the timer running, stay frozen
+        // Same target as before — keep the timer running, stay frozen
       } else {
         // Over a non-folder item, or not enough overlap — clear folder hover state
         if (lastFolderOverRef.current) {
@@ -761,11 +781,6 @@ export const Desktop: React.FC = () => {
     _stableOverId = null;
     _pendingOverId = null;
     _pendingTimestamp = 0;
-    // Restore page scroller after drag
-    if (pagesContainerRef.current) {
-      pagesContainerRef.current.style.overflow = '';
-      pagesContainerRef.current.style.scrollSnapType = '';
-    }
 
     const sourceId = active.id as string;
     const targetId = over?.id as string | null;
@@ -804,7 +819,7 @@ export const Desktop: React.FC = () => {
       const targetItem = findItemById(targetId);
       const sourceItem_ = findItemById(sourceId);
 
-      // --- Drop into folder ---
+      // --- Drop into existing folder ---
       // Only accept the drop into a folder when folderDropTargetId is set,
       // which means the user hovered over the folder long enough (≥500ms).
       // If the user just passed through quickly, treat it as a normal reorder.
@@ -816,6 +831,23 @@ export const Desktop: React.FC = () => {
 
       if (shouldDropIntoFolder) {
         moveItemToFolder(sourceId, targetId);
+        setActiveId(null);
+        setFolderDropTargetId(null);
+        lastFolderOverRef.current = null;
+        setIsFolderDropPending(false);
+        return;
+      }
+
+      // --- Merge two items into a new folder (iOS-style) ---
+      // When dragging a non-folder item onto another non-folder item and
+      // folderDropTargetId is set (hovered ≥500ms), create a new folder.
+      const shouldMergeToFolder = !isDraggingFolder
+        && targetItem?.type === 'link'
+        && sourceItem_?.type !== 'folder'
+        && folderDropTargetId === targetId;
+
+      if (shouldMergeToFolder) {
+        mergeItemsToNewFolder(sourceId, targetId);
         setActiveId(null);
         setFolderDropTargetId(null);
         lastFolderOverRef.current = null;
@@ -844,18 +876,13 @@ export const Desktop: React.FC = () => {
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
-  }, [folderDropTargetId, findItemById, moveItemToFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout]);
+  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout]);
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
     _stableOverId = null;
     _pendingOverId = null;
     _pendingTimestamp = 0;
-    // Restore page scroller after drag
-    if (pagesContainerRef.current) {
-      pagesContainerRef.current.style.overflow = '';
-      pagesContainerRef.current.style.scrollSnapType = '';
-    }
     setActiveId(null);
     dragStartedInDockRef.current = false;
     lastReorderRef.current = null;
@@ -909,28 +936,225 @@ export const Desktop: React.FC = () => {
     }
   };
 
-  // Handle page scroll snapping
-  const scrollToPage = (pageIdx: number) => {
-    if (pagesContainerRef.current) {
-      const w = pagesContainerRef.current.clientWidth;
-      pagesContainerRef.current.scrollTo({ left: w * pageIdx, behavior: 'smooth' });
+  // === iOS-style page swipe logic ===
+  // Auto-append an empty page when the last page has content (like iOS).
+  // This gives the user a blank page to swipe to and add new items.
+  const displayPages = useMemo(() => {
+    const pages = layout.pages;
+    const lastPage = pages[pages.length - 1];
+    if (lastPage && lastPage.length > 0) {
+      return [...pages, []]; // append virtual empty page
     }
-    setCurrentPage(pageIdx);
-  };
+    return pages;
+  }, [layout.pages]);
+  const totalPages = displayPages.length;
 
-  const handlePageScroll = () => {
-    if (pagesContainerRef.current) {
-      const w = pagesContainerRef.current.clientWidth;
-      const scrollLeft = pagesContainerRef.current.scrollLeft;
-      const page = Math.round(scrollLeft / w);
-      setCurrentPage(page);
+  // Measure container width on mount and resize
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (pagesContainerRef.current) {
+        setContainerWidth(pagesContainerRef.current.clientWidth);
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  // Animate to a specific page index
+  const scrollToPage = useCallback((pageIdx: number) => {
+    const clamped = Math.max(0, Math.min(pageIdx, totalPages - 1));
+    setPageTransition(true);
+    setPageOffset(-clamped * containerWidth);
+    setCurrentPage(clamped);
+  }, [containerWidth, totalPages]);
+
+  // --- Touch event handlers ---
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Don't interfere with drag-and-drop
+    if (activeId) return;
+    // Don't start swipe if touching the add-button, let its click fire normally
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-add-button]')) return;
+    const touch = e.touches[0];
+    swipeRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startTime: Date.now(),
+      currentX: touch.clientX,
+      isDragging: true,
+      isHorizontal: null,
+    };
+    setPageTransition(false);
+  }, [activeId]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    if (!s.isDragging || activeId) return;
+
+    const touch = e.touches[0];
+    const diffX = touch.clientX - s.startX;
+    const diffY = touch.clientY - s.startY;
+
+    // Decide direction lock after 10px movement
+    if (s.isHorizontal === null) {
+      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+        s.isHorizontal = Math.abs(diffX) > Math.abs(diffY);
+      }
+      if (!s.isHorizontal) return;
     }
-  };
+    if (!s.isHorizontal) return;
+
+    s.currentX = touch.clientX;
+    const baseOffset = -currentPage * containerWidth;
+    let delta = diffX;
+
+    // Rubber-band effect at edges (iOS style damping)
+    if (
+      (currentPage === 0 && delta > 0) ||
+      (currentPage === totalPages - 1 && delta < 0)
+    ) {
+      delta = delta * 0.3; // damping factor
+    }
+
+    setPageOffset(baseOffset + delta);
+  }, [activeId, currentPage, containerWidth, totalPages]);
+
+  const handleTouchEnd = useCallback(() => {
+    const s = swipeRef.current;
+    if (!s.isDragging || activeId) return;
+    s.isDragging = false;
+
+    // If no horizontal swipe was detected (tap or vertical scroll),
+    // just snap back and let the browser fire the native click event.
+    if (!s.isHorizontal) {
+      setPageTransition(true);
+      setPageOffset(-currentPage * containerWidth);
+      return;
+    }
+
+    const diffX = s.currentX - s.startX;
+    const elapsed = Date.now() - s.startTime;
+    const velocity = Math.abs(diffX) / Math.max(elapsed, 1); // px/ms
+
+    // Thresholds for page change
+    const DISTANCE_THRESHOLD = containerWidth * 0.2; // 20% of page width
+    const VELOCITY_THRESHOLD = 0.3; // px/ms (fast flick)
+
+    let targetPage = currentPage;
+    if (Math.abs(diffX) > DISTANCE_THRESHOLD || velocity > VELOCITY_THRESHOLD) {
+      if (diffX < 0) {
+        targetPage = Math.min(currentPage + 1, totalPages - 1);
+      } else {
+        targetPage = Math.max(currentPage - 1, 0);
+      }
+    }
+
+    scrollToPage(targetPage);
+  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage]);
+
+  // --- Mouse event handlers (for desktop trackpad / mouse drag) ---
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (activeId) return;
+    // Only left mouse button
+    if (e.button !== 0) return;
+    // Don't start swipe if clicking on an interactive element
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]') || target.closest('button') || target.closest('a')) return;
+
+    // Prevent browser native text/element selection (blue highlight) during drag
+    e.preventDefault();
+
+    swipeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startTime: Date.now(),
+      currentX: e.clientX,
+      isDragging: true,
+      isHorizontal: null,
+    };
+    setPageTransition(false);
+  }, [activeId]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const s = swipeRef.current;
+    if (!s.isDragging || activeId) return;
+
+    const diffX = e.clientX - s.startX;
+    const diffY = e.clientY - s.startY;
+
+    if (s.isHorizontal === null) {
+      if (Math.abs(diffX) > 5 || Math.abs(diffY) > 5) {
+        s.isHorizontal = Math.abs(diffX) > Math.abs(diffY);
+      }
+      if (!s.isHorizontal) return;
+    }
+    if (!s.isHorizontal) return;
+
+    // Prevent selection during horizontal swipe
+    e.preventDefault();
+
+    s.currentX = e.clientX;
+    const baseOffset = -currentPage * containerWidth;
+    let delta = diffX;
+
+    if (
+      (currentPage === 0 && delta > 0) ||
+      (currentPage === totalPages - 1 && delta < 0)
+    ) {
+      delta = delta * 0.3;
+    }
+
+    setPageOffset(baseOffset + delta);
+  }, [activeId, currentPage, containerWidth, totalPages]);
+
+  const handleMouseUp = useCallback(() => {
+    const s = swipeRef.current;
+    if (!s.isDragging || activeId) return;
+    s.isDragging = false;
+
+    if (!s.isHorizontal) {
+      setPageTransition(true);
+      setPageOffset(-currentPage * containerWidth);
+      return;
+    }
+
+    const diffX = s.currentX - s.startX;
+    const elapsed = Date.now() - s.startTime;
+    const velocity = Math.abs(diffX) / Math.max(elapsed, 1);
+
+    const DISTANCE_THRESHOLD = containerWidth * 0.2;
+    const VELOCITY_THRESHOLD = 0.3;
+
+    let targetPage = currentPage;
+    if (Math.abs(diffX) > DISTANCE_THRESHOLD || velocity > VELOCITY_THRESHOLD) {
+      if (diffX < 0) {
+        targetPage = Math.min(currentPage + 1, totalPages - 1);
+      } else {
+        targetPage = Math.max(currentPage - 1, 0);
+      }
+    }
+
+    scrollToPage(targetPage);
+  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage]);
+
+  // Sync offset when currentPage or containerWidth changes (e.g. on resize)
+  useEffect(() => {
+    setPageTransition(true);
+    setPageOffset(-currentPage * containerWidth);
+  }, [containerWidth]);
+
+  // Clamp currentPage when total pages shrink
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      scrollToPage(totalPages - 1);
+    }
+  }, [totalPages, currentPage, scrollToPage]);
 
   const isLocalSearchActive = (searchMode !== 'google' && searchMode !== 'bing' && searchQuery.trim() !== '');
 
   // IDs for sortable contexts
-  const pageItemIds = useMemo(() => layout.pages.map(page => page.map(item => item.id)), [layout.pages]);
+  const pageItemIds = useMemo(() => displayPages.map(page => page.map(item => item.id)), [displayPages]);
   const dockItemIds = useMemo(() => layout.dock.map(item => item.id), [layout.dock]);
   const folderItemIds = useMemo(() => openedFolder?.children?.map(item => item.id) ?? [], [openedFolder]);
 
@@ -970,7 +1194,7 @@ export const Desktop: React.FC = () => {
     <div className="w-full h-full flex flex-col overflow-hidden relative">
       
       {/* 1. Search Bar */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-14 md:pt-14 px-6 pointer-events-none">
+      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-24 md:pt-20 px-6 pointer-events-none">
         <div className="w-full max-w-[580px] pointer-events-auto">
           <form onSubmit={handleSearchSubmit} className="relative group flex items-center">
             {isDropdownOpen && (
@@ -1064,11 +1288,27 @@ export const Desktop: React.FC = () => {
         ) : (
           <div 
             ref={pagesContainerRef}
-            className="h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
-            onScroll={handlePageScroll}
+            className="h-full overflow-hidden relative select-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
           >
-            {layout.pages.map((page, pageIdx) => (
-              <PageDropZone key={pageIdx} pageIdx={pageIdx}>
+            <div
+              className="h-full flex"
+              style={{
+                width: `${totalPages * 100}%`,
+                transform: `translateX(${pageOffset}px)`,
+                transition: pageTransition ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none',
+                willChange: 'transform',
+              }}
+            >
+            {displayPages.map((page, pageIdx) => (
+              <PageDropZone key={pageIdx} pageIdx={pageIdx} totalPages={totalPages}>
                 <SortableContext items={pageItemIds[pageIdx] || []} strategy={rectSortingStrategy}>
                   <div
                     className="desktop-icon-grid grid content-start w-full md:px-4"
@@ -1090,14 +1330,49 @@ export const Desktop: React.FC = () => {
                 </SortableContext>
               </PageDropZone>
             ))}
+            </div>
+
+            {/* Edge arrow buttons for PC — hover on left/right edge to reveal */}
+            {totalPages > 1 && (
+              <>
+                {/* Left arrow */}
+                {currentPage > 0 && (
+                  <div
+                    className="hidden md:flex absolute left-0 top-0 bottom-0 w-[48px] items-center justify-center z-10 group/arrow"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => scrollToPage(currentPage - 1)}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center opacity-0 group-hover/arrow:opacity-100 transition-opacity duration-300 cursor-pointer hover:bg-white/15 hover:scale-110 active:scale-95">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/70">
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+                {/* Right arrow */}
+                {currentPage < totalPages - 1 && (
+                  <div
+                    className="hidden md:flex absolute right-0 top-0 bottom-0 w-[48px] items-center justify-center z-10 group/arrow"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => scrollToPage(currentPage + 1)}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center opacity-0 group-hover/arrow:opacity-100 transition-opacity duration-300 cursor-pointer hover:bg-white/15 hover:scale-110 active:scale-95">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/70">
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
 
       {/* 3. Page Indicator Dots */}
-      {!isLocalSearchActive && layout.pages.length > 1 && (
+      {!isLocalSearchActive && displayPages.length > 1 && (
         <div className="absolute bottom-[108px] md:bottom-[118px] left-0 right-0 z-20 flex justify-center gap-2">
-          {layout.pages.map((_, i) => (
+          {displayPages.map((_, i) => (
             <button
               key={i}
               onClick={() => scrollToPage(i)}

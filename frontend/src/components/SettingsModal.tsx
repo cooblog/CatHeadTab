@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useConfigStore, isEnvConfigured, ENV_API_URL } from '../store/configStore';
+import { useLayoutStore } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { saveImageBlob, loadImageBlob, compressImageToWebP, getRawBlob, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
+import { saveImageBlob, loadImageBlob, compressImageToWebP, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
 import client from '../api/client';
 import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 
@@ -276,14 +277,12 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     // Close preview modal if open
     setWpPreviewItem(null);
 
-    // If user is logged in, sync URL wallpaper to cloud
+    // If user is logged in, sync wallpaper preference to cloud
     const { jwtToken } = useConfigStore.getState();
     if (jwtToken) {
-      try {
-        await client.put('/api/v1/user/preferences', { backgroundImage: wallpaperUrl });
-      } catch (err) {
+      useLayoutStore.getState().syncPreferencesToCloud().catch(err => {
         console.error('Failed to sync wallpaper to cloud', err);
-      }
+      });
     }
   };
 
@@ -523,24 +522,9 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
 
     const { jwtToken } = useConfigStore.getState();
     if (jwtToken) {
-      try {
-        if (trimmed.startsWith('idb://')) {
-          const rawBlob = await getRawBlob('bg-custom');
-          if (rawBlob) {
-            const webpBlob = await compressImageToWebP(rawBlob);
-            const formData = new FormData();
-            formData.append('image', webpBlob, 'background.webp');
-            await client.post('/api/v1/user/background', formData, {
-              headers: { 'Content-Type': 'multipart/form-data' },
-            });
-          }
-          await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background' });
-        } else {
-          await client.put('/api/v1/user/preferences', { backgroundImage: trimmed });
-        }
-      } catch (err) {
+      useLayoutStore.getState().syncPreferencesToCloud().catch(err => {
         console.error('Failed to sync background to cloud', err);
-      }
+      });
     }
   }, [setBackgroundImage]);
 
@@ -570,7 +554,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
 
       {/* App Window container */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-6xl sm:h-[70vh] md:h-[68vh]'}`}
+        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-6xl sm:h-[70vh] md:h-[68vh]'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}

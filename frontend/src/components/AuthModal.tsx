@@ -152,7 +152,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-[2px] animate-fadeIn p-4" onClick={onClose}>
       <div 
-        className="w-full max-w-sm bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] rounded-[2.5rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] p-8 flex flex-col transform animate-scaleIn pointer-events-auto"
+        className="w-full max-w-sm bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] rounded-[2.5rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] p-8 flex flex-col transform animate-scaleIn pointer-events-auto select-none"
         onClick={e => e.stopPropagation()}
       >
         {/* ===== Step 1: Server URL Configuration ===== */}

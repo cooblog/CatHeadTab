@@ -152,7 +152,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
 
       {/* App Window container */}
       <div 
-        className="w-full max-w-md bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden"
+        className="w-full max-w-md bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none"
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}

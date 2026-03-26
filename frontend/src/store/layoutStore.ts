@@ -7,7 +7,7 @@ import { getRawBlob, compressImageToWebP, saveImageBlob } from '../utils/imageSt
 const triggerAutoSync = () => {
   const { jwtToken } = useConfigStore.getState();
   if (jwtToken) {
-    useLayoutStore.getState().uploadLayoutToCloud().catch(err => {
+    useLayoutStore.getState().syncLayoutOnly().catch(err => {
       console.error('Failed to auto-sync layout to cloud', err);
     });
   }
@@ -56,8 +56,15 @@ interface LayoutState {
   moveItemToPage: (sourceId: string, pageIndex: number, insertIndex?: number) => void;
   reorderInsideFolder: (folderId: string, sourceId: string, targetId: string) => void;
   moveItemOutOfFolder: (sourceId: string, folderId: string, pageIndex?: number) => void;
+  /** Merge two items into a new folder at the target's position. */
+  mergeItemsToNewFolder: (sourceId: string, targetId: string) => void;
   
   // Cloud Sync Actions
+  /** Sync only layout (pages + dock) to cloud. Called on every layout change. */
+  syncLayoutOnly: () => Promise<void>;
+  /** Sync only wallpaper/preferences to cloud. Called when background changes. */
+  syncPreferencesToCloud: () => Promise<void>;
+  /** Sync both layout and preferences to cloud (full sync). */
   uploadLayoutToCloud: () => Promise<void>;
   pullLayoutFromCloud: () => Promise<void>;
   mergeLayoutWithCloud: () => Promise<void>;
@@ -502,7 +509,80 @@ export const useLayoutStore = create<LayoutState>()(
         triggerAutoSync();
       },
 
+      mergeItemsToNewFolder: (sourceId, targetId) => {
+        if (sourceId === targetId) return;
+        const layout = { ...get().layout };
 
+        // 1. Find where the target lives (so we can place the folder there)
+        let targetLocation: 'page' | 'dock' | null = null;
+        let targetPageIdx = -1;
+        let targetIdx = -1;
+
+        for (let p = 0; p < layout.pages.length; p++) {
+          const i = layout.pages[p].findIndex(item => item.id === targetId);
+          if (i >= 0) { targetLocation = 'page'; targetPageIdx = p; targetIdx = i; break; }
+        }
+        if (!targetLocation) {
+          const i = layout.dock.findIndex(item => item.id === targetId);
+          if (i >= 0) { targetLocation = 'dock'; targetIdx = i; }
+        }
+        if (!targetLocation) return;
+
+        // 2. Remove both items from all locations
+        let sourceItem: DesktopItem | null = null;
+        let targetItem: DesktopItem | null = null;
+
+        const pr1 = removeFromPages(layout.pages, sourceId);
+        if (pr1.removed) { layout.pages = pr1.pages; sourceItem = pr1.removed; }
+        else {
+          const dr1 = removeItemFromList(layout.dock, sourceId);
+          if (dr1.removed) { layout.dock = dr1.result; sourceItem = dr1.removed; }
+        }
+        if (!sourceItem) return;
+
+        const pr2 = removeFromPages(layout.pages, targetId);
+        if (pr2.removed) { layout.pages = pr2.pages; targetItem = pr2.removed; }
+        else {
+          const dr2 = removeItemFromList(layout.dock, targetId);
+          if (dr2.removed) { layout.dock = dr2.result; targetItem = dr2.removed; }
+        }
+        if (!targetItem) return;
+
+        // 3. Create the new folder with both items as children
+        const newFolder: DesktopItem = {
+          id: `folder-${Date.now()}`,
+          type: 'folder',
+          title: targetItem.title || sourceItem.title || 'New Folder',
+          children: [targetItem, sourceItem],
+        };
+
+        // 4. Insert the folder at the target's original position
+        // Recalculate index — after removal it may have shifted
+        if (targetLocation === 'page') {
+          const page = layout.pages[targetPageIdx];
+          const insertAt = Math.min(targetIdx, page.length);
+          layout.pages[targetPageIdx] = [
+            ...page.slice(0, insertAt),
+            newFolder,
+            ...page.slice(insertAt),
+          ];
+        } else {
+          const insertAt = Math.min(targetIdx, layout.dock.length);
+          layout.dock = [
+            ...layout.dock.slice(0, insertAt),
+            newFolder,
+            ...layout.dock.slice(insertAt),
+          ];
+        }
+
+        // 5. Clean empty trailing pages
+        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
+          layout.pages.pop();
+        }
+
+        set({ layout });
+        triggerAutoSync();
+      },
 
       moveItemFromDock: (id) => {
         const layout = { ...get().layout };
@@ -515,6 +595,45 @@ export const useLayoutStore = create<LayoutState>()(
         }
         set({ layout });
         triggerAutoSync();
+      },
+
+      syncLayoutOnly: async () => {
+        set({ loading: true, error: null });
+        try {
+          const { layout } = get();
+          await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
+          set({ loading: false });
+        } catch (err: any) {
+          set({ error: err.message || 'Layout sync failed', loading: false });
+          throw err;
+        }
+      },
+
+      syncPreferencesToCloud: async () => {
+        set({ loading: true, error: null });
+        try {
+          const { backgroundImage } = useConfigStore.getState();
+
+          if (backgroundImage.startsWith('idb://')) {
+            const rawBlob = await getRawBlob('bg-custom');
+            if (rawBlob) {
+              const webpBlob = await compressImageToWebP(rawBlob);
+              const formData = new FormData();
+              formData.append('image', webpBlob, 'background.webp');
+              await client.post('/api/v1/user/background', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+              });
+            }
+            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background' });
+          } else {
+            await client.put('/api/v1/user/preferences', { backgroundImage });
+          }
+
+          set({ loading: false });
+        } catch (err: any) {
+          set({ error: err.message || 'Preferences sync failed', loading: false });
+          throw err;
+        }
       },
 
       uploadLayoutToCloud: async () => {
