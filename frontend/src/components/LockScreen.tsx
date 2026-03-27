@@ -25,11 +25,42 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
   });
   const [dragOffset, setDragOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Update clock every second
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Block ALL mouse / touch / pointer events from reaching anything below
+  // the lock-screen overlay by capturing them at the document level.
+  useEffect(() => {
+    const blockEvent = (e: Event) => {
+      // Allow events that originate from inside the lock-screen wrapper
+      const wrapper = wrapperRef.current;
+      if (wrapper && wrapper.contains(e.target as Node)) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    };
+
+    const events = [
+      'mousedown', 'mouseup', 'mousemove', 'click', 'dblclick',
+      'pointerdown', 'pointerup', 'pointermove',
+      'touchstart', 'touchmove', 'touchend',
+      'dragstart', 'drag', 'dragend',
+      'selectstart',
+    ];
+
+    for (const evt of events) {
+      document.addEventListener(evt, blockEvent, { capture: true });
+    }
+
+    return () => {
+      for (const evt of events) {
+        document.removeEventListener(evt, blockEvent, { capture: true });
+      }
+    };
   }, []);
 
   // Format time — large display
@@ -55,6 +86,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
 
   // --- Touch handlers ---
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent text selection during touch drag
     const touch = e.touches[0];
     swipeRef.current = {
       startY: touch.clientY,
@@ -90,6 +122,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
   // --- Mouse handlers (for desktop) ---
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    e.preventDefault(); // Prevent text selection during drag
     swipeRef.current = {
       startY: e.clientY,
       currentY: e.clientY,
@@ -135,6 +168,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
   const opacity = unlocking ? 0 : 1 - progress * 0.5;
 
   return (
+    <div ref={wrapperRef}>
     <AnimatePresence>
       {!unlocking ? (
         <motion.div
@@ -149,6 +183,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
             transform: `translateY(${translateY}px)`,
             opacity,
             transition: swipeRef.current.isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
           }}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -158,6 +194,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onClick={handleClick}
+          onDragStart={(e) => e.preventDefault()}
+          onSelectCapture={(e) => e.preventDefault()}
         >
           {/* Full background image */}
           {backgroundUrl && (
@@ -265,5 +303,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock, backgroundUrl 
         </motion.div>
       )}
     </AnimatePresence>
+    </div>
   );
 };

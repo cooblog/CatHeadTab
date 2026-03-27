@@ -28,6 +28,42 @@ function App() {
     setLocked(false);
   }, [setLocked]);
 
+  // When locked, inject a global <style> and continuously clear any existing
+  // selection so native browser highlights cannot remain visible.
+  useEffect(() => {
+    if (!isLocked) return;
+
+    const clearSelection = () => {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) selection.removeAllRanges();
+    };
+
+    const style = document.createElement('style');
+    style.setAttribute('data-lockscreen', 'true');
+    style.textContent = `
+      * {
+        -webkit-user-select: none !important;
+        user-select: none !important;
+        -webkit-touch-callout: none !important;
+      }
+      *::selection { background: transparent !important; color: inherit !important; }
+      *::-moz-selection { background: transparent !important; color: inherit !important; }
+    `;
+
+    clearSelection();
+    document.addEventListener('selectionchange', clearSelection, true);
+    window.addEventListener('mouseup', clearSelection, true);
+    window.addEventListener('dragend', clearSelection, true);
+    document.head.appendChild(style);
+
+    return () => {
+      document.removeEventListener('selectionchange', clearSelection, true);
+      window.removeEventListener('mouseup', clearSelection, true);
+      window.removeEventListener('dragend', clearSelection, true);
+      style.remove();
+    };
+  }, [isLocked]);
+
   useEffect(() => {
     // Wait for Zustand to hydrate from storage
     setMounted(true);

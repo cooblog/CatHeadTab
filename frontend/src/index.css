@@ -247,6 +247,8 @@ body {
   grid-template-columns: repeat(auto-fit, 72px) !important;
   gap: 24px !important;
   justify-content: center !important;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 @media (min-width: 768px) {
@@ -270,6 +272,14 @@ body {
   grid-template-columns: repeat(auto-fit, 90px) !important;
   gap: 24px !important;
   justify-content: center !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.folder-icon-grid img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 @media (min-width: 768px) {

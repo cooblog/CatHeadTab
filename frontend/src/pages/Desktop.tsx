@@ -122,7 +122,7 @@ const DesktopIconContent: React.FC<{
   );
   
   return (
-    <div className={`flex flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
+    <div className={`flex select-none flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
       <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-all duration-200 relative ${
         hasImageIcon
           ? `shadow-lg ${isDraggedOver
@@ -147,6 +147,8 @@ const DesktopIconContent: React.FC<{
                   src={getSmartFaviconUrl(url, 64)}
                   className="w-[88%] h-[88%] object-contain"
                   alt=""
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               </div>
@@ -165,7 +167,7 @@ const DesktopIconContent: React.FC<{
               </div>
             ) : item.icon ? (
               item.icon.startsWith('http') ? (
-                <img src={item.icon} className="w-full h-full object-cover" alt={item.title} onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }} />
+                <img src={item.icon} className="w-full h-full object-cover" alt={item.title} draggable={false} onDragStart={(e) => e.preventDefault()} onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }} />
               ) : (
                 <div className="flex items-center justify-center w-full h-full text-3xl md:text-4xl">{item.icon}</div>
               )
@@ -174,6 +176,8 @@ const DesktopIconContent: React.FC<{
                 src={getSmartFaviconUrl(item.url, 128)}
                 className="w-full h-full object-cover"
                 alt={item.title}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
                 onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
               />
             ) : null}
@@ -184,7 +188,7 @@ const DesktopIconContent: React.FC<{
         )}
       </div>
       {!isDock && (
-        <span className="mt-1.5 text-[12px] font-medium text-white tracking-wide w-full text-center px-0.5 truncate drop-shadow-md">
+        <span className="pointer-events-none mt-1.5 w-full truncate px-0.5 text-center text-[12px] font-medium tracking-wide text-white drop-shadow-md">
           {item.title || 'Untitled'}
         </span>
       )}
@@ -235,7 +239,7 @@ const SortableDesktopIcon: React.FC<{
       style={style}
       {...attributes}
       {...listeners}
-      className={`${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
+      className={`select-none ${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
       data-desktop-icon="true"
       onClick={(e) => {
         if (!isDragging) {
@@ -1526,9 +1530,11 @@ export const Desktop: React.FC = () => {
       {/* 7. Folder Overlay */}
       {openedFolder && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
+          className="fixed inset-0 z-50 flex select-none items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
           onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}
           onContextMenu={(e) => e.preventDefault()}
+          onDragStart={(e) => e.preventDefault()}
+          onSelectCapture={(e) => e.preventDefault()}
         >
           <div className="w-full max-w-5xl flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             {/* Folder name - outside the rounded container, at top-left */}
@@ -1583,7 +1589,7 @@ export const Desktop: React.FC = () => {
             <div className="flex-1 overflow-y-auto w-full px-1 sm:px-6 md:px-10 lg:px-14 py-6 sm:py-10 no-scrollbar">
               <SortableContext items={folderItemIds} strategy={rectSortingStrategy}>
                 <div 
-                  className="folder-icon-grid grid content-start"
+                  className="folder-icon-grid grid select-none content-start"
                   style={{ maxWidth: '900px', margin: '0 auto', justifyContent: 'center', justifyItems: 'center' }}
                 >
                   {openedFolder.children?.map(item => (
