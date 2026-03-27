@@ -1,15 +1,17 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
 import { useLayoutStore } from './store/layoutStore'
 import client from './api/client'
 import { Desktop } from './pages/Desktop'
-import { OAuthCallback } from './pages/OAuthCallback'
-import { VerifyEmail } from './pages/VerifyEmail'
-import { ResetPassword } from './pages/ResetPassword'
 import { loadImageBlob } from './utils/imageStore'
 import { LockScreen } from './components/LockScreen'
 import { useIdleTimer } from './hooks/useIdleTimer'
+
+// Lazy-loaded routes (not needed on first render)
+const OAuthCallback = lazy(() => import('./pages/OAuthCallback').then(m => ({ default: m.OAuthCallback })));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
+const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 
 function App() {
   const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout } = useConfigStore();
@@ -107,7 +109,7 @@ function App() {
 
   return (
     <div 
-      className="w-full h-screen overflow-hidden text-white flex flex-col bg-cover bg-center transition-all duration-700"
+      className="w-full h-screen overflow-hidden text-white flex flex-col bg-cover bg-center transition-[background-image] duration-700"
       style={{ 
         backgroundImage: resolvedBg ? `url("${resolvedBg}")` : undefined 
       }}
@@ -128,12 +130,14 @@ function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full h-full relative z-10 pt-10">
-        <Routes>
-          <Route path="/oauth/callback" element={<OAuthCallback />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/*" element={<Desktop />} />
-        </Routes>
+        <Suspense fallback={null}>
+          <Routes>
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/*" element={<Desktop />} />
+          </Routes>
+        </Suspense>
       </main>
       
     </div>

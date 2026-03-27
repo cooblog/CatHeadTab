@@ -123,7 +123,7 @@ const DesktopIconContent: React.FC<{
   
   return (
     <div className={`flex select-none flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
-      <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-all duration-200 relative ${
+      <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-[transform,box-shadow] duration-200 relative ${
         hasImageIcon
           ? `shadow-lg ${isDraggedOver
               ? 'scale-125 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
@@ -297,14 +297,14 @@ const FolderDropOutZone: React.FC<{ isActive: boolean }> = ({ isActive }) => {
     <div
       ref={setNodeRef}
       className={`
-        transition-all duration-300 ease-out overflow-hidden
+        transition-[max-height,opacity,margin] duration-300 ease-out overflow-hidden
         ${isActive ? 'max-h-24 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
       `}
     >
       <div
         className={`
           flex items-center justify-center gap-2 py-4 px-6 mx-4 sm:mx-8 rounded-2xl
-          border-2 border-dashed transition-all duration-200
+          border-2 border-dashed transition-[border-color,background-color,transform,box-shadow] duration-200
           ${isOver
             ? 'border-white/60 bg-white/20 scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.15)]'
             : 'border-white/20 bg-white/[0.06]'
@@ -1245,7 +1245,7 @@ export const Desktop: React.FC = () => {
   // For the Add (+) icon
   const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
     <div className="flex flex-col items-center w-[72px] md:w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
-      <div className="w-[60px] h-[60px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-all duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
+      <div className="w-[60px] h-[60px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-[transform,background-color,border-color] duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
           <path d="M12 5v14M5 12h14" />
         </svg>
@@ -1303,7 +1303,7 @@ export const Desktop: React.FC = () => {
                         setIsDropdownOpen(false);
                         if (searchInputRef.current) searchInputRef.current.focus();
                       }}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${searchMode === mode.id ? 'bg-white/15 shadow-md shadow-black/20 text-white' : 'hover:bg-white/5 text-white/80'}`}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${searchMode === mode.id ? 'bg-white/15 shadow-md shadow-black/20 text-white' : 'hover:bg-white/5 text-white/80'}`}
                     >
                       <div className="shrink-0">{mode.icon}</div>
                       <span className="text-[13px] font-medium tracking-wide">{getSearchModeLabel(mode.id as SearchMode)}</span>
@@ -1324,7 +1324,7 @@ export const Desktop: React.FC = () => {
               }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/30 backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-black/40 focus:bg-black/50 focus:border-white/30 rounded-full py-3 md:py-3.5 pl-14 pr-6 text-[14px] font-medium text-white shadow-2xl outline-none placeholder-white/40 transition-all duration-300"
+              className="w-full bg-black/30 backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-black/40 focus:bg-black/50 focus:border-white/30 rounded-full py-3 md:py-3.5 pl-14 pr-6 text-[14px] font-medium text-white shadow-2xl outline-none placeholder-white/40 transition-colors duration-300"
             />
           </form>
         </div>
@@ -1388,7 +1388,7 @@ export const Desktop: React.FC = () => {
                 width: `${totalPages * 100}%`,
                 transform: `translateX(${pageOffset}px)`,
                 transition: pageTransition ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none',
-                willChange: 'transform',
+                willChange: swipeRef.current.isDragging ? 'transform' : 'auto',
               }}
             >
             {displayPages.map((page, pageIdx) => (
@@ -1460,7 +1460,7 @@ export const Desktop: React.FC = () => {
             <button
               key={i}
               onClick={() => scrollToPage(i)}
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${currentPage === i ? 'bg-white scale-125' : 'bg-white/30 hover:bg-white/50'}`}
+              className={`w-2 h-2 rounded-full transition-[background-color,transform] duration-300 ${currentPage === i ? 'bg-white scale-125' : 'bg-white/30 hover:bg-white/50'}`}
             />
           ))}
         </div>
@@ -1469,7 +1469,7 @@ export const Desktop: React.FC = () => {
       {/* 4. Dock Bar */}
       <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
         <div
-          className="bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300"
+          className="bg-[#f5f5f5]/[0.12] backdrop-blur-xl border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-[padding,gap] duration-300"
         >
           <div
             className={`flex items-center ${dockAdaptive.scrollable ? 'overflow-x-auto no-scrollbar gap-5 px-5 py-2.5' : !dockAdaptive.useAdaptive ? 'gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3' : ''}`}
@@ -1503,13 +1503,13 @@ export const Desktop: React.FC = () => {
       {/* 5. Settings & Lock Buttons */}
       <div className="fixed top-4 left-4 md:top-6 md:left-6 z-30 flex items-center gap-2">
         <button 
-          className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+          className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-[background-color,color,transform] duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
           onClick={() => setIsSettingsOpen(true)}
         >
           <SettingsIcon />
         </button>
         <button
-          className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+          className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-[background-color,color,transform] duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
           onClick={() => setLocked(true)}
           title={language === 'zh' ? '锁屏' : 'Lock Screen'}
         >
@@ -1520,7 +1520,7 @@ export const Desktop: React.FC = () => {
       {/* 6. User/Auth Button */}
       <div className="fixed top-4 right-4 md:top-6 md:right-6 z-30">
         <button 
-          className={`w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer ${jwtToken ? 'bg-[#72d565]/80 text-black border-[#72d565]' : 'bg-black/30 text-white/60 border-white/10 hover:bg-white/15 hover:text-white'}`}
+          className={`w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-[background-color,color,transform] duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer ${jwtToken ? 'bg-[#72d565]/80 text-black border-[#72d565]' : 'bg-black/30 text-white/60 border-white/10 hover:bg-white/15 hover:text-white'}`}
           onClick={handleAuthClick}
         >
           <UserAvatarIcon />

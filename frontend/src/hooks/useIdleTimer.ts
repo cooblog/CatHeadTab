@@ -43,7 +43,17 @@ export function useIdleTimer(
       'wheel',
     ];
 
-    const handleActivity = () => resetTimer();
+    // Throttle high-frequency events (mousemove, scroll, wheel) to avoid
+    // calling clearTimeout+setTimeout dozens of times per second.
+    let lastActivityTime = 0;
+    const THROTTLE_MS = 1000; // Only reset timer at most once per second
+
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityTime < THROTTLE_MS) return;
+      lastActivityTime = now;
+      resetTimer();
+    };
 
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
 

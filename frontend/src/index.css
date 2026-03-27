@@ -34,25 +34,11 @@ a[aria-disabled="true"],
 }
 
 body {
-  /* 默认星空/渐变背景，可通过设置动态替换 */
+  /* 静态渐变背景，不使用动画以避免持续 CPU 消耗 */
   background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-  background-size: 400% 400%;
-  animation: gradientBG 15s ease infinite;
   color: #fff;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   overflow: hidden; /* 防止出现外层滚动条 */
-}
-
-@keyframes gradientBG {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
 }
 
 /* --- 液态玻璃组件类 --- */
@@ -84,7 +70,7 @@ body {
     backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 0.75rem;
-    transition: all 0.3s;
+    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s, transform 0.3s;
   }
 
   .glass-card:hover {
@@ -111,7 +97,7 @@ body {
     border-radius: 0.5rem;
     color: #fff;
     font-weight: 500;
-    transition: all 0.15s;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   }
 
   .glass-button:hover {
@@ -136,7 +122,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 0.5rem;
     color: #fff;
-    transition: all 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
 
   .glass-input::placeholder {

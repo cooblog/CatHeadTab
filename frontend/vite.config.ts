@@ -20,6 +20,22 @@ export default defineConfig({
       input: {
         newtab: path.resolve(__dirname, 'index.html'),
       },
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/react-router')) {
+            return 'vendor-router';
+          }
+          if (id.includes('node_modules/@dnd-kit')) {
+            return 'vendor-dndkit';
+          }
+          if (id.includes('node_modules/framer-motion')) {
+            return 'vendor-motion';
+          }
+        },
+      },
     },
   },
 })
