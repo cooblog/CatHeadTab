@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
 import { useLayoutStore } from './store/layoutStore'
@@ -8,13 +8,25 @@ import { OAuthCallback } from './pages/OAuthCallback'
 import { VerifyEmail } from './pages/VerifyEmail'
 import { ResetPassword } from './pages/ResetPassword'
 import { loadImageBlob } from './utils/imageStore'
+import { LockScreen } from './components/LockScreen'
+import { useIdleTimer } from './hooks/useIdleTimer'
 
 function App() {
-  const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile } = useConfigStore();
+  const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout } = useConfigStore();
   const { pullLayoutFromCloud } = useLayoutStore();
   const [mounted, setMounted] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
+
+  // Lock screen on idle — disabled while already locked
+  const handleIdle = useCallback(() => {
+    setLocked(true);
+  }, [setLocked]);
+  useIdleTimer(handleIdle, lockIdleTimeout, !isLocked);
+
+  const handleUnlock = useCallback(() => {
+    setLocked(false);
+  }, [setLocked]);
 
   useEffect(() => {
     // Wait for Zustand to hydrate from storage
@@ -64,6 +76,9 @@ function App() {
         backgroundImage: resolvedBg ? `url("${resolvedBg}")` : undefined 
       }}
     >
+      {/* Lock Screen Overlay */}
+      {isLocked && <LockScreen onUnlock={handleUnlock} backgroundUrl={resolvedBg} />}
+
       {/* Cloud Sync Indicator */}
       {syncing && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-full shadow-lg animate-pulse">

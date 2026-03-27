@@ -235,4 +235,7 @@ export const zh = {
   'explore.alreadyOnDesktop': '桌面已存在',
   'explore.added': '已添加',
   'explore.noResults': '没有找到匹配的网站',
+
+  // Lock Screen
+  'lockScreen.hint': '向上滑动或点击解锁',
 };

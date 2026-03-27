@@ -32,11 +32,17 @@ interface ConfigState {
   language: 'zh' | 'en'
   backgroundImage: string
   userProfile: UserProfile | null
+  /** Whether the lock screen is currently shown. */
+  isLocked: boolean
+  /** Idle timeout before auto-lock (milliseconds). Default 5 minutes. */
+  lockIdleTimeout: number
   setServerUrl: (url: string) => void
   setLanguage: (lang: 'zh' | 'en') => void
   setJwtToken: (token: string | null) => void
   setBackgroundImage: (url: string) => void
   setUserProfile: (profile: UserProfile | null) => void
+  setLocked: (locked: boolean) => void
+  setLockIdleTimeout: (ms: number) => void
   logout: () => void
   isConfigured: () => boolean
   /** Returns the effective API URL (env variable takes precedence over user input). */
@@ -76,11 +82,15 @@ export const useConfigStore = create<ConfigState>()(
       language: 'zh',
       backgroundImage: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop',
       userProfile: null,
+      isLocked: false,
+      lockIdleTimeout: 5 * 60 * 1000,
       setServerUrl: (url) => set({ serverUrl: url }),
       setLanguage: (lang) => set({ language: lang }),
       setJwtToken: (token) => set({ jwtToken: token }),
       setBackgroundImage: (url) => set({ backgroundImage: url }),
       setUserProfile: (profile) => set({ userProfile: profile }),
+      setLocked: (locked) => set({ isLocked: locked }),
+      setLockIdleTimeout: (ms) => set({ lockIdleTimeout: ms }),
       logout: () => set({ jwtToken: null, userProfile: null }),
       isConfigured: () => !!(ENV_API_URL || get().serverUrl),
       getEffectiveServerUrl: () => ENV_API_URL || get().serverUrl,

@@ -79,6 +79,12 @@ const UserAvatarIcon = () => (
   </svg>
 );
 
+const LockIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
 
 // === DesktopIcon Component (static, used for DragOverlay and non-draggable contexts) ===
 const DesktopIconContent: React.FC<{ 
@@ -461,7 +467,7 @@ function createFolderAwareCollision(_draggedItem: DesktopItem | null): Collision
 export const Desktop: React.FC = () => {
   const { fetchBookmarks } = useBookmarkStore();
   const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem, mergeItemsToNewFolder } = useLayoutStore();
-  const { jwtToken } = useConfigStore();
+  const { jwtToken, setLocked, language } = useConfigStore();
   const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -1490,13 +1496,20 @@ export const Desktop: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. Settings Button */}
-      <div className="fixed top-4 left-4 md:top-6 md:left-6 z-30">
+      {/* 5. Settings & Lock Buttons */}
+      <div className="fixed top-4 left-4 md:top-6 md:left-6 z-30 flex items-center gap-2">
         <button 
           className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
           onClick={() => setIsSettingsOpen(true)}
         >
           <SettingsIcon />
+        </button>
+        <button
+          className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:bg-white/15 hover:text-white transition-all duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer"
+          onClick={() => setLocked(true)}
+          title={language === 'zh' ? '锁屏' : 'Lock Screen'}
+        >
+          <LockIcon />
         </button>
       </div>
 

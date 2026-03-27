@@ -235,4 +235,7 @@ export const en = {
   'explore.alreadyOnDesktop': 'Already on desktop',
   'explore.added': 'Added',
   'explore.noResults': 'No matching sites found',
+
+  // Lock Screen
+  'lockScreen.hint': 'Swipe up or tap to unlock',
 };
