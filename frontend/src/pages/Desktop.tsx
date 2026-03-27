@@ -701,9 +701,16 @@ export const Desktop: React.FC = () => {
     // When the dragged icon overlaps a folder enough AND stays there long enough (500ms),
     // we mark it as a drop target. While the overlap is sufficient, we PAUSE normal
     // reordering so the icon doesn't get pushed away before the timer fires.
+    // NOTE: Dock items never participate in folder merging — only reorder.
     let isOverFolder = false;
 
-    if (!isDraggingFolder && newOverId && newOverId !== activeId) {
+    // Check if either side is in the Dock — skip folder merge for Dock items
+    const sourceInDockForFolder = layout.dock.some(item => item.id === activeId);
+    const overData_ = over?.data.current as { isDock?: boolean } | undefined;
+    const targetInDockForFolder = !!overData_?.isDock;
+    const eitherInDock = sourceInDockForFolder || targetInDockForFolder;
+
+    if (!eitherInDock && !isDraggingFolder && newOverId && newOverId !== activeId) {
       const overItem = findItemById(newOverId);
       const overlapRatio = getOverlapRatio();
 
@@ -829,40 +836,47 @@ export const Desktop: React.FC = () => {
       const targetItem = findItemById(targetId);
       const sourceItem_ = findItemById(sourceId);
 
-      // --- Drop into existing folder ---
-      // Only accept the drop into a folder when folderDropTargetId is set,
-      // which means the user hovered over the folder long enough (≥500ms).
-      // If the user just passed through quickly, treat it as a normal reorder.
-      // Never drop a folder INTO another folder — folders should only reorder.
-      const isDraggingFolder = sourceItem_?.type === 'folder';
-      const shouldDropIntoFolder = !isDraggingFolder
-        && targetItem?.type === 'folder'
-        && folderDropTargetId === targetId;
+      // Check if either source or target is in the Dock — Dock never does folder merge
+      const sourceInDockEnd = layout.dock.some(item => item.id === sourceId);
+      const targetInDockEnd = layout.dock.some(item => item.id === targetId);
+      const eitherInDockEnd = sourceInDockEnd || targetInDockEnd;
 
-      if (shouldDropIntoFolder) {
-        moveItemToFolder(sourceId, targetId);
-        setActiveId(null);
-        setFolderDropTargetId(null);
-        lastFolderOverRef.current = null;
-        setIsFolderDropPending(false);
-        return;
-      }
+      if (!eitherInDockEnd) {
+        // --- Drop into existing folder ---
+        // Only accept the drop into a folder when folderDropTargetId is set,
+        // which means the user hovered over the folder long enough (≥500ms).
+        // If the user just passed through quickly, treat it as a normal reorder.
+        // Never drop a folder INTO another folder — folders should only reorder.
+        const isDraggingFolder = sourceItem_?.type === 'folder';
+        const shouldDropIntoFolder = !isDraggingFolder
+          && targetItem?.type === 'folder'
+          && folderDropTargetId === targetId;
 
-      // --- Merge two items into a new folder (iOS-style) ---
-      // When dragging a non-folder item onto another non-folder item and
-      // folderDropTargetId is set (hovered ≥500ms), create a new folder.
-      const shouldMergeToFolder = !isDraggingFolder
-        && targetItem?.type === 'link'
-        && sourceItem_?.type !== 'folder'
-        && folderDropTargetId === targetId;
+        if (shouldDropIntoFolder) {
+          moveItemToFolder(sourceId, targetId);
+          setActiveId(null);
+          setFolderDropTargetId(null);
+          lastFolderOverRef.current = null;
+          setIsFolderDropPending(false);
+          return;
+        }
 
-      if (shouldMergeToFolder) {
-        mergeItemsToNewFolder(sourceId, targetId);
-        setActiveId(null);
-        setFolderDropTargetId(null);
-        lastFolderOverRef.current = null;
-        setIsFolderDropPending(false);
-        return;
+        // --- Merge two items into a new folder (iOS-style) ---
+        // When dragging a non-folder item onto another non-folder item and
+        // folderDropTargetId is set (hovered ≥500ms), create a new folder.
+        const shouldMergeToFolder = !isDraggingFolder
+          && targetItem?.type === 'link'
+          && sourceItem_?.type !== 'folder'
+          && folderDropTargetId === targetId;
+
+        if (shouldMergeToFolder) {
+          mergeItemsToNewFolder(sourceId, targetId);
+          setActiveId(null);
+          setFolderDropTargetId(null);
+          lastFolderOverRef.current = null;
+          setIsFolderDropPending(false);
+          return;
+        }
       }
 
       // Check if we're inside a folder overlay
@@ -1169,9 +1183,8 @@ export const Desktop: React.FC = () => {
   const folderItemIds = useMemo(() => openedFolder?.children?.map(item => item.id) ?? [], [openedFolder]);
 
   // --- Adaptive Dock sizing ---
-  // On mobile (< 768px), the viewport is narrow. We compute how many icons
-  // can fit and scale down icon size + gap when there are many items.
-  // On desktop (≥ 768px), we use larger base sizes with the same logic.
+  // On mobile (< 768px): icons keep original size; Dock is horizontally scrollable.
+  // On desktop (≥ 768px): scale down icon size + gap to fit (existing behaviour).
   const dockAdaptive = useMemo(() => {
     const count = layout.dock.length;
     const isMobile = containerWidth > 0 && containerWidth < 768;
@@ -1183,29 +1196,31 @@ export const Desktop: React.FC = () => {
     const basePy = isMobile ? 10 : 12; // vertical padding
 
     if (count <= 4) {
-      // Few icons: use default sizes (no override needed)
-      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false };
+      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false, scrollable: false };
     }
 
-    // Available width: viewport minus some safe margin (16px each side)
     const availableWidth = (containerWidth || window.innerWidth) - 32;
-    // Total needed = count * iconSize + (count - 1) * gap + 2 * px
     const neededWidth = count * baseIconSize + (count - 1) * baseGap + 2 * basePx;
 
     if (neededWidth <= availableWidth) {
-      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false };
+      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false, scrollable: false };
     }
 
-    // Scale down: find the ratio to fit everything
+    // --- Mobile: allow horizontal scroll instead of shrinking ---
+    if (isMobile) {
+      return { iconSize: 0, gap: 0, px: 0, py: 0, useAdaptive: false, scrollable: true };
+    }
+
+    // --- Desktop: scale down (existing logic) ---
     const ratio = availableWidth / neededWidth;
-    const minIconSize = isMobile ? 36 : 42;
-    const minGap = isMobile ? 8 : 10;
-    const minPx = isMobile ? 10 : 14;
+    const minIconSize = 42;
+    const minGap = 10;
+    const minPx = 14;
 
     const scaledIconSize = Math.max(minIconSize, Math.round(baseIconSize * ratio));
     const scaledGap = Math.max(minGap, Math.round(baseGap * ratio));
     const scaledPx = Math.max(minPx, Math.round(basePx * ratio));
-    const scaledPy = Math.max(isMobile ? 6 : 8, Math.round(basePy * ratio));
+    const scaledPy = Math.max(8, Math.round(basePy * ratio));
 
     return {
       iconSize: scaledIconSize,
@@ -1213,6 +1228,7 @@ export const Desktop: React.FC = () => {
       px: scaledPx,
       py: scaledPy,
       useAdaptive: true,
+      scrollable: false,
     };
   }, [layout.dock.length, containerWidth]);
 
@@ -1443,30 +1459,34 @@ export const Desktop: React.FC = () => {
       {/* 4. Dock Bar */}
       <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
         <div
-          className={`flex items-center bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300 ${!dockAdaptive.useAdaptive ? 'gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3' : ''}`}
-          style={dockAdaptive.useAdaptive ? {
-            gap: dockAdaptive.gap,
-            paddingLeft: dockAdaptive.px,
-            paddingRight: dockAdaptive.px,
-            paddingTop: dockAdaptive.py,
-            paddingBottom: dockAdaptive.py,
-          } : undefined}
+          className="bg-[#f5f5f5]/[0.12] backdrop-blur-[50px] border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-300"
         >
-          <SortableContext items={dockItemIds} strategy={rectSortingStrategy}>
-            {layout.dock.map(item => (
-              <SortableDesktopIcon 
-                key={item.id} 
-                item={item} 
-                onClick={handleItemClick} 
-                onContextMenu={(e, i) => handleContextMenu(e, i, true)} 
-                isDock
-                isDraggedOver={folderDropTargetId === item.id}
-                activeId={activeId}
-                isFolderDropPending={isFolderDropPending}
-                dockIconSize={dockAdaptive.useAdaptive ? dockAdaptive.iconSize : undefined}
-              />
-            ))}
-          </SortableContext>
+          <div
+            className={`flex items-center ${dockAdaptive.scrollable ? 'overflow-x-auto no-scrollbar gap-5 px-5 py-2.5' : !dockAdaptive.useAdaptive ? 'gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3' : ''}`}
+            style={dockAdaptive.useAdaptive ? {
+              gap: dockAdaptive.gap,
+              paddingLeft: dockAdaptive.px,
+              paddingRight: dockAdaptive.px,
+              paddingTop: dockAdaptive.py,
+              paddingBottom: dockAdaptive.py,
+            } : undefined}
+          >
+            <SortableContext items={dockItemIds} strategy={rectSortingStrategy}>
+              {layout.dock.map(item => (
+                <SortableDesktopIcon
+                  key={item.id}
+                  item={item}
+                  onClick={handleItemClick}
+                  onContextMenu={(e, i) => handleContextMenu(e, i, true)}
+                  isDock
+                  isDraggedOver={folderDropTargetId === item.id}
+                  activeId={activeId}
+                  isFolderDropPending={isFolderDropPending}
+                  dockIconSize={dockAdaptive.useAdaptive ? dockAdaptive.iconSize : undefined}
+                />
+              ))}
+            </SortableContext>
+          </div>
         </div>
       </div>
 
