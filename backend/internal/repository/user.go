@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/google/uuid"
@@ -133,7 +134,28 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 }
 
 func (r *postgresUserRepository) UpdatePreferences(id uuid.UUID, prefs map[string]interface{}) error {
-	data, err := json.Marshal(prefs)
+	// Merge: read existing preferences, apply new fields on top, then write back.
+	// This prevents overwriting unrelated preference keys (e.g. saving
+	// lockIdleTimeout should not erase backgroundImage and vice-versa).
+	var existingJSON []byte
+	err := r.db.QueryRow(`SELECT COALESCE(preferences, '{}') FROM users WHERE id = $1`, id).Scan(&existingJSON)
+	if err != nil {
+		return fmt.Errorf("read existing preferences: %w", err)
+	}
+
+	existing := make(map[string]interface{})
+	if len(existingJSON) > 0 {
+		if err := json.Unmarshal(existingJSON, &existing); err != nil {
+			existing = make(map[string]interface{})
+		}
+	}
+
+	// Apply incoming fields
+	for k, v := range prefs {
+		existing[k] = v
+	}
+
+	data, err := json.Marshal(existing)
 	if err != nil {
 		return err
 	}

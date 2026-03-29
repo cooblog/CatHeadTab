@@ -168,3 +168,17 @@ export const findNodeById = (nodes: ChromeBookmarkTreeNode[], id: string): Chrom
   }
   return null;
 };
+
+// Helper to recursively extract all bookmark links (nodes with url) from the tree
+export const getAllBookmarks = (nodes: ChromeBookmarkTreeNode[]): ChromeBookmarkTreeNode[] => {
+  const bookmarks: ChromeBookmarkTreeNode[] = [];
+  for (const node of nodes) {
+    if (node.url) {
+      bookmarks.push(node);
+    }
+    if (node.children) {
+      bookmarks.push(...getAllBookmarks(node.children));
+    }
+  }
+  return bookmarks;
+};

@@ -230,8 +230,16 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             <span className="text-[13px] font-semibold text-white/70">{userProfile?.username || 'Profile'}</span>
           </div>
           
-          {/* Right spacer */}
+          {/* Right: close button on mobile */}
           <div className="flex items-center w-auto md:w-20 justify-end">
+            <button
+              onClick={onClose}
+              className="md:hidden w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/70">
+                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              </svg>
+            </button>
             <div className="hidden md:block w-20" />
           </div>
         </div>

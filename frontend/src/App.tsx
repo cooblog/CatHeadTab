@@ -37,11 +37,11 @@ function App() {
   const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
 
-  // Lock screen on idle — disabled while already locked
+  // Lock screen on idle — disabled while already locked or when set to "never" (0)
   const handleIdle = useCallback(() => {
     setLocked(true);
   }, [setLocked]);
-  useIdleTimer(handleIdle, lockIdleTimeout, !isLocked);
+  useIdleTimer(handleIdle, lockIdleTimeout, !isLocked && lockIdleTimeout > 0);
 
   const handleUnlock = useCallback(() => {
     setLocked(false);

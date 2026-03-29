@@ -184,6 +184,7 @@ export const en = {
   'auth.verificationResent': 'Verification email sent! Please check your inbox.',
   'auth.emailNotVerifiedTitle': 'Email Verification Required',
   'auth.emailNotVerifiedDesc': 'We sent a verification link to your email. Please verify before logging in.',
+  'auth.rateLimited': 'Too many requests. Please wait before trying again.',
 
   // Bookmark App
   'bookmark.favorites': 'Favorites',
@@ -191,6 +192,8 @@ export const en = {
   'bookmark.otherBookmarks': 'Other Bookmarks',
   'bookmark.folders': 'Folders',
   'bookmark.search': 'Search in folder...',
+  'bookmark.searchAll': 'Search all bookmarks...',
+  'bookmark.allBookmarks': 'All Bookmarks',
   'bookmark.items': 'items',
   'bookmark.empty': 'This folder is empty',
   'bookmark.addHint': 'Bookmarks you add will appear here.',
@@ -247,4 +250,15 @@ export const en = {
 
   // Lock Screen
   'lockScreen.hint': 'Swipe up or tap to unlock',
+
+  // Lock Screen Settings
+  'settings.lockTitle': 'Auto Lock Screen',
+  'settings.lockDesc': 'Set how long before the lock screen activates after inactivity.',
+  'settings.lockLabel': 'Idle Lock Timeout',
+  'settings.lock1min': '1 minute',
+  'settings.lock3min': '3 minutes',
+  'settings.lock5min': '5 minutes',
+  'settings.lock10min': '10 minutes',
+  'settings.lock30min': '30 minutes',
+  'settings.lockNever': 'Never',
 };

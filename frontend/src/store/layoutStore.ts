@@ -628,7 +628,7 @@ export const useLayoutStore = create<LayoutState>()(
       syncPreferencesToCloud: async () => {
         set({ loading: true, error: null });
         try {
-          const { backgroundImage } = useConfigStore.getState();
+          const { backgroundImage, lockIdleTimeout } = useConfigStore.getState();
 
           if (backgroundImage.startsWith('idb://')) {
             const rawBlob = await getRawBlob('bg-custom');
@@ -640,9 +640,9 @@ export const useLayoutStore = create<LayoutState>()(
                 headers: { 'Content-Type': 'multipart/form-data' },
               });
             }
-            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background' });
+            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background', lockIdleTimeout });
           } else {
-            await client.put('/api/v1/user/preferences', { backgroundImage });
+            await client.put('/api/v1/user/preferences', { backgroundImage, lockIdleTimeout });
           }
 
           set({ loading: false });
@@ -658,7 +658,7 @@ export const useLayoutStore = create<LayoutState>()(
           const { layout } = get();
           await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
           
-          const { backgroundImage } = useConfigStore.getState();
+          const { backgroundImage, lockIdleTimeout } = useConfigStore.getState();
 
           if (backgroundImage.startsWith('idb://')) {
             // Upload local image binary to cloud
@@ -672,10 +672,10 @@ export const useLayoutStore = create<LayoutState>()(
               });
             }
             // Save preferences with marker indicating cloud-stored image
-            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background' });
+            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background', lockIdleTimeout });
           } else {
             // URL-based wallpaper — just sync the URL string
-            await client.put('/api/v1/user/preferences', { backgroundImage });
+            await client.put('/api/v1/user/preferences', { backgroundImage, lockIdleTimeout });
           }
           
           set({ loading: false });
@@ -695,6 +695,13 @@ export const useLayoutStore = create<LayoutState>()(
 
           const prefsRes = await client.get('/api/v1/user/preferences');
           const bg = prefsRes.data.preferences?.backgroundImage;
+          const cloudLockIdleTimeout = prefsRes.data.preferences?.lockIdleTimeout;
+
+          // Apply lock idle timeout from cloud (if present)
+          if (typeof cloudLockIdleTimeout === 'number') {
+            useConfigStore.getState().setLockIdleTimeout(cloudLockIdleTimeout);
+          }
+
           if (bg) {
             if (bg === 'cloud://background') {
               // Download the cloud-stored image binary and save to local IndexedDB

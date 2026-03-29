@@ -40,7 +40,7 @@ const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
 
 export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> = ({ onClose, initialTab = 'wallpaper' }) => {
-  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage } = useConfigStore();
+  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, jwtToken } = useConfigStore();
   const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
@@ -1149,6 +1149,44 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                         简体中文
                         {language === 'zh' && <span className="text-[#72d565]">✓</span>}
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* Lock screen timeout section */}
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">{t('settings.lockTitle')}</h3>
+                    <p className="text-[13px] text-white/50 mb-3">{t('settings.lockDesc')}</p>
+
+                    <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('settings.lockLabel')}</label>
+                    <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                      {([
+                        { ms: 1 * 60 * 1000, label: 'settings.lock1min' },
+                        { ms: 3 * 60 * 1000, label: 'settings.lock3min' },
+                        { ms: 5 * 60 * 1000, label: 'settings.lock5min' },
+                        { ms: 10 * 60 * 1000, label: 'settings.lock10min' },
+                        { ms: 30 * 60 * 1000, label: 'settings.lock30min' },
+                        { ms: 0, label: 'settings.lockNever' },
+                      ] as const).map((opt, idx, arr) => (
+                        <button
+                          key={opt.ms}
+                          className={`w-full px-5 py-4 text-[14px] font-medium flex justify-between ${idx < arr.length - 1 ? 'border-b border-white/5' : ''} ${lockIdleTimeout === opt.ms ? 'bg-white/5 text-white/90' : 'text-white/50 hover:bg-white/5 hover:text-white/90'}`}
+                          onClick={() => {
+                            setLockIdleTimeout(opt.ms);
+                            // Sync to cloud if logged in
+                            if (jwtToken) {
+                              client.put('/api/v1/user/preferences', { lockIdleTimeout: opt.ms }).catch(err => {
+                                console.error('Failed to sync lockIdleTimeout to cloud', err);
+                              });
+                            }
+                          }}
+                        >
+                          {t(opt.label)}
+                          {lockIdleTimeout === opt.ms && <span className="text-[#72d565]">✓</span>}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

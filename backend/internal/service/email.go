@@ -34,7 +34,11 @@ func (s *EmailService) SendVerificationEmail(toEmail, token string) error {
 	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", s.cfg.FrontendURL, token)
 
 	subject := "Verify your CatHeadTab email"
-	body := fmt.Sprintf(`<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; max-width: 520px; margin: 0 auto; padding: 20px;">
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;">
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; max-width: 520px; margin: 0 auto; padding: 20px;">
   <p>Hello,</p>
   <p>Thank you for registering with CatHeadTab!</p>
   <p>Please verify your email address by clicking the link below:</p>
@@ -42,7 +46,9 @@ func (s *EmailService) SendVerificationEmail(toEmail, token string) error {
   <p>This link will expire in 24 hours.</p>
   <p style="color: #999; font-size: 13px;">If you did not create this account, please ignore this email.</p>
   <p style="color: #999;">— CatHeadTab Team</p>
-</div>`, verifyURL, verifyURL)
+</div>
+</body>
+</html>`, verifyURL, verifyURL)
 
 	return s.sendHTML(toEmail, subject, body)
 }
@@ -57,7 +63,11 @@ func (s *EmailService) SendPasswordResetEmail(toEmail, token string) error {
 	resetURL := fmt.Sprintf("%s/reset-password?token=%s", s.cfg.FrontendURL, token)
 
 	subject := "Reset your CatHeadTab password"
-	body := fmt.Sprintf(`<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; max-width: 520px; margin: 0 auto; padding: 20px;">
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;">
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; max-width: 520px; margin: 0 auto; padding: 20px;">
   <p>Hello,</p>
   <p>We received a request to reset your CatHeadTab password.</p>
   <p>Click the link below to set a new password:</p>
@@ -65,7 +75,9 @@ func (s *EmailService) SendPasswordResetEmail(toEmail, token string) error {
   <p>This link will expire in 1 hour.</p>
   <p style="color: #999; font-size: 13px;">If you did not request this, please ignore this email and your password will remain unchanged.</p>
   <p style="color: #999;">— CatHeadTab Team</p>
-</div>`, resetURL, resetURL)
+</div>
+</body>
+</html>`, resetURL, resetURL)
 
 	return s.sendHTML(toEmail, subject, body)
 }
@@ -82,7 +94,7 @@ func (s *EmailService) sendMail(to, subject, body, contentType string) error {
 	from := s.cfg.SMTPFrom
 	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
 
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: %s; charset=UTF-8\r\n\r\n%s",
+	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: %s; charset=\"UTF-8\"\r\n\r\n%s",
 		from, to, subject, contentType, body)
 
 	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPassword, s.cfg.SMTPHost)

@@ -184,6 +184,7 @@ export const zh = {
   'auth.verificationResent': '验证邮件已发送！请检查您的收件箱。',
   'auth.emailNotVerifiedTitle': '需要验证邮箱',
   'auth.emailNotVerifiedDesc': '我们已向您的邮箱发送了验证链接，请验证后再登录。',
+  'auth.rateLimited': '操作过于频繁，请稍后再试。',
 
   // Bookmark App
   'bookmark.favorites': '默认收藏夹',
@@ -191,6 +192,8 @@ export const zh = {
   'bookmark.otherBookmarks': '其他书签',
   'bookmark.folders': '自建文件夹',
   'bookmark.search': '在当前目录下筛选...',
+  'bookmark.searchAll': '搜索全部书签...',
+  'bookmark.allBookmarks': '全部书签',
   'bookmark.items': '项',
   'bookmark.empty': '当前文件夹为空',
   'bookmark.addHint': '您添加的书签将显示在这里。',
@@ -247,4 +250,15 @@ export const zh = {
 
   // Lock Screen
   'lockScreen.hint': '向上滑动或点击解锁',
+
+  // Lock Screen Settings
+  'settings.lockTitle': '自动锁屏',
+  'settings.lockDesc': '设置无操作多久后自动进入锁屏界面。',
+  'settings.lockLabel': '空闲锁屏时间',
+  'settings.lock1min': '1 分钟',
+  'settings.lock3min': '3 分钟',
+  'settings.lock5min': '5 分钟',
+  'settings.lock10min': '10 分钟',
+  'settings.lock30min': '30 分钟',
+  'settings.lockNever': '永不',
 };

@@ -40,14 +40,17 @@ func NewRateLimiter(window time.Duration) *RateLimiter {
 
 // Allow returns true if the given key has not been seen within the current
 // window, and records the access. Returns false if the key is rate-limited.
-func (rl *RateLimiter) Allow(key string) bool {
+// When rate-limited, retryAfter contains the number of seconds the caller
+// must wait before retrying.
+func (rl *RateLimiter) Allow(key string) (allowed bool, retryAfter int) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
 	now := time.Now()
 	entry, exists := rl.entries[key]
 	if exists && now.Sub(entry.lastRequest) < rl.window {
-		return false
+		remaining := rl.window - now.Sub(entry.lastRequest)
+		return false, int(remaining.Seconds()) + 1 // round up
 	}
 
 	if !exists {
@@ -55,7 +58,7 @@ func (rl *RateLimiter) Allow(key string) bool {
 		rl.entries[key] = entry
 	}
 	entry.lastRequest = now
-	return true
+	return true, 0
 }
 
 // cleanupLoop periodically removes entries that have expired well beyond
@@ -117,9 +120,10 @@ func EmailRateLimit(limiter *RateLimiter) gin.HandlerFunc {
 		clientIP := c.ClientIP()
 
 		// Rate-limit by IP
-		if !limiter.Allow("ip:" + clientIP) {
+		if allowed, retryAfter := limiter.Allow("ip:" + clientIP); !allowed {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "Too many requests. Please try again later",
+				"error":       "Too many requests. Please try again later",
+				"retry_after": retryAfter,
 			})
 			return
 		}
@@ -127,9 +131,10 @@ func EmailRateLimit(limiter *RateLimiter) gin.HandlerFunc {
 		// Rate-limit by email (peek from request body)
 		email := peekEmail(c)
 		if email != "" {
-			if !limiter.Allow("email:" + email) {
+			if allowed, retryAfter := limiter.Allow("email:" + email); !allowed {
 				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-					"error": "Too many requests for this email. Please try again later",
+					"error":       "Too many requests for this email. Please try again later",
+					"retry_after": retryAfter,
 				})
 				return
 			}
@@ -139,9 +144,10 @@ func EmailRateLimit(limiter *RateLimiter) gin.HandlerFunc {
 		// where no email is provided in the body
 		if email == "" {
 			if userID := c.GetString("user_id"); userID != "" {
-				if !limiter.Allow("user:" + userID) {
+				if allowed, retryAfter := limiter.Allow("user:" + userID); !allowed {
 					c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-						"error": "Too many requests. Please try again later",
+						"error":       "Too many requests. Please try again later",
+						"retry_after": retryAfter,
 					})
 					return
 				}

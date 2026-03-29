@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useBookmarkStore, ChromeBookmarkTreeNode, getFolderItemCount } from '../../store/bookmarkStore';
+import { useBookmarkStore, ChromeBookmarkTreeNode, getFolderItemCount, getAllBookmarks } from '../../store/bookmarkStore';
 import { useTranslation } from '../../i18n/useTranslation';
 import { getSmartFaviconUrl } from '../../utils/favicon';
 
@@ -20,6 +20,13 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
   useEffect(() => {
     if (!bookmarksTree || bookmarksTree.length === 0) return;
     
+    // Special handling for "All Bookmarks"
+    if (activeFolderId === 'all') {
+      setActiveFolderPaths([]);
+      setCurrentChildren([]);
+      return;
+    }
+
     let path: ChromeBookmarkTreeNode[] = [];
     let foundChildren: ChromeBookmarkTreeNode[] = [];
 
@@ -54,10 +61,22 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   const currentFolder = activeFolderPaths[activeFolderPaths.length - 1];
 
-  const filteredChildren = currentChildren.filter(child => {
-    if (!searchQuery.trim()) return true;
-    return child.title?.toLowerCase().includes(searchQuery.toLowerCase()) || child.url?.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredChildren = (() => {
+    // When "All Bookmarks" is selected, search from the entire tree
+    if (activeFolderId === 'all') {
+      const allItems = getAllBookmarks(bookmarksTree);
+      if (!searchQuery.trim()) return allItems;
+      const q = searchQuery.toLowerCase();
+      return allItems.filter(child =>
+        child.title?.toLowerCase().includes(q) || child.url?.toLowerCase().includes(q)
+      );
+    }
+    // Normal folder filtering
+    return currentChildren.filter(child => {
+      if (!searchQuery.trim()) return true;
+      return child.title?.toLowerCase().includes(searchQuery.toLowerCase()) || child.url?.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => e.preventDefault()}>
@@ -99,14 +118,18 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
           
           <div className="flex-1 flex justify-center drag-region cursor-move opacity-60 hover:opacity-100 transition-opacity min-w-0">
             <div className="flex items-center gap-1.5 text-[12px] md:text-[13px] font-medium text-white/70 truncate max-w-full overflow-hidden">
-              {activeFolderPaths.map((p, idx) => (
-                <React.Fragment key={p.id}>
-                  {idx > 0 && <span className="text-white/30 text-[10px] shrink-0">▶</span>}
-                  <span className={`truncate ${idx === activeFolderPaths.length - 1 ? 'text-white font-bold drop-shadow-md' : 'cursor-pointer hover:text-white transition-colors'}`} onClick={() => setActiveFolderId(p.id)}>
-                    {p.title || t('bookmark.root')}
-                  </span>
-                </React.Fragment>
-              ))}
+              {activeFolderId === 'all' ? (
+                <span className="text-white font-bold drop-shadow-md truncate">{t('bookmark.allBookmarks')}</span>
+              ) : (
+                activeFolderPaths.map((p, idx) => (
+                  <React.Fragment key={p.id}>
+                    {idx > 0 && <span className="text-white/30 text-[10px] shrink-0">&#9654;</span>}
+                    <span className={`truncate ${idx === activeFolderPaths.length - 1 ? 'text-white font-bold drop-shadow-md' : 'cursor-pointer hover:text-white transition-colors'}`} onClick={() => setActiveFolderId(p.id)}>
+                      {p.title || t('bookmark.root')}
+                    </span>
+                  </React.Fragment>
+                ))
+              )}
             </div>
           </div>
           
@@ -136,13 +159,26 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                       type="text" 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={t('bookmark.search')}
+                      placeholder={activeFolderId === 'all' ? t('bookmark.searchAll') : t('bookmark.search')}
                       className="w-full bg-[#202324] border border-white/10 focus:border-[#72d565]/50 hover:bg-[#2a2e30] rounded-xl pl-10 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/30 outline-none transition-all shadow-inner"
                     />
                   </div>
                 </div>
                 {/* Folder list */}
                 <div className="flex-1 overflow-y-auto no-scrollbar pl-4 pr-3 pb-8 pt-3 space-y-1">
+                  {/* All Bookmarks */}
+                  <div className="mb-4">
+                    <button 
+                      onClick={() => { setActiveFolderId('all'); setShowSidebar(false); }}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all w-full text-left group ${activeFolderId === 'all' ? 'bg-[#72d565] text-black shadow-lg shadow-[#72d565]/20' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={`shrink-0 ${activeFolderId === 'all' ? 'text-black/80' : 'text-white/40 group-hover:text-[#72d565]'}`}><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                        <span className="text-[14px] font-medium truncate">{t('bookmark.allBookmarks')}</span>
+                      </div>
+                      <span className={`text-[12px] font-semibold ${activeFolderId === 'all' ? 'text-black/60' : 'text-white/30'}`}>{getAllBookmarks(bookmarksTree).length}</span>
+                    </button>
+                  </div>
                   {bookmarksTree?.[0]?.children?.map((rootFolder: ChromeBookmarkTreeNode) => (
                     <div key={rootFolder.id} className="mb-4">
                       <div className="px-3 text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1.5">{rootFolder.title}</div>
@@ -188,7 +224,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                   type="text" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('bookmark.search')}
+                  placeholder={activeFolderId === 'all' ? t('bookmark.searchAll') : t('bookmark.search')}
                   className="w-full bg-[#202324] border border-white/10 focus:border-[#72d565]/50 hover:bg-[#2a2e30] rounded-xl pl-10 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/30 outline-none transition-all shadow-inner"
                 />
               </div>
@@ -196,6 +232,21 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
             {/* Folder List */}
             <div className="flex-1 overflow-y-auto no-scrollbar pl-5 pr-3 pb-8 pt-3 space-y-1">
+              {/* All Bookmarks */}
+              <div className="mb-4">
+                <button 
+                  onClick={() => setActiveFolderId('all')}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all w-full text-left group ${activeFolderId === 'all' ? 'bg-[#72d565] text-black shadow-lg shadow-[#72d565]/20' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className={`shrink-0 ${activeFolderId === 'all' ? 'text-black/80' : 'text-white/40 group-hover:text-[#72d565]'}`}><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                    <span className="text-[14px] font-medium truncate">{t('bookmark.allBookmarks')}</span>
+                  </div>
+                  <span className={`text-[12px] font-semibold ${activeFolderId === 'all' ? 'text-black/60' : 'text-white/30 group-hover:text-white/50'}`}>
+                    {getAllBookmarks(bookmarksTree).length}
+                  </span>
+                </button>
+              </div>
               {bookmarksTree?.[0]?.children?.map((rootFolder: ChromeBookmarkTreeNode) => (
                 <div key={rootFolder.id} className="mb-4">
                   <div className="px-3 text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1.5">{rootFolder.title}</div>
@@ -247,7 +298,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                   type="text" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t('bookmark.search')}
+                  placeholder={activeFolderId === 'all' ? t('bookmark.searchAll') : t('bookmark.search')}
                   className="w-full bg-[#202324] border border-white/10 focus:border-[#72d565]/50 hover:bg-[#2a2e30] rounded-xl pl-10 pr-4 py-2.5 text-[13px] text-white/90 placeholder-white/30 outline-none transition-all shadow-inner"
                 />
               </div>
@@ -256,7 +307,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
               
               <div className="flex items-center justify-between mb-3 md:mb-4 pb-3 border-b border-white/10 pl-1">
                 <h1 className="text-base md:text-xl font-bold text-white tracking-tight flex items-center gap-3">
-                  {currentFolder?.title || t('bookmark.bookmarks')}
+                  {activeFolderId === 'all' ? t('bookmark.allBookmarks') : (currentFolder?.title || t('bookmark.bookmarks'))}
                 </h1>
                 <span className="text-white/40 text-[12px] md:text-[13px] font-medium bg-white/5 px-2.5 md:px-3 py-0.5 md:py-1 rounded-full">{filteredChildren.length} {t('bookmark.items')}</span>
               </div>

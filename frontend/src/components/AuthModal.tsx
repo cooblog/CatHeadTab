@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useConfigStore, isEnvConfigured } from '../store/configStore';
 import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
@@ -26,6 +26,41 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string } | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
+
+  // Rate limit countdown
+  const [cooldown, setCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCooldown = useCallback((seconds: number) => {
+    if (cooldownRef.current) {
+      clearInterval(cooldownRef.current);
+    }
+    setCooldown(seconds);
+    cooldownRef.current = setInterval(() => {
+      setCooldown(prev => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  // Cleanup cooldown timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  // Clear rate-limit error when cooldown ends
+  useEffect(() => {
+    if (cooldown === 0 && error === t('auth.rateLimited')) {
+      setError('');
+    }
+  }, [cooldown, error, t]);
 
   // Validate and save server URL
   const handleServerSubmit = async (e: React.FormEvent) => {
@@ -89,6 +124,11 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (err.response?.status === 403 && err.response?.data?.email_not_verified) {
         setPendingEmail(err.response.data.email || identifier);
         setView('verify-pending');
+      } else if (err.response?.status === 429) {
+        // Rate limited — start countdown
+        const retryAfter = err.response?.data?.retry_after || 60;
+        startCooldown(retryAfter);
+        setError(t('auth.rateLimited'));
       } else {
         setError(err.response?.data?.error || t('auth.authFailed'));
       }
@@ -105,8 +145,14 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     try {
       await client.post('/api/v1/auth/resend-verification', { email: pendingEmail });
       setSuccess(t('auth.verificationResent'));
-    } catch {
-      setError(t('auth.authFailed'));
+    } catch (err: any) {
+      if (err.response?.status === 429) {
+        const retryAfter = err.response?.data?.retry_after || 60;
+        startCooldown(retryAfter);
+        setError(t('auth.rateLimited'));
+      } else {
+        setError(t('auth.authFailed'));
+      }
     } finally {
       setLoading(false);
     }
@@ -182,6 +228,11 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setView(newView);
     setError('');
     setSuccess('');
+    setCooldown(0);
+    if (cooldownRef.current) {
+      clearInterval(cooldownRef.current);
+      cooldownRef.current = null;
+    }
     if (newView !== 'verify-pending') {
       setPendingEmail('');
     }
@@ -319,11 +370,11 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             <button
               type="button"
-              disabled={loading}
+              disabled={loading || cooldown > 0}
               onClick={handleResendVerification}
               className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-colors shadow-lg disabled:opacity-50"
             >
-              {loading ? t('auth.processing') : t('auth.resendVerification')}
+              {loading ? t('auth.processing') : cooldown > 0 ? `${t('auth.resendVerification')} (${cooldown}s)` : t('auth.resendVerification')}
             </button>
 
             <button
@@ -410,10 +461,12 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
               <button 
                 type="submit" 
-                disabled={loading}
+                disabled={loading || cooldown > 0}
                 className="w-full mt-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-colors shadow-lg disabled:opacity-50"
               >
-                {loading ? t('auth.processing') : (
+                {loading ? t('auth.processing') : cooldown > 0 ? (
+                  `${view === 'forgot' ? t('auth.sendResetLink') : view === 'register' ? t('auth.createAccount') : t('auth.continue')} (${cooldown}s)`
+                ) : (
                   view === 'login' ? t('auth.continue') : 
                   view === 'register' ? t('auth.createAccount') : 
                   t('auth.sendResetLink')
