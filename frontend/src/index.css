@@ -228,29 +228,60 @@ body {
   }
 }
 
-/* 桌面图标网格：固定列宽 + 固定间距，居中显示，窗口缩小先压两侧空白再减列数 */
+/* 桌面图标网格：显式列数，支持 widget 跨多格子 (grid-column/row span) */
+/* cell 尺寸包含图标+下方文字区域，widget 跨越的 span 自然包含 gap */
 .desktop-icon-grid {
-  grid-template-columns: repeat(auto-fit, 72px) !important;
-  gap: 24px !important;
+  grid-template-columns: repeat(4, 72px) !important;
+  grid-auto-rows: 96px !important;
+  gap: 16px 20px !important;
   justify-content: center !important;
   -webkit-user-select: none;
   user-select: none;
 }
 
+@media (min-width: 640px) {
+  .desktop-icon-grid {
+    grid-template-columns: repeat(6, 72px) !important;
+    gap: 20px 24px !important;
+  }
+}
+
 @media (min-width: 768px) {
   .desktop-icon-grid {
-    grid-template-columns: repeat(auto-fit, 80px) !important;
-    gap: 60px !important;
+    grid-template-columns: repeat(6, 80px) !important;
+    grid-auto-rows: 100px !important;
+    gap: 20px 32px !important;
     max-width: 1400px;
     margin-left: auto;
     margin-right: auto;
   }
 }
 
+@media (min-width: 1024px) {
+  .desktop-icon-grid {
+    grid-template-columns: repeat(8, 80px) !important;
+    gap: 24px 36px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .desktop-icon-grid {
+    grid-template-columns: repeat(10, 80px) !important;
+    gap: 24px 40px !important;
+  }
+}
+
 @media (min-width: 1536px) {
   .desktop-icon-grid {
+    grid-template-columns: repeat(12, 80px) !important;
     max-width: 1600px;
   }
+}
+
+/* Widget items inside the grid span across multiple cells */
+.desktop-icon-grid .widget-container {
+  min-width: 0;
+  min-height: 0;
 }
 
 /* 文件夹内图标网格：手机端列宽更大，一行3个 */

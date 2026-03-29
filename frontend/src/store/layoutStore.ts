@@ -13,7 +13,42 @@ const triggerAutoSync = () => {
   }
 };
 
-export type DesktopItemType = 'app' | 'link' | 'folder';
+export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
+
+/** Widget types supported by the system. */
+export type WidgetType = 'calendar' | 'weather' | 'countdown';
+
+/** Widget size presets (columns × rows in the desktop grid). */
+export type WidgetSize = 'small' | 'medium';
+
+/** Maps widget size to grid span dimensions. */
+export const WIDGET_SIZE_MAP: Record<WidgetSize, { cols: number; rows: number }> = {
+  small: { cols: 2, rows: 1 },
+  medium: { cols: 2, rows: 2 },
+};
+
+/** Configuration specific to each widget type. */
+export interface CalendarWidgetConfig {
+  widgetType: 'calendar';
+}
+
+export interface WeatherWidgetConfig {
+  widgetType: 'weather';
+  /** City name for weather lookup; empty = auto-detect via IP geolocation. */
+  city?: string;
+  /** Temperature unit: 'C' for Celsius, 'F' for Fahrenheit. */
+  unit?: 'C' | 'F';
+}
+
+export interface CountdownWidgetConfig {
+  widgetType: 'countdown';
+  /** ISO 8601 date string for the target date. */
+  targetDate: string;
+  /** Display label for the countdown event. */
+  eventName: string;
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig;
 
 export interface DesktopItem {
   id: string;
@@ -22,6 +57,10 @@ export interface DesktopItem {
   url?: string;
   icon?: string;
   children?: DesktopItem[];
+  /** Widget-specific fields (only present when type === 'widget'). */
+  widgetType?: WidgetType;
+  widgetSize?: WidgetSize;
+  widgetConfig?: WidgetConfig;
 }
 
 export interface DesktopLayout {
@@ -58,6 +97,12 @@ interface LayoutState {
   moveItemOutOfFolder: (sourceId: string, folderId: string, pageIndex?: number) => void;
   /** Merge two items into a new folder at the target's position. */
   mergeItemsToNewFolder: (sourceId: string, targetId: string) => void;
+
+  // Widget Actions
+  /** Add a widget to a specific page. */
+  addWidget: (widgetType: WidgetType, widgetSize: WidgetSize, config: WidgetConfig, pageIndex?: number) => void;
+  /** Update a widget's configuration (e.g. countdown target date). */
+  updateWidgetConfig: (id: string, config: Partial<WidgetConfig>) => void;
   
   // Cloud Sync Actions
   /** Sync only layout (pages + dock) to cloud. Called on every layout change. */
@@ -609,6 +654,37 @@ export const useLayoutStore = create<LayoutState>()(
           const lastPage = layout.pages.length - 1;
           layout.pages[lastPage] = [...layout.pages[lastPage], dr.removed];
         }
+        set({ layout });
+        triggerAutoSync();
+      },
+
+      addWidget: (widgetType, widgetSize, config, pageIndex) => {
+        const layout = { ...get().layout, pages: get().layout.pages.map(p => [...p]), dock: [...get().layout.dock] };
+        const widgetItem: DesktopItem = {
+          id: `widget-${widgetType}-${Date.now()}`,
+          type: 'widget',
+          title: widgetType.charAt(0).toUpperCase() + widgetType.slice(1),
+          widgetType,
+          widgetSize,
+          widgetConfig: config,
+        };
+        const pi = pageIndex ?? layout.pages.length - 1;
+        while (layout.pages.length <= pi) layout.pages.push([]);
+        layout.pages[pi] = [...layout.pages[pi], widgetItem];
+        set({ layout });
+        triggerAutoSync();
+      },
+
+      updateWidgetConfig: (id, config) => {
+        const layout = { ...get().layout };
+        layout.pages = layout.pages.map(page =>
+          page.map(item => {
+            if (item.id === id && item.type === 'widget') {
+              return { ...item, widgetConfig: { ...item.widgetConfig, ...config } as WidgetConfig };
+            }
+            return item;
+          })
+        );
         set({ layout });
         triggerAutoSync();
       },

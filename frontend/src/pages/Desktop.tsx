@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
 import { useBookmarkStore } from '../store/bookmarkStore';
-import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS } from '../store/layoutStore';
+import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS, WIDGET_SIZE_MAP } from '../store/layoutStore';
 import { useConfigStore } from '../store/configStore';
 import { SettingsModal } from '../components/SettingsModal';
 import { AuthModal } from '../components/AuthModal';
@@ -8,6 +8,8 @@ import { ProfileModal } from '../components/ProfileModal';
 import { BookmarkBrowser } from '../components/apps/BookmarkBrowser';
 import { AddItemModal } from '../components/AddItemModal';
 import { ExploreWorld } from '../components/ExploreWorld';
+import { AddWidgetModal } from '../components/AddWidgetModal';
+import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
 import { getSmartFaviconUrl } from '../utils/favicon';
 import {
@@ -25,7 +27,6 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 // === Icons ===
 const SettingsIcon = () => (
@@ -196,6 +197,102 @@ const DesktopIconContent: React.FC<{
   );
 };
 
+// === Centralized FLIP animation manager for desktop grid ===
+// Instead of per-element hooks (which suffer from race conditions with rAF),
+// we use a single manager that snapshots ALL children at once before React
+// commits, then animates them all at once after commit. This avoids timing
+// issues between independent useLayoutEffect calls.
+//
+// Usage:
+//   const flipManager = useGridFlipManager();
+//   // pass flipManager.containerRef to the grid container
+//   // call flipManager.snapshot() BEFORE triggering a state change that reorders
+//   // useLayoutEffect will automatically PLAY the animation after re-render
+
+interface FlipSnapshot {
+  [id: string]: { left: number; top: number };
+}
+
+const useGridFlipManager = () => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const snapshotRef = useRef<FlipSnapshot | null>(null);
+  const activeAnimationsRef = useRef<Map<Element, Animation>>(new Map());
+
+  // Snapshot all grid children's positions BEFORE a reorder.
+  // Call this synchronously right before setState/reorder.
+  const snapshot = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const snap: FlipSnapshot = {};
+    const children = container.querySelectorAll('[data-flip-id]');
+    children.forEach((child) => {
+      const id = (child as HTMLElement).dataset.flipId;
+      if (!id) return;
+      // Cancel any in-progress FLIP animation so getBoundingClientRect
+      // returns the element's final (true CSS Grid) position.
+      const existing = activeAnimationsRef.current.get(child);
+      if (existing) {
+        existing.cancel();
+        activeAnimationsRef.current.delete(child);
+      }
+      const rect = child.getBoundingClientRect();
+      snap[id] = { left: rect.left, top: rect.top };
+    });
+    snapshotRef.current = snap;
+  }, []);
+
+  // After React re-renders and the DOM is updated, compare old vs new positions
+  // and animate the difference using Web Animations API (no rAF race conditions).
+  useLayoutEffect(() => {
+    const prevSnap = snapshotRef.current;
+    if (!prevSnap) return;
+    snapshotRef.current = null; // consume the snapshot
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const children = container.querySelectorAll('[data-flip-id]');
+    children.forEach((child) => {
+      const el = child as HTMLElement;
+      const id = el.dataset.flipId;
+      if (!id || !prevSnap[id]) return;
+
+      // If this element is the one being dragged (opacity < 1), skip animation
+      if (el.style.opacity && parseFloat(el.style.opacity) < 0.5) return;
+
+      const oldPos = prevSnap[id];
+      const newRect = el.getBoundingClientRect();
+      const dx = oldPos.left - newRect.left;
+      const dy = oldPos.top - newRect.top;
+
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+
+      // Cancel previous animation on this element if any
+      const prev = activeAnimationsRef.current.get(el);
+      if (prev) prev.cancel();
+
+      // Use Web Animations API — immune to rAF timing issues
+      const anim = el.animate(
+        [
+          { transform: `translate3d(${dx}px, ${dy}px, 0)` },
+          { transform: 'translate3d(0, 0, 0)' },
+        ],
+        {
+          duration: 250,
+          easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+          fill: 'none',
+        }
+      );
+      activeAnimationsRef.current.set(el, anim);
+      anim.onfinish = () => activeAnimationsRef.current.delete(el);
+      anim.oncancel = () => activeAnimationsRef.current.delete(el);
+    });
+  });
+
+  return { containerRef, snapshot };
+};
+
 // === Sortable Desktop Icon (used in grids) ===
 const SortableDesktopIcon: React.FC<{
   item: DesktopItem;
@@ -207,7 +304,9 @@ const SortableDesktopIcon: React.FC<{
   isFolderDropPending?: boolean;
   /** Override Dock icon size in px (for adaptive scaling) */
   dockIconSize?: number;
-}> = ({ item, onClick, onContextMenu, isDock, isDraggedOver, activeId, isFolderDropPending, dockIconSize }) => {
+  /** When true, skip dnd-kit transform; animation handled by parent FLIP manager */
+  isDesktopGrid?: boolean;
+}> = ({ item, onClick, onContextMenu, isDock, isDraggedOver, activeId, isFolderDropPending, dockIconSize, isDesktopGrid }) => {
   const {
     attributes,
     listeners,
@@ -223,15 +322,28 @@ const SortableDesktopIcon: React.FC<{
   // When the folder hover timer has fired (folderDropTargetId is set),
   // freeze sortable transforms so the grid stays stable and the user can
   // clearly see which folder they're about to drop into.
-  // Before the timer fires, normal reordering continues unhindered.
   const shouldFreezeTransform = isFolderDropPending && !isDragging;
 
-  const style: React.CSSProperties = {
-    transform: shouldFreezeTransform ? undefined : CSS.Transform.toString(transform),
-    transition: shouldFreezeTransform ? 'none' : (transition || 'transform 250ms cubic-bezier(0.25, 1, 0.5, 1)'),
-    opacity: isDragging ? 0.3 : 1,
-    zIndex: isDragging ? 0 : 1,
-  };
+  let style: React.CSSProperties;
+  if (isDesktopGrid) {
+    // Desktop grid: parent FLIP manager handles movement animation.
+    // We don't apply dnd-kit transform (inaccurate for mixed-size grids).
+    style = {
+      opacity: isDragging ? 0.3 : 1,
+      zIndex: isDragging ? 0 : 1,
+    };
+  } else {
+    // Dock / folder grid: use dnd-kit's transform (uniform item sizes → accurate)
+    const translateOnly = transform
+      ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)`
+      : undefined;
+    style = {
+      transform: shouldFreezeTransform ? undefined : translateOnly,
+      transition: shouldFreezeTransform ? 'none' : (transition || 'transform 250ms cubic-bezier(0.25, 1, 0.5, 1)'),
+      opacity: isDragging ? 0.3 : 1,
+      zIndex: isDragging ? 0 : 1,
+    };
+  }
 
   return (
     <div 
@@ -241,6 +353,7 @@ const SortableDesktopIcon: React.FC<{
       {...listeners}
       className={`select-none ${activeId ? 'cursor-grabbing' : 'cursor-pointer'}`}
       data-desktop-icon="true"
+      data-flip-id={isDesktopGrid ? item.id : undefined}
       onClick={(e) => {
         if (!isDragging) {
           e.preventDefault();
@@ -256,6 +369,63 @@ const SortableDesktopIcon: React.FC<{
         <div className={`transition-transform duration-200 ${isDraggedOver ? 'scale-110' : 'group-hover:scale-110 group-active:scale-95'}`}>
           <DesktopIconContent item={item} isDock={isDock} isDraggedOver={isDraggedOver} dockIconSize={dockIconSize} />
         </div>
+      </div>
+    </div>
+  );
+};
+
+// === Sortable Widget (used in grids, supports drag & grid span) ===
+const SortableWidget: React.FC<{
+  item: DesktopItem;
+  onClick: (item: DesktopItem) => void;
+  onContextMenu?: (e: React.MouseEvent, item: DesktopItem) => void;
+  activeId?: string | null;
+}> = ({ item, onClick, onContextMenu, activeId }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    data: { item, isDock: false, isWidget: true },
+  });
+
+  const validSize = (item.widgetSize && item.widgetSize in WIDGET_SIZE_MAP) ? item.widgetSize : 'small';
+  const { cols, rows } = WIDGET_SIZE_MAP[validSize];
+
+  // Parent FLIP manager handles movement animation — no dnd-kit transform
+  const style: React.CSSProperties = {
+    opacity: isDragging ? 0.3 : 1,
+    zIndex: isDragging ? 0 : 1,
+    gridColumn: `span ${cols}`,
+    gridRow: `span ${rows}`,
+    justifySelf: 'stretch',
+    alignSelf: 'stretch',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`select-none ${activeId ? 'cursor-grabbing' : 'cursor-pointer'} group`}
+      data-desktop-icon="true"
+      data-flip-id={item.id}
+      onClick={(e) => {
+        if (!isDragging) {
+          e.preventDefault();
+          onClick(item);
+        }
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu?.(e, item);
+      }}
+    >
+      <div className="w-full h-full transition-transform duration-200 group-hover:scale-[1.02] group-active:scale-[0.98]">
+        <DesktopWidget item={item} />
       </div>
     </div>
   );
@@ -387,12 +557,12 @@ function createFolderAwareCollision(_draggedItem: DesktopItem | null): Collision
     if (!activeRect) return collisions;
 
     // Keep only collisions that are within a generous distance.
-    // We use 0.75× the cell-to-cell centre distance as the threshold.
-    // For desktop: cell dist ≈ 150px → threshold ≈ 112px
-    // For mobile:  cell dist ≈  96px → threshold ≈  72px
-    // This filters out far-away items while still allowing natural reordering.
-    const iconSize = Math.min(activeRect.width, activeRect.height);
-    const threshold = iconSize * 1.25;
+    // Use the LARGER dimension of the dragged item so that multi-cell widgets
+    // (which have a much bigger rect) still get detected properly.
+    // Coefficient 1.5 keeps the threshold generous without catching
+    // items that are clearly in a different grid row/column.
+    const iconSize = Math.max(activeRect.width, activeRect.height);
+    const threshold = iconSize * 1.5;
 
     const close = collisions.filter((c) => {
       if (isSpecialZone(c.id)) return false; // handled separately
@@ -495,6 +665,9 @@ export const Desktop: React.FC = () => {
 
   // Explore World state
   const [isExploreOpen, setIsExploreOpen] = useState(false);
+  
+  // Add Widget state
+  const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
 
   // Folder rename state
   const [isEditingFolderName, setIsEditingFolderName] = useState(false);
@@ -521,6 +694,9 @@ export const Desktop: React.FC = () => {
   }>({ startX: 0, startY: 0, startTime: 0, currentX: 0, isDragging: false, isHorizontal: null });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // FLIP animation manager for desktop grid reorder animations
+  const flipManager = useGridFlipManager();
 
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -677,6 +853,7 @@ export const Desktop: React.FC = () => {
     // so that folders can be reordered freely via normal sortable logic.
     const activeItem_ = activeId ? findItemById(activeId) : null;
     const isDraggingFolder = activeItem_?.type === 'folder';
+    const isDraggingWidget = activeItem_?.type === 'widget';
 
     // --- Helper: compute overlap ratio between the dragged icon and the over element ---
     // Returns a value between 0 and 1, representing how much of the smaller rect
@@ -720,11 +897,11 @@ export const Desktop: React.FC = () => {
     const targetInDockForFolder = !!overData_?.isDock;
     const eitherInDock = sourceInDockForFolder || targetInDockForFolder;
 
-    if (!eitherInDock && !isDraggingFolder && newOverId && newOverId !== activeId) {
+    if (!eitherInDock && !isDraggingFolder && !isDraggingWidget && newOverId && newOverId !== activeId) {
       const overItem = findItemById(newOverId);
       const overlapRatio = getOverlapRatio();
 
-      // Allow merging into folders AND onto regular link items (not app items)
+      // Allow merging into folders AND onto regular link items (not app/widget items)
       const isDroppableTarget = overItem?.type === 'folder' || (overItem?.type === 'link');
 
       if (isDroppableTarget && overlapRatio >= FOLDER_OVERLAP_THRESHOLD) {
@@ -765,10 +942,14 @@ export const Desktop: React.FC = () => {
     // so the icon stays in place and the user has time to trigger folder drop.
     if (isOverFolder) return;
 
-    // --- Cross-container drag (Desktop ↔ Dock) ---
-    // @dnd-kit's SortableContext only animates items within the SAME context.
-    // To get smooth reorder animations when dragging between Desktop and Dock,
-    // we must move the item between containers in real-time during dragOver.
+    // --- Real-time reordering for FLIP animations ---
+    // For the desktop grid, dnd-kit's rectSortingStrategy produces inaccurate
+    // transforms with mixed-size items. So we skip dnd-kit transforms and
+    // instead reorder state in real-time during dragOver, letting CSS Grid
+    // place items correctly and FLIP animate the transition.
+    //
+    // For cross-container moves (Desktop ↔ Dock), this was already done.
+    // Now we also do it for SAME-container desktop moves.
     if (newOverId && newOverId !== activeId && !openedFolder) {
       const overIdStr = String(newOverId);
 
@@ -788,18 +969,26 @@ export const Desktop: React.FC = () => {
       const targetIsDock = !!overData?.isDock;
 
       const reorderKey = `${active.id}->${newOverId}`;
-      const shouldReorder =
-        (sourceInDock !== targetIsDock) ||
-        (!sourceInDock && !targetIsDock && dragStartedInDockRef.current);
+
+      // For cross-container: always reorder
+      // For same-container desktop: also reorder in real-time for FLIP
+      // For same-container dock: dnd-kit handles animation fine (uniform sizes)
+      const isCrossContainer = sourceInDock !== targetIsDock;
+      const isBackFromDock = !sourceInDock && !targetIsDock && dragStartedInDockRef.current;
+      const isSameContainerDesktop = !sourceInDock && !targetIsDock && !dragStartedInDockRef.current;
+
+      const shouldReorder = isCrossContainer || isBackFromDock || isSameContainerDesktop;
 
       if (shouldReorder && lastReorderRef.current !== reorderKey) {
-        // Record this pair so we don't fire the same move again when
-        // @dnd-kit re-measures and re-fires handleDragOver synchronously.
         lastReorderRef.current = reorderKey;
+        // Snapshot before reorder for FLIP animation (desktop items)
+        if (!targetIsDock || isSameContainerDesktop) {
+          flipManager.snapshot();
+        }
         reorderDesktopItem(active.id as string, newOverId);
       }
     }
-  }, [activeId, findItemById, openedFolder, reorderDesktopItem, moveItemToPage, layout]);
+  }, [activeId, findItemById, openedFolder, reorderDesktopItem, moveItemToPage, layout, flipManager]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -858,7 +1047,9 @@ export const Desktop: React.FC = () => {
         // If the user just passed through quickly, treat it as a normal reorder.
         // Never drop a folder INTO another folder — folders should only reorder.
         const isDraggingFolder = sourceItem_?.type === 'folder';
+        const isDraggingWidget = sourceItem_?.type === 'widget';
         const shouldDropIntoFolder = !isDraggingFolder
+          && !isDraggingWidget
           && targetItem?.type === 'folder'
           && folderDropTargetId === targetId;
 
@@ -874,7 +1065,9 @@ export const Desktop: React.FC = () => {
         // --- Merge two items into a new folder (iOS-style) ---
         // When dragging a non-folder item onto another non-folder item and
         // folderDropTargetId is set (hovered ≥500ms), create a new folder.
+        // Widgets cannot be merged into folders.
         const shouldMergeToFolder = !isDraggingFolder
+          && !isDraggingWidget
           && targetItem?.type === 'link'
           && sourceItem_?.type !== 'folder'
           && folderDropTargetId === targetId;
@@ -900,6 +1093,7 @@ export const Desktop: React.FC = () => {
           moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
         }
       } else {
+        flipManager.snapshot(); // Capture positions before reorder for FLIP animation
         reorderDesktopItem(sourceId, targetId);
       }
     }
@@ -910,7 +1104,7 @@ export const Desktop: React.FC = () => {
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
-  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout]);
+  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout, flipManager]);
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
@@ -1383,6 +1577,7 @@ export const Desktop: React.FC = () => {
             onMouseLeave={handleMouseUp}
           >
             <div
+              ref={flipManager.containerRef}
               className="h-full flex"
               style={{
                 width: `${totalPages * 100}%`,
@@ -1399,15 +1594,26 @@ export const Desktop: React.FC = () => {
                     style={{ justifyContent: 'center', justifyItems: 'center' }}
                   >
                     {page.map(item => (
-                      <SortableDesktopIcon 
-                        key={item.id} 
-                        item={item} 
-                        onClick={handleItemClick} 
-                        onContextMenu={(e, i) => handleContextMenu(e, i, false)}
-                        isDraggedOver={folderDropTargetId === item.id}
-                        activeId={activeId}
-                        isFolderDropPending={isFolderDropPending}
-                      />
+                      item.type === 'widget' ? (
+                        <SortableWidget
+                          key={item.id}
+                          item={item}
+                          onClick={handleItemClick}
+                          onContextMenu={(e, i) => handleContextMenu(e, i, false)}
+                          activeId={activeId}
+                        />
+                      ) : (
+                        <SortableDesktopIcon 
+                          key={item.id} 
+                          item={item} 
+                          onClick={handleItemClick} 
+                          onContextMenu={(e, i) => handleContextMenu(e, i, false)}
+                          isDraggedOver={folderDropTargetId === item.id}
+                          activeId={activeId}
+                          isFolderDropPending={isFolderDropPending}
+                          isDesktopGrid
+                        />
+                      )
                     ))}
                     <AddButton pageIdx={pageIdx} />
                   </div>
@@ -1627,7 +1833,29 @@ export const Desktop: React.FC = () => {
         easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
       }}>
         {activeItem ? (
-          <DesktopIconContent item={activeItem} isOverlay isDock={false} />
+          activeItem.type === 'widget' ? (
+            (() => {
+              const overlaySize = (activeItem.widgetSize && activeItem.widgetSize in WIDGET_SIZE_MAP)
+                ? activeItem.widgetSize : 'small';
+              const { cols: oCols, rows: oRows } = WIDGET_SIZE_MAP[overlaySize];
+              // Match actual CSS grid cell sizes for the current viewport
+              const isMd = typeof window !== 'undefined' && window.innerWidth >= 768;
+              const cellW = isMd ? 80 : 72;
+              const cellH = isMd ? 100 : 96;
+              const gapX = isMd ? (window.innerWidth >= 1280 ? 40 : window.innerWidth >= 1024 ? 36 : 32) : 20;
+              const gapY = isMd ? (window.innerWidth >= 1024 ? 24 : 20) : 16;
+              return (
+                <div style={{
+                  width: oCols * cellW + (oCols - 1) * gapX,
+                  height: oRows * cellH + (oRows - 1) * gapY,
+                }}>
+                  <DesktopWidget item={activeItem} isOverlay />
+                </div>
+              );
+            })()
+          ) : (
+            <DesktopIconContent item={activeItem} isOverlay isDock={false} />
+          )
         ) : null}
       </DragOverlay>
 
@@ -1637,6 +1865,7 @@ export const Desktop: React.FC = () => {
       {isProfileOpen && <ProfileModal onClose={() => setIsProfileOpen(false)} />}
       {isBookmarkBrowserOpen && <BookmarkBrowser onClose={() => setIsBookmarkBrowserOpen(false)} />}
       {isExploreOpen && <ExploreWorld onClose={() => setIsExploreOpen(false)} />}
+      {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {isAddModalOpen && <AddItemModal 
         onClose={() => { setIsAddModalOpen(false); setEditingItem(null); setAddToFolderId(undefined); setAddToPageIndex(undefined); }}
         editItem={editingItem}
@@ -1652,7 +1881,8 @@ export const Desktop: React.FC = () => {
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[180px] animate-scaleIn"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
           >
-            {contextMenu.item.type !== 'app' && (
+            {/* Edit button — not for app or widget types */}
+            {contextMenu.item.type !== 'app' && contextMenu.item.type !== 'widget' && (
               <>
                 <button 
                   className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
@@ -1665,26 +1895,30 @@ export const Desktop: React.FC = () => {
               </>
             )}
             
-            {contextMenu.inDock ? (
-              <button 
-                className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
-                onClick={() => { moveItemFromDock(contextMenu.item.id); setContextMenu(null); }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
-                {t('desktop.removeFromDock')}
-              </button>
-            ) : (
-              <button 
-                className={`w-full text-left px-4 py-2.5 text-[13px] flex items-center gap-3 transition-colors rounded-lg mx-0 ${layout.dock.length >= MAX_DOCK_ITEMS ? 'text-white/30 cursor-not-allowed' : 'text-white/90 hover:bg-white/[0.12]'}`}
-                onClick={() => { if (layout.dock.length < MAX_DOCK_ITEMS) { moveItemToDock(contextMenu.item.id); setContextMenu(null); } }}
-                disabled={layout.dock.length >= MAX_DOCK_ITEMS}
-                title={layout.dock.length >= MAX_DOCK_ITEMS ? `Dock is full (max ${MAX_DOCK_ITEMS})` : undefined}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-                {t('desktop.moveToDock')}{layout.dock.length >= MAX_DOCK_ITEMS ? ` (${MAX_DOCK_ITEMS}/${MAX_DOCK_ITEMS})` : ''}
-              </button>
+            {/* Move to/from Dock — not for widget types */}
+            {contextMenu.item.type !== 'widget' && (
+              contextMenu.inDock ? (
+                <button 
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+                  onClick={() => { moveItemFromDock(contextMenu.item.id); setContextMenu(null); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+                  {t('desktop.removeFromDock')}
+                </button>
+              ) : (
+                <button 
+                  className={`w-full text-left px-4 py-2.5 text-[13px] flex items-center gap-3 transition-colors rounded-lg mx-0 ${layout.dock.length >= MAX_DOCK_ITEMS ? 'text-white/30 cursor-not-allowed' : 'text-white/90 hover:bg-white/[0.12]'}`}
+                  onClick={() => { if (layout.dock.length < MAX_DOCK_ITEMS) { moveItemToDock(contextMenu.item.id); setContextMenu(null); } }}
+                  disabled={layout.dock.length >= MAX_DOCK_ITEMS}
+                  title={layout.dock.length >= MAX_DOCK_ITEMS ? `Dock is full (max ${MAX_DOCK_ITEMS})` : undefined}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                  {t('desktop.moveToDock')}{layout.dock.length >= MAX_DOCK_ITEMS ? ` (${MAX_DOCK_ITEMS}/${MAX_DOCK_ITEMS})` : ''}
+                </button>
+              )
             )}
 
+            {/* Delete — for non-app types (includes widget) */}
             {contextMenu.item.type !== 'app' && (
               <>
                 <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
@@ -1693,7 +1927,7 @@ export const Desktop: React.FC = () => {
                   onClick={() => handleDelete(contextMenu.item)}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                  {t('desktop.deleteItem')}
+                  {contextMenu.item.type === 'widget' ? t('widget.deleteWidget') : t('desktop.deleteItem')}
                 </button>
               </>
             )}
@@ -1722,6 +1956,13 @@ export const Desktop: React.FC = () => {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               {t('desktop.addFolder')}
+            </button>
+            <button 
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+              onClick={() => { setBlankContextMenu(null); setIsAddWidgetOpen(true); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              {t('desktop.addWidget')}
             </button>
             <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
             <button 
