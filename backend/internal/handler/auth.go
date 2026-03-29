@@ -841,7 +841,7 @@ func (h *AuthHandler) getGoogleUser(accessToken string) (*googleUser, error) {
 func (h *AuthHandler) generateToken(userID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 72).Unix(),
+		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(), // 30 days
 	})
 	return token.SignedString([]byte(h.cfg.JWTSecret))
 }

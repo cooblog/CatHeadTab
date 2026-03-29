@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useSyncExternalStore, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
 import { useLayoutStore } from './store/layoutStore'
@@ -13,10 +13,27 @@ const OAuthCallback = lazy(() => import('./pages/OAuthCallback').then(m => ({ de
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
 const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 
+// Wait for both Zustand stores to finish hydrating from async chrome.storage
+// before rendering anything. This prevents the race condition where jwtToken is
+// still null (default) when the profile-check useEffect fires.
+function useStoreHydrated() {
+  const configHydrated = useSyncExternalStore(
+    (cb) => useConfigStore.persist.onFinishHydration(cb),
+    () => useConfigStore.persist.hasHydrated(),
+    () => false,
+  );
+  const layoutHydrated = useSyncExternalStore(
+    (cb) => useLayoutStore.persist.onFinishHydration(cb),
+    () => useLayoutStore.persist.hasHydrated(),
+    () => false,
+  );
+  return configHydrated && layoutHydrated;
+}
+
 function App() {
   const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout } = useConfigStore();
   const { pullLayoutFromCloud } = useLayoutStore();
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useStoreHydrated();
   const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
 
@@ -66,11 +83,6 @@ function App() {
     };
   }, [isLocked]);
 
-  useEffect(() => {
-    // Wait for Zustand to hydrate from storage
-    setMounted(true);
-  }, []);
-
   // Resolve background image (idb:// → Object URL, otherwise use as-is)
   useEffect(() => {
     if (backgroundImage.startsWith('idb://')) {
@@ -83,9 +95,9 @@ function App() {
   }, [backgroundImage]);
 
   // Token freshness check + pull cloud data on page load
-  // Only attempt when both serverUrl and jwtToken are available
+  // Only attempt when both serverUrl and jwtToken are available AND stores are hydrated
   useEffect(() => {
-    if (mounted && jwtToken && serverUrl) {
+    if (hydrated && jwtToken && serverUrl) {
       setSyncing(true);
       client.get('/api/v1/user/profile')
         .then((res: any) => {
@@ -93,19 +105,26 @@ function App() {
           // Token is valid — pull cloud data to overwrite local
           return pullLayoutFromCloud();
         })
-        .catch(() => {
-          logout();
+        .catch((err: any) => {
+          // Only clear token on explicit 401 Unauthorized, NOT on network errors
+          if (err.response && err.response.status === 401) {
+            logout();
+          } else {
+            // Network error, timeout, server down — keep the token intact
+            console.warn('Profile fetch failed (network/server error), keeping token:', err.message);
+          }
         })
         .finally(() => {
           setSyncing(false);
         });
-    } else {
+    } else if (hydrated) {
+      // Stores are hydrated but no token/serverUrl — user is genuinely not logged in
       setUserProfile(null);
       setSyncing(false);
     }
-  }, [mounted, jwtToken, serverUrl, logout, setUserProfile, pullLayoutFromCloud]);
+  }, [hydrated, jwtToken, serverUrl, logout, setUserProfile, pullLayoutFromCloud]);
 
-  if (!mounted) return null; // Prevent hydration flash
+  if (!hydrated) return null; // Wait for chrome.storage async hydration
 
   return (
     <div 
