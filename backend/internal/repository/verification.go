@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/CatHeadTab/backend/internal/model"
@@ -13,11 +14,12 @@ import (
 
 // VerificationRepository handles email verification and password reset tokens.
 type VerificationRepository interface {
-	CreateEmailVerification(userID uuid.UUID) (*model.EmailVerification, error)
+	CreateEmailVerification(userID uuid.UUID, ttl time.Duration) (*model.EmailVerification, error)
 	GetEmailVerification(token string) (*model.EmailVerification, error)
 	DeleteEmailVerifications(userID uuid.UUID) error
+	CleanupExpiredTokens() (int64, error)
 
-	CreatePasswordReset(userID uuid.UUID) (*model.PasswordReset, error)
+	CreatePasswordReset(userID uuid.UUID, ttl time.Duration) (*model.PasswordReset, error)
 	GetPasswordReset(token string) (*model.PasswordReset, error)
 	MarkPasswordResetUsed(token string) error
 	DeletePasswordResets(userID uuid.UUID) error
@@ -40,7 +42,7 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func (r *postgresVerificationRepository) CreateEmailVerification(userID uuid.UUID) (*model.EmailVerification, error) {
+func (r *postgresVerificationRepository) CreateEmailVerification(userID uuid.UUID, ttl time.Duration) (*model.EmailVerification, error) {
 	// Delete existing tokens for this user first
 	if err := r.DeleteEmailVerifications(userID); err != nil {
 		return nil, err
@@ -55,7 +57,7 @@ func (r *postgresVerificationRepository) CreateEmailVerification(userID uuid.UUI
 		ID:        uuid.New(),
 		UserID:    userID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ExpiresAt: time.Now().Add(ttl),
 	}
 
 	err = r.db.QueryRow(
@@ -87,7 +89,7 @@ func (r *postgresVerificationRepository) DeleteEmailVerifications(userID uuid.UU
 	return err
 }
 
-func (r *postgresVerificationRepository) CreatePasswordReset(userID uuid.UUID) (*model.PasswordReset, error) {
+func (r *postgresVerificationRepository) CreatePasswordReset(userID uuid.UUID, ttl time.Duration) (*model.PasswordReset, error) {
 	// Invalidate previous tokens
 	if err := r.DeletePasswordResets(userID); err != nil {
 		return nil, err
@@ -102,7 +104,7 @@ func (r *postgresVerificationRepository) CreatePasswordReset(userID uuid.UUID) (
 		ID:        uuid.New(),
 		UserID:    userID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(1 * time.Hour),
+		ExpiresAt: time.Now().Add(ttl),
 	}
 
 	err = r.db.QueryRow(
@@ -137,4 +139,27 @@ func (r *postgresVerificationRepository) MarkPasswordResetUsed(token string) err
 func (r *postgresVerificationRepository) DeletePasswordResets(userID uuid.UUID) error {
 	_, err := r.db.Exec(`DELETE FROM password_resets WHERE user_id = $1`, userID)
 	return err
+}
+
+// CleanupExpiredTokens removes expired email verification tokens and
+// expired/used password reset tokens from the database, preventing the
+// tables from growing indefinitely.
+func (r *postgresVerificationRepository) CleanupExpiredTokens() (int64, error) {
+	var total int64
+
+	res, err := r.db.Exec(`DELETE FROM email_verifications WHERE expires_at < NOW()`)
+	if err != nil {
+		return 0, fmt.Errorf("cleanup email_verifications: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	total += n
+
+	res, err = r.db.Exec(`DELETE FROM password_resets WHERE expires_at < NOW() OR used = TRUE`)
+	if err != nil {
+		return total, fmt.Errorf("cleanup password_resets: %w", err)
+	}
+	n, _ = res.RowsAffected()
+	total += n
+
+	return total, nil
 }

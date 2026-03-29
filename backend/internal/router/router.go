@@ -56,6 +56,21 @@ func Setup(cfg *config.Config) *gin.Engine {
 	)
 	wallpaperSvc := service.NewWallpaperService(wpCache, wallhavenProvider)
 
+	// Start background goroutine to periodically clean up expired tokens
+	// (email verifications and used/expired password resets).
+	go func() {
+		ticker := time.NewTicker(cfg.TokenCleanupInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			deleted, err := verifyRepo.CleanupExpiredTokens()
+			if err != nil {
+				log.Printf("[token-cleanup] error: %v", err)
+			} else if deleted > 0 {
+				log.Printf("[token-cleanup] removed %d expired token(s)", deleted)
+			}
+		}
+	}()
+
 	// Start background goroutine that extends the refresh deadline for stale
 	// L2 entries that haven't been accessed recently. Entries accessed via
 	// GetOrFetch are refreshed on-the-fly (compare & update); this job catches
@@ -84,6 +99,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	faviconHandler := handler.NewFaviconHandler()
 	wallpaperHandler := handler.NewWallpaperHandler(wallpaperSvc)
 
+	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
+	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
+
 	// Public routes (no auth) — Preset sites (available to all users)
 	r.GET("/api/v1/preset-sites", presetHandler.ListAll)                       // Legacy: returns everything
 	r.GET("/api/v1/preset-sites/search", presetHandler.SearchSites)            // New: search sites by keyword
@@ -105,9 +123,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/verify-email", authHandler.VerifyEmail)
-		auth.POST("/forgot-password", authHandler.ForgotPassword)
+		auth.POST("/forgot-password", middleware.EmailRateLimit(emailRateLimiter), authHandler.ForgotPassword)
 		auth.POST("/reset-password", authHandler.ResetPassword)
 		auth.GET("/oauth-config", authHandler.GetOAuthConfig)
+		auth.POST("/resend-verification", middleware.EmailRateLimit(emailRateLimiter), authHandler.ResendVerificationPublic)
 
 		// OAuth login (public — user is not yet authenticated)
 		auth.POST("/github", authHandler.GitHubLogin)
@@ -118,37 +137,45 @@ func Setup(cfg *config.Config) *gin.Engine {
 	api := r.Group("/api/v1")
 	api.Use(middleware.Auth(cfg.JWTSecret))
 	{
-		// Bookmarks
-		bookmarks := api.Group("/bookmarks")
-		{
-			bookmarks.GET("", bookmarkHandler.List)
-			bookmarks.POST("", bookmarkHandler.Create)
-			bookmarks.PUT("/:id", bookmarkHandler.Update)
-			bookmarks.DELETE("/:id", bookmarkHandler.Delete)
-			bookmarks.POST("/sync", bookmarkHandler.Sync)
-		}
-
-		// Desktop Layout
-		api.GET("/layout", layoutHandler.Get)
-		api.PUT("/layout", layoutHandler.Update)
-
-		// User
+		// User profile & preferences (no email verification required — users
+		// need to see their profile to trigger verification from the UI)
 		user := api.Group("/user")
 		{
 			user.GET("/profile", userHandler.GetProfile)
 			user.GET("/preferences", userHandler.GetPreferences)
 			user.PUT("/preferences", userHandler.UpdatePreferences)
-			user.POST("/background", bgHandler.Upload)
-			user.GET("/background", bgHandler.Download)
-			user.DELETE("/background", bgHandler.Delete)
 
-			// Account management (authenticated)
+			// Account management (authenticated, no verification required)
 			user.POST("/change-password", authHandler.ChangePassword)
-			user.POST("/resend-verification", authHandler.ResendVerification)
+			user.POST("/resend-verification", middleware.EmailRateLimit(emailRateLimiter), authHandler.ResendVerification)
 			user.GET("/linked-accounts", authHandler.GetLinkedAccounts)
 			user.POST("/link/github", authHandler.GitHubLinkAccount)
 			user.POST("/link/google", authHandler.GoogleLinkAccount)
 			user.DELETE("/link/:provider", authHandler.UnlinkAccount)
+		}
+
+		// Routes below require verified email
+		verified := api.Group("")
+		verified.Use(middleware.RequireVerified(userRepo))
+		{
+			// Bookmarks
+			bookmarks := verified.Group("/bookmarks")
+			{
+				bookmarks.GET("", bookmarkHandler.List)
+				bookmarks.POST("", bookmarkHandler.Create)
+				bookmarks.PUT("/:id", bookmarkHandler.Update)
+				bookmarks.DELETE("/:id", bookmarkHandler.Delete)
+				bookmarks.POST("/sync", bookmarkHandler.Sync)
+			}
+
+			// Desktop Layout
+			verified.GET("/layout", layoutHandler.Get)
+			verified.PUT("/layout", layoutHandler.Update)
+
+			// Background (upload/download/delete)
+			verified.POST("/user/background", bgHandler.Upload)
+			verified.GET("/user/background", bgHandler.Download)
+			verified.DELETE("/user/background", bgHandler.Delete)
 		}
 	}
 

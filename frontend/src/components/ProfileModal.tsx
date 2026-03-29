@@ -13,7 +13,7 @@ interface LinkedAccount {
 }
 
 export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { userProfile, logout } = useConfigStore();
+  const { userProfile, logout, setUserProfile } = useConfigStore();
   const { uploadLayoutToCloud, pullLayoutFromCloud, mergeLayoutWithCloud } = useLayoutStore();
   const { t } = useTranslation();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -32,6 +32,13 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string } | null>(null);
 
   useEffect(() => {
+    // Fallback: if userProfile is missing, fetch it now
+    if (!userProfile) {
+      client.get('/api/v1/user/profile')
+        .then(res => setUserProfile(res.data))
+        .catch(() => {});
+    }
+
     // Fetch linked accounts
     client.get('/api/v1/user/linked-accounts')
       .then(res => setLinkedAccounts(res.data.accounts || []))

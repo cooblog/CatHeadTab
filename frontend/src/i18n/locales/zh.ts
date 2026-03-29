@@ -167,6 +167,9 @@ export const zh = {
   'auth.invalidResetToken': '无效或已过期的重置链接。',
   'auth.invalidVerificationToken': '无效或已过期的验证链接。',
   'auth.emailVerified': '您的邮箱已成功验证！',
+  'auth.verifying': '正在验证您的邮箱...',
+  'auth.verificationSuccessTitle': '验证成功！',
+  'auth.verificationFailedTitle': '验证失败',
   'auth.verificationFailed': '邮箱验证失败，链接可能已过期。',
   'auth.resetFailed': '密码重置失败，链接可能已过期。',
   'auth.serverSetupTitle': '连接服务器',
@@ -175,6 +178,12 @@ export const zh = {
   'auth.serverUrlRequired': '请输入服务器地址。',
   'auth.serverConnectFailed': '无法连接到服务器，请检查地址后重试。',
   'auth.serverConnect': '连 接',
+  'auth.registrationSuccess': '注册成功！请查收邮件并验证您的邮箱。',
+  'auth.emailNotVerified': '邮箱尚未验证，请检查您的收件箱。',
+  'auth.resendVerification': '重新发送验证邮件',
+  'auth.verificationResent': '验证邮件已发送！请检查您的收件箱。',
+  'auth.emailNotVerifiedTitle': '需要验证邮箱',
+  'auth.emailNotVerifiedDesc': '我们已向您的邮箱发送了验证链接，请验证后再登录。',
 
   // Bookmark App
   'bookmark.favorites': '默认收藏夹',

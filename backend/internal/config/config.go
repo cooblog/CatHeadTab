@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+	"strconv"
+	"time"
 )
 
 // Config holds the application configuration loaded from environment variables.
@@ -35,6 +37,16 @@ type Config struct {
 	// Comma-separated values: "sfw", "sketchy". Default: "sfw".
 	// "sketchy" requires a valid API key to work on wallhaven.cc.
 	WallhavenPurity string
+
+	// Token TTL settings
+	// EmailVerifyTokenTTL controls how long email verification tokens remain valid.
+	EmailVerifyTokenTTL time.Duration
+	// PasswordResetTokenTTL controls how long password reset tokens remain valid.
+	PasswordResetTokenTTL time.Duration
+	// JWTTokenTTL controls how long JWT login tokens remain valid.
+	JWTTokenTTL time.Duration
+	// TokenCleanupInterval controls how often expired tokens are purged from the database.
+	TokenCleanupInterval time.Duration
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -61,6 +73,11 @@ func Load() *Config {
 
 		WallhavenAPIKey: getEnv("WALLHAVEN_API_KEY", ""),
 		WallhavenPurity: getEnv("WALLHAVEN_PURITY", "sfw"),
+
+		EmailVerifyTokenTTL:   getDurationEnv("EMAIL_VERIFY_TOKEN_TTL_HOURS", 24) * time.Hour,
+		PasswordResetTokenTTL: getDurationEnv("PASSWORD_RESET_TOKEN_TTL_HOURS", 1) * time.Hour,
+		JWTTokenTTL:           getDurationEnv("JWT_TOKEN_TTL_DAYS", 30) * 24 * time.Hour,
+		TokenCleanupInterval:  getDurationEnv("TOKEN_CLEANUP_INTERVAL_HOURS", 6) * time.Hour,
 	}
 }
 
@@ -69,4 +86,19 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getDurationEnv reads an integer from the environment variable identified by
+// key and returns it as a time.Duration. If the variable is not set or cannot
+// be parsed, fallback is returned.
+func getDurationEnv(key string, fallback int) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return time.Duration(fallback)
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return time.Duration(fallback)
+	}
+	return time.Duration(n)
 }

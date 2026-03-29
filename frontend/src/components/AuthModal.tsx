@@ -3,11 +3,11 @@ import { useConfigStore, isEnvConfigured } from '../store/configStore';
 import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
 
-type AuthView = 'login' | 'register' | 'forgot';
+type AuthView = 'login' | 'register' | 'forgot' | 'verify-pending';
 type ModalStep = 'server' | 'auth';
 
 export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { serverUrl, setServerUrl, setJwtToken } = useConfigStore();
+  const { serverUrl, setServerUrl, setJwtToken, setUserProfile } = useConfigStore();
   const { t } = useTranslation();
 
   // Skip server step if env variable is set OR serverUrl is already configured
@@ -25,6 +25,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string } | null>(null);
+  const [pendingEmail, setPendingEmail] = useState('');
 
   // Validate and save server URL
   const handleServerSubmit = async (e: React.FormEvent) => {
@@ -66,17 +67,46 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (view === 'login') {
         const res = await client.post('/api/v1/auth/login', { identifier, password });
         setJwtToken(res.data.token);
+        // Immediately fetch profile after login so ProfileModal has data
+        try {
+          const profileRes = await client.get('/api/v1/user/profile');
+          setUserProfile(profileRes.data);
+        } catch {
+          // Profile fetch will be retried by App.tsx useEffect
+        }
         onClose();
       } else if (view === 'register') {
-        const res = await client.post('/api/v1/auth/register', { email, username, password });
-        setJwtToken(res.data.token);
-        onClose();
+        await client.post('/api/v1/auth/register', { email, username, password });
+        // Registration no longer returns a JWT — show verification pending view
+        setPendingEmail(email);
+        setView('verify-pending');
       } else if (view === 'forgot') {
         await client.post('/api/v1/auth/forgot-password', { email });
         setSuccess(t('auth.resetEmailSent'));
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || t('auth.authFailed'));
+      // Handle email-not-verified on login (HTTP 403)
+      if (err.response?.status === 403 && err.response?.data?.email_not_verified) {
+        setPendingEmail(err.response.data.email || identifier);
+        setView('verify-pending');
+      } else {
+        setError(err.response?.data?.error || t('auth.authFailed'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!pendingEmail) return;
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await client.post('/api/v1/auth/resend-verification', { email: pendingEmail });
+      setSuccess(t('auth.verificationResent'));
+    } catch {
+      setError(t('auth.authFailed'));
     } finally {
       setLoading(false);
     }
@@ -121,6 +151,13 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         try {
           const res = await client.post(`/api/v1/auth/${event.data.provider}`, { code: event.data.code });
           setJwtToken(res.data.token);
+          // Immediately fetch profile after OAuth login so ProfileModal has data
+          try {
+            const profileRes = await client.get('/api/v1/user/profile');
+            setUserProfile(profileRes.data);
+          } catch {
+            // Profile fetch will be retried by App.tsx useEffect
+          }
           onClose();
         } catch (err: any) {
           setError(err.response?.data?.error || t('auth.oauthFailed'));
@@ -145,16 +182,61 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setView(newView);
     setError('');
     setSuccess('');
+    if (newView !== 'verify-pending') {
+      setPendingEmail('');
+    }
   };
 
   const showOAuth = oauthConfig && (oauthConfig.github_client_id || oauthConfig.google_client_id);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-[2px] animate-fadeIn p-4" onClick={onClose} onContextMenu={(e) => e.preventDefault()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => e.preventDefault()}>
+      {/* Dimmed Background Overlay */}
       <div 
-        className="w-full max-w-sm bg-[#1c1c1e]/70 backdrop-blur-[80px] border border-white/[0.08] rounded-[2.5rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] p-8 flex flex-col transform animate-scaleIn pointer-events-auto select-none"
+        className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"
+        onClick={onClose}
+      />
+
+      {/* App Window container */}
+      <div 
+        className="w-full max-w-sm bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none"
         onClick={e => e.stopPropagation()}
       >
+        {/* Window Header */}
+        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+          {/* Left: Mac traffic lights on desktop */}
+          <div className="flex items-center gap-2 w-auto md:w-20">
+            <div className="hidden md:flex gap-2.5">
+              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
+                <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+              <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
+                <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
+              </button>
+              <button className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
+                <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          
+          {/* Center title */}
+          <div className="flex-1 flex justify-center">
+            <span className="text-[13px] font-semibold text-white/70">
+              {step === 'server' ? t('auth.serverSetupTitle') : 
+               view === 'forgot' ? t('auth.forgotPassword') :
+               view === 'verify-pending' ? t('auth.emailNotVerifiedTitle') :
+               t('auth.signIn')}
+            </span>
+          </div>
+          
+          {/* Right spacer */}
+          <div className="flex items-center w-auto md:w-20 justify-end">
+            <div className="hidden md:block w-20" />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
         {/* ===== Step 1: Server URL Configuration ===== */}
         {step === 'server' && (
           <>
@@ -187,8 +269,8 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </>
         )}
 
-        {/* ===== Step 2: Auth (Login / Register / Forgot) ===== */}
-        {step === 'auth' && view !== 'forgot' && (
+        {/* ===== Step 2: Auth (Login / Register / Forgot / Verify-Pending) ===== */}
+        {step === 'auth' && view !== 'forgot' && view !== 'verify-pending' && (
           <div className="flex justify-center mb-6">
             <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
               <button 
@@ -217,7 +299,44 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
         )}
 
-        {step === 'auth' && (
+        {/* Email verification pending */}
+        {step === 'auth' && view === 'verify-pending' && (
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-2">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <polyline points="22,7 12,13 2,7"/>
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white">{t('auth.emailNotVerifiedTitle')}</h2>
+            <p className="text-white/50 text-[13px] leading-relaxed">{t('auth.emailNotVerifiedDesc')}</p>
+            {pendingEmail && (
+              <p className="text-white/70 text-[14px] font-medium break-all">{pendingEmail}</p>
+            )}
+
+            {error && <div className="w-full text-red-500 text-[13px] font-medium text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{error}</div>}
+            {success && <div className="w-full text-[#72d565] text-[13px] font-medium text-center bg-[#72d565]/10 p-3 rounded-xl border border-[#72d565]/20">{success}</div>}
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleResendVerification}
+              className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-colors shadow-lg disabled:opacity-50"
+            >
+              {loading ? t('auth.processing') : t('auth.resendVerification')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchView('login')}
+              className="text-white/40 hover:text-white/70 text-[13px] transition-colors"
+            >
+              ← {t('auth.backToLogin')}
+            </button>
+          </div>
+        )}
+
+        {step === 'auth' && view !== 'verify-pending' && (
           <>
             {error && <div className="mb-4 text-red-500 text-[13px] font-medium text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20">{error}</div>}
             {success && <div className="mb-4 text-[#72d565] text-[13px] font-medium text-center bg-[#72d565]/10 p-3 rounded-xl border border-[#72d565]/20">{success}</div>}
@@ -318,7 +437,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <>
                 <div className="relative flex items-center justify-center my-6">
                   <div className="absolute inset-x-0 h-[1px] bg-white/10" />
-                  <span className="relative bg-[#1a1c1a] px-4 text-[11px] uppercase font-bold tracking-widest text-white/40">{t('auth.or')}</span>
+                  <span className="relative bg-transparent px-4 text-[11px] uppercase font-bold tracking-widest text-white/40">{t('auth.or')}</span>
                 </div>
 
                 <div className="flex flex-col gap-3">
@@ -349,6 +468,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );

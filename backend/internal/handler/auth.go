@@ -51,6 +51,8 @@ type RegisterInput struct {
 }
 
 // Register handles user registration.
+// Registration no longer returns a JWT immediately. The user must verify
+// their email address before they can log in.
 // POST /api/v1/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
 	var input RegisterInput
@@ -86,26 +88,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Send verification email
-	verification, err := h.verifyRepo.CreateEmailVerification(newUser.ID)
+	// Send verification email — user must verify before logging in
+	verification, err := h.verifyRepo.CreateEmailVerification(newUser.ID, h.cfg.EmailVerifyTokenTTL)
 	if err == nil && verification != nil {
 		_ = h.emailService.SendVerificationEmail(newUser.Email, verification.Token)
 	}
 
-	token, err := h.generateToken(newUser.ID.String())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-
 	c.JSON(http.StatusCreated, gin.H{
-		"token": token,
-		"user": gin.H{
-			"id":             newUser.ID,
-			"username":       newUser.Username,
-			"email":          newUser.Email,
-			"email_verified": newUser.EmailVerified,
-		},
+		"pending_verification": true,
+		"message":              "Registration successful. Please check your email to verify your account before logging in.",
 	})
 }
 
@@ -116,6 +107,8 @@ type LoginInput struct {
 }
 
 // Login handles user login.
+// Users with unverified email addresses cannot log in; they will receive
+// a special response that allows the frontend to offer a "resend" action.
 // POST /api/v1/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input LoginInput
@@ -141,6 +134,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email/username or password"})
+		return
+	}
+
+	// Block login for unverified email addresses
+	if !user.EmailVerified {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":                "Email not verified. Please check your inbox and verify your email before logging in.",
+			"email_not_verified":   true,
+			"email":                user.Email,
+		})
 		return
 	}
 
@@ -172,7 +175,16 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("[VerifyEmail] Received token (len=%d): %q\n", len(input.Token), input.Token)
 	verification, err := h.verifyRepo.GetEmailVerification(input.Token)
+	if err != nil {
+		fmt.Printf("[VerifyEmail] DB error: %v\n", err)
+	}
+	if verification == nil {
+		fmt.Printf("[VerifyEmail] No matching token found in DB (may be expired or not exist)\n")
+	} else {
+		fmt.Printf("[VerifyEmail] Found verification for user_id=%s, expires_at=%v\n", verification.UserID, verification.ExpiresAt)
+	}
 	if err != nil || verification == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired verification token"})
 		return
@@ -189,7 +201,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 }
 
 // ResendVerification resends the email verification link.
-// POST /api/v1/auth/resend-verification
+// POST /api/v1/user/resend-verification (authenticated)
 func (h *AuthHandler) ResendVerification(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
 	userID, _ := uuid.Parse(userIDStr)
@@ -205,7 +217,7 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 		return
 	}
 
-	verification, err := h.verifyRepo.CreateEmailVerification(user.ID)
+	verification, err := h.verifyRepo.CreateEmailVerification(user.ID, h.cfg.EmailVerifyTokenTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create verification token"})
 		return
@@ -217,6 +229,42 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
+}
+
+// ResendVerificationPublic resends the email verification link without requiring
+// authentication. This allows users who registered but haven't verified yet to
+// request a new verification email from the login screen.
+// POST /api/v1/auth/resend-verification
+func (h *AuthHandler) ResendVerificationPublic(c *gin.Context) {
+	var input struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Always return success to prevent email enumeration
+	user, _ := h.userRepo.GetByEmail(input.Email)
+	if user == nil {
+		c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a verification link has been sent"})
+		return
+	}
+
+	if user.EmailVerified {
+		c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a verification link has been sent"})
+		return
+	}
+
+	verification, err := h.verifyRepo.CreateEmailVerification(user.ID, h.cfg.EmailVerifyTokenTTL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create verification token"})
+		return
+	}
+
+	_ = h.emailService.SendVerificationEmail(user.Email, verification.Token)
+
+	c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a verification link has been sent"})
 }
 
 // ForgotPasswordInput represents the forgot password request body.
@@ -240,7 +288,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	reset, err := h.verifyRepo.CreatePasswordReset(user.ID)
+	reset, err := h.verifyRepo.CreatePasswordReset(user.ID, h.cfg.PasswordResetTokenTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reset token"})
 		return
@@ -841,7 +889,7 @@ func (h *AuthHandler) getGoogleUser(accessToken string) (*googleUser, error) {
 func (h *AuthHandler) generateToken(userID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(30 * 24 * time.Hour).Unix(), // 30 days
+		"exp":     time.Now().Add(h.cfg.JWTTokenTTL).Unix(),
 	})
 	return token.SignedString([]byte(h.cfg.JWTSecret))
 }

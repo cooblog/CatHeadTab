@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // Auth returns a Gin middleware that validates JWT tokens from the
@@ -59,6 +61,40 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 		}
 
 		c.Set("user_id", userID)
+		c.Next()
+	}
+}
+
+// RequireVerified returns a Gin middleware that checks whether the
+// authenticated user has verified their email address. It must be used
+// after the Auth middleware so that "user_id" is available in the context.
+func RequireVerified(userRepo repository.UserRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDStr := c.GetString("user_id")
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid user id",
+			})
+			return
+		}
+
+		user, err := userRepo.GetByID(userID)
+		if err != nil || user == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "user not found",
+			})
+			return
+		}
+
+		if !user.EmailVerified {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":              "Email verification required. Please verify your email to use this feature.",
+				"email_not_verified": true,
+			})
+			return
+		}
+
 		c.Next()
 	}
 }

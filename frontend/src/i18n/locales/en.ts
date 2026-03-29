@@ -167,6 +167,9 @@ export const en = {
   'auth.invalidResetToken': 'Invalid or expired reset link.',
   'auth.invalidVerificationToken': 'Invalid or expired verification link.',
   'auth.emailVerified': 'Your email has been verified successfully!',
+  'auth.verifying': 'Verifying your email...',
+  'auth.verificationSuccessTitle': 'Verification Complete!',
+  'auth.verificationFailedTitle': 'Verification Failed',
   'auth.verificationFailed': 'Failed to verify email. The link may have expired.',
   'auth.resetFailed': 'Failed to reset password. The link may have expired.',
   'auth.serverSetupTitle': 'Connect to Server',
@@ -175,6 +178,12 @@ export const en = {
   'auth.serverUrlRequired': 'Please enter a server URL.',
   'auth.serverConnectFailed': 'Cannot connect to the server. Please check the URL and try again.',
   'auth.serverConnect': 'Connect',
+  'auth.registrationSuccess': 'Registration successful! Please check your email to verify your account.',
+  'auth.emailNotVerified': 'Your email is not verified yet. Please check your inbox.',
+  'auth.resendVerification': 'Resend Verification Email',
+  'auth.verificationResent': 'Verification email sent! Please check your inbox.',
+  'auth.emailNotVerifiedTitle': 'Email Verification Required',
+  'auth.emailNotVerifiedDesc': 'We sent a verification link to your email. Please verify before logging in.',
 
   // Bookmark App
   'bookmark.favorites': 'Favorites',
