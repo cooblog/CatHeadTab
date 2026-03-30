@@ -28,6 +28,12 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 
+// Disable all layout-change animations for desktop grid items.
+// We use a FLIP animation manager instead, and dnd-kit's internal
+// layout-shift detection can cause infinite update loops with mixed-size
+// grid items (widgets spanning 2×2 etc.).
+const noLayoutAnimation = () => false;
+
 // === Icons ===
 const SettingsIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -87,6 +93,17 @@ const LockIcon = () => (
 );
 
 
+// Helper: extract mini-icon URLs from a folder's children (stable, outside component)
+function getMiniIconUrls(nodes: DesktopItem[]): string[] {
+  const urls: string[] = [];
+  for (const n of nodes) {
+    if (n.type === 'app' && n.icon) urls.push('');
+    else if (n.url) urls.push(n.url);
+    else if (n.children) urls.push(...getMiniIconUrls(n.children));
+  }
+  return urls;
+}
+
 // === DesktopIcon Component (static, used for DragOverlay and non-draggable contexts) ===
 const DesktopIconContent: React.FC<{ 
   item: DesktopItem; 
@@ -95,20 +112,16 @@ const DesktopIconContent: React.FC<{
   isDraggedOver?: boolean;
   /** Override Dock icon size in px (for adaptive scaling when Dock has many items) */
   dockIconSize?: number;
-}> = ({ item, isDock, isOverlay, isDraggedOver, dockIconSize }) => {
+}> = React.memo(({ item, isDock, isOverlay, isDraggedOver, dockIconSize }) => {
   const isFolder = item.type === 'folder';
   
-  const getMiniIcons = (nodes: DesktopItem[]): string[] => {
-    let urls: string[] = [];
-    for (const n of nodes) {
-      if (n.type === 'app' && n.icon) urls.push('');
-      else if (n.url) urls.push(n.url);
-      else if (n.children) urls = urls.concat(getMiniIcons(n.children));
-    }
-    return urls;
-  };
+  // Memoize mini-icon URLs so that identical children arrays don't regenerate
+  // new <img> elements and cause the folder preview to flicker.
+  const miniIcons = useMemo(
+    () => isFolder && item.children ? getMiniIconUrls(item.children).slice(0, 9) : [],
+    [isFolder, item.children],
+  );
 
-  const miniIcons = isFolder && item.children ? getMiniIcons(item.children).slice(0, 9) : [];
   // When a custom dockIconSize is provided, use inline styles; otherwise use Tailwind classes
   const iconSize = (isDock && dockIconSize)
     ? '' // will use inline style instead
@@ -143,7 +156,7 @@ const DesktopIconContent: React.FC<{
         {isFolder ? (
           <div className="grid grid-cols-3 grid-rows-3 gap-1 p-2.5 w-full h-full">
             {miniIcons.map((url, i) => (
-              <div key={i} className="rounded-[3px] overflow-hidden bg-white/10 flex items-center justify-center">
+              <div key={`${i}-${url}`} className="rounded-[3px] overflow-hidden bg-white/10 flex items-center justify-center">
                 <img 
                   src={getSmartFaviconUrl(url, 64)}
                   className="w-[88%] h-[88%] object-contain"
@@ -195,7 +208,37 @@ const DesktopIconContent: React.FC<{
       )}
     </div>
   );
-};
+}, (prev, next) => {
+  // Custom shallow comparison to prevent unnecessary re-renders.
+  // Zustand's immutable updates create new item references even when the
+  // underlying data hasn't changed, which causes folder preview images
+  // to re-mount and flicker. We compare the fields that actually affect
+  // the visual output.
+  if (prev.isDock !== next.isDock) return false;
+  if (prev.isOverlay !== next.isOverlay) return false;
+  if (prev.isDraggedOver !== next.isDraggedOver) return false;
+  if (prev.dockIconSize !== next.dockIconSize) return false;
+  const a = prev.item;
+  const b = next.item;
+  if (a === b) return true;
+  if (a.id !== b.id) return false;
+  if (a.type !== b.type) return false;
+  if (a.title !== b.title) return false;
+  if (a.icon !== b.icon) return false;
+  if (a.url !== b.url) return false;
+  // For folders: compare children by length and ids
+  if (a.type === 'folder') {
+    const ac = a.children;
+    const bc = b.children;
+    if (ac === bc) return true;
+    if (!ac || !bc) return false;
+    if (ac.length !== bc.length) return false;
+    for (let i = 0; i < ac.length; i++) {
+      if (ac[i].id !== bc[i].id || ac[i].url !== bc[i].url || ac[i].icon !== bc[i].icon) return false;
+    }
+  }
+  return true;
+});
 
 // === Centralized FLIP animation manager for desktop grid ===
 // Instead of per-element hooks (which suffer from race conditions with rAF),
@@ -317,6 +360,9 @@ const SortableDesktopIcon: React.FC<{
   } = useSortable({ 
     id: item.id,
     data: { item, isDock, isFolder: item.type === 'folder' },
+    // Desktop grid uses FLIP manager — disable dnd-kit layout animations
+    // to prevent infinite update loops with mixed-size grid items.
+    ...(isDesktopGrid ? { animateLayoutChanges: noLayoutAnimation, transition: null } : {}),
   });
 
   // When the folder hover timer has fired (folderDropTargetId is set),
@@ -389,6 +435,8 @@ const SortableWidget: React.FC<{
   } = useSortable({
     id: item.id,
     data: { item, isDock: false, isWidget: true },
+    animateLayoutChanges: noLayoutAnimation,
+    transition: null,
   });
 
   const validSize = (item.widgetSize && item.widgetSize in WIDGET_SIZE_MAP) ? item.widgetSize : 'small';
@@ -442,7 +490,7 @@ const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: Re
   const pageWidthPercent = 100 / totalPages;
   return (
     <div ref={setNodeRef} className="flex-shrink-0 h-full pt-4 flex flex-col items-center" style={{ width: `${pageWidthPercent}%` }}>
-      <div className="w-full h-full overflow-y-auto no-scrollbar pt-2">
+      <div className="w-full h-full overflow-y-auto no-scrollbar pt-4">
         {children}
         {/* Bottom padding to prevent last row being hidden behind Dock */}
         <div className="h-8 md:h-12 shrink-0" />
@@ -529,12 +577,20 @@ const SEARCH_MODES = [
 //    *previous* stable target, giving the user time to pause on a folder.
 //
 // The debounce state lives outside the function so it persists across calls.
-const SORT_DEBOUNCE_MS = 300; // ms the pointer must stay on a new target before swapping
+// Debounce durations for collision target switching.
+// Folder/link targets (potential merge/drop-into) need a longer debounce so the
+// user has time to hover without the icon being swapped away. Regular icons only
+// need a short debounce to keep the grid from jittering on fast pointer moves.
+const SORT_DEBOUNCE_FOLDER_MS = 300;
+const SORT_DEBOUNCE_ICON_MS = 60;
 let _stableOverId: string | number | null = null;
 let _pendingOverId: string | number | null = null;
 let _pendingTimestamp = 0;
 
-function createFolderAwareCollision(_draggedItem: DesktopItem | null): CollisionDetection {
+function createFolderAwareCollision(
+  _draggedItem: DesktopItem | null,
+  lookupItem?: (id: string) => DesktopItem | null,
+): CollisionDetection {
   return (args) => {
     const collisions = closestCenter(args);
     if (!collisions || collisions.length === 0) {
@@ -618,8 +674,16 @@ function createFolderAwareCollision(_draggedItem: DesktopItem | null): Collision
       return withSpecialZones(close);
     }
 
-    // Same candidate as pending — check if debounce time has elapsed
-    if (now - _pendingTimestamp >= SORT_DEBOUNCE_MS) {
+    // Same candidate as pending — pick debounce duration based on target type.
+    // Folder/link targets get longer debounce for merge-hover, regular icons are fast.
+    const isDraggingFolder = _draggedItem?.type === 'folder';
+    const isDraggingWidget = _draggedItem?.type === 'widget';
+    const topItem = lookupItem ? lookupItem(String(topId)) : null;
+    const targetIsFolderOrLink = !isDraggingFolder && !isDraggingWidget
+      && (topItem?.type === 'folder' || topItem?.type === 'link');
+    const debounceMs = targetIsFolderOrLink ? SORT_DEBOUNCE_FOLDER_MS : SORT_DEBOUNCE_ICON_MS;
+
+    if (now - _pendingTimestamp >= debounceMs) {
       // Debounce complete — accept the new target
       _stableOverId = topId;
       _pendingOverId = null;
@@ -705,9 +769,19 @@ export const Desktop: React.FC = () => {
   // the item is already in pages but still needs manual reordering calls
   // (SortableContext can't auto-sort items that were added mid-drag).
   const dragStartedInDockRef = useRef(false);
-  // Guard against infinite re-render loops: track the last reorder source→target
-  // pair so we never fire the same cross-container move twice in a row.
+  // Guard against infinite re-render loops: track recent reorder keys and timestamps
+  // to prevent the same move AND rapid ping-pong cycles (especially with multi-cell widgets).
   const lastReorderRef = useRef<string | null>(null);
+  const reorderHistoryRef = useRef<string[]>([]);
+  const lastReorderTimeRef = useRef<number>(0);
+  // Defer reorder calls via requestAnimationFrame so they execute OUTSIDE
+  // dnd-kit's synchronous layout-effect measurement cycle.  Without this,
+  // the chain is: items change → SortableContext layout-effect calls
+  // measureDroppableContainers → droppableRects change → collision detection
+  // re-runs → handleDragOver fires → reorderDesktopItem → items change → ∞
+  // By scheduling the reorder in the NEXT animation frame, the layout effect
+  // completes first and the loop is broken.
+  const pendingReorderRAF = useRef<number | null>(null);
   const folderHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   // Track the last folder we hovered over (survives brief flickers away)
@@ -739,7 +813,7 @@ export const Desktop: React.FC = () => {
   const activeItem = activeId ? findItemById(activeId) : null;
 
   // Collision detection: when dragging a folder, skip folder-priority so folders reorder normally
-  const collisionDetection = useMemo(() => createFolderAwareCollision(activeItem), [activeItem]);
+  const collisionDetection = useMemo(() => createFolderAwareCollision(activeItem, findItemById), [activeItem, findItemById]);
 
   // Sensors: MouseSensor for desktop (distance-based), TouchSensor for mobile (long-press).
   // Separating them avoids the need for touch-action:none on icons, allowing native
@@ -842,6 +916,8 @@ export const Desktop: React.FC = () => {
     // manually reordering it after a cross-container move (see handleDragOver).
     dragStartedInDockRef.current = layout.dock.some(item => item.id === id);
     lastReorderRef.current = null;
+    reorderHistoryRef.current = [];
+    lastReorderTimeRef.current = 0;
     setContextMenu(null);
   }, [layout.dock]);
 
@@ -980,12 +1056,61 @@ export const Desktop: React.FC = () => {
       const shouldReorder = isCrossContainer || isBackFromDock || isSameContainerDesktop;
 
       if (shouldReorder && lastReorderRef.current !== reorderKey) {
-        lastReorderRef.current = reorderKey;
-        // Snapshot before reorder for FLIP animation (desktop items)
-        if (!targetIsDock || isSameContainerDesktop) {
-          flipManager.snapshot();
+        // Multi-cell widgets need extra protection against ping-pong cycles:
+        // when a 2×2 widget is reordered the grid reshuffles dramatically,
+        // causing dnd-kit to detect a NEW collision target almost immediately
+        // (A→B→C→A loop). We apply:
+        // 1) A 150ms minimum time interval between consecutive widget reorders
+        // 2) Cycle detection: if this reorderKey appeared recently, skip it
+        //
+        // For regular icons, the collision-detection debounce (60ms) + rAF
+        // deferral already provides enough protection — no extra throttle needed.
+        const activeItem_ = activeId ? findItemById(activeId) : null;
+        const isWidgetDrag = activeItem_?.type === 'widget';
+
+        if (isWidgetDrag) {
+          const now = Date.now();
+          const elapsed = now - lastReorderTimeRef.current;
+          if (elapsed < 150) return; // throttle: too soon since last widget reorder
+
+          // Cycle detection: check if this exact key appeared in recent history
+          if (reorderHistoryRef.current.includes(reorderKey)) return;
+
+          // Keep history bounded (last 4 moves)
+          reorderHistoryRef.current.push(reorderKey);
+          if (reorderHistoryRef.current.length > 4) {
+            reorderHistoryRef.current.shift();
+          }
+          lastReorderTimeRef.current = now;
         }
-        reorderDesktopItem(active.id as string, newOverId);
+
+        lastReorderRef.current = reorderKey;
+
+        // Cancel any pending reorder from a previous dragOver event
+        if (pendingReorderRAF.current != null) {
+          cancelAnimationFrame(pendingReorderRAF.current);
+        }
+
+        // CRITICAL: Defer the actual state mutation to the next animation frame.
+        // dnd-kit's SortableContext fires a layout-effect that calls
+        // measureDroppableContainers whenever items change. If we mutate state
+        // synchronously inside handleDragOver, the chain becomes:
+        //   reorderDesktopItem → items change → layout-effect measures →
+        //   droppableRects change → collision re-runs → handleDragOver → ∞
+        // By deferring to rAF, the layout-effect measurement completes first
+        // and the state mutation happens in a separate frame, breaking the loop.
+        const capturedActiveId = active.id as string;
+        const capturedOverId = newOverId;
+        const shouldSnap = !targetIsDock || isSameContainerDesktop;
+
+        pendingReorderRAF.current = requestAnimationFrame(() => {
+          pendingReorderRAF.current = null;
+          // Snapshot before reorder for FLIP animation (desktop items)
+          if (shouldSnap) {
+            flipManager.snapshot();
+          }
+          reorderDesktopItem(capturedActiveId, capturedOverId);
+        });
       }
     }
   }, [activeId, findItemById, openedFolder, reorderDesktopItem, moveItemToPage, layout, flipManager]);
@@ -993,6 +1118,11 @@ export const Desktop: React.FC = () => {
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
+    // Cancel any pending RAF reorder from dragOver
+    if (pendingReorderRAF.current != null) {
+      cancelAnimationFrame(pendingReorderRAF.current);
+      pendingReorderRAF.current = null;
+    }
     // Reset collision debounce state
     _stableOverId = null;
     _pendingOverId = null;
@@ -1101,6 +1231,8 @@ export const Desktop: React.FC = () => {
     setActiveId(null);
     dragStartedInDockRef.current = false;
     lastReorderRef.current = null;
+    reorderHistoryRef.current = [];
+    lastReorderTimeRef.current = 0;
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
@@ -1108,12 +1240,19 @@ export const Desktop: React.FC = () => {
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
+    // Cancel any pending RAF reorder from dragOver
+    if (pendingReorderRAF.current != null) {
+      cancelAnimationFrame(pendingReorderRAF.current);
+      pendingReorderRAF.current = null;
+    }
     _stableOverId = null;
     _pendingOverId = null;
     _pendingTimestamp = 0;
     setActiveId(null);
     dragStartedInDockRef.current = false;
     lastReorderRef.current = null;
+    reorderHistoryRef.current = [];
+    lastReorderTimeRef.current = 0;
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);

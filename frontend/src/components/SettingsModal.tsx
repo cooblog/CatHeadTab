@@ -1077,6 +1077,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                                     alt={`Wallpaper ${item.id}`}
                                     className="absolute inset-0 w-full h-full object-cover"
                                     loading="lazy"
+                                    referrerPolicy="no-referrer"
                                   />
                                   {/* Purity badge (sketchy/nsfw only) */}
                                   {item.purity !== 'sfw' && (
