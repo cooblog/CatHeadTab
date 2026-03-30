@@ -32,9 +32,21 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   const days = useMemo(() => {
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < firstDay; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+    const cells: { day: number; type: 'prev' | 'current' | 'next' }[] = [];
+    // Fill leading days from previous month
+    for (let i = firstDay - 1; i >= 0; i--) {
+      cells.push({ day: prevMonthDays - i, type: 'prev' });
+    }
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ day: d, type: 'current' });
+    }
+    // Fill trailing days from next month to complete 6 rows (42 cells)
+    const remaining = 42 - cells.length;
+    for (let d = 1; d <= remaining; d++) {
+      cells.push({ day: d, type: 'next' });
+    }
     return cells;
   }, [viewYear, viewMonth]);
 
@@ -104,20 +116,20 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
         ))}
       </div>
 
-      {/* Days grid */}
-      <div className="grid grid-cols-7 gap-0 flex-1 content-start">
-        {days.map((day, i) => (
+      {/* Days grid — fixed 6 rows */}
+      <div className="grid grid-cols-7 grid-rows-6 gap-0 flex-1 min-h-0">
+        {days.map((cell, i) => (
           <div
             key={i}
-            className={`text-[9px] w-[22px] h-[22px] flex items-center justify-center mx-auto rounded-full transition-colors ${
-              day === today && isCurrentMonth
+            className={`text-[9px] flex items-center justify-center mx-auto rounded-full transition-colors aspect-square w-full max-w-[22px] ${
+              cell.type === 'current' && cell.day === today && isCurrentMonth
                 ? 'bg-red-500 text-white font-bold'
-                : day
+                : cell.type === 'current'
                   ? 'text-white/80 hover:bg-white/10'
-                  : ''
+                  : 'text-white/20'
             }`}
           >
-            {day ?? ''}
+            {cell.day}
           </div>
         ))}
       </div>
