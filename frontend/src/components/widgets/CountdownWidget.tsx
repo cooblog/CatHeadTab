@@ -66,28 +66,28 @@ export const CountdownWidget: React.FC<CountdownWidgetProps> = ({ size, config }
 
   // Medium (2×2): days + hours/mins/secs + event name
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center select-none px-2 py-2 gap-1">
-      <span className="text-[11px] font-semibold text-white/90 truncate max-w-full">{eventName}</span>
+    <div className="w-full h-full flex flex-col items-center justify-center select-none px-3 py-3 gap-1.5">
+      <span className="text-sm font-semibold text-white/90 truncate max-w-full">{eventName}</span>
 
-      <div className="flex items-baseline gap-0.5">
-        <span className="text-[36px] font-extralight text-white leading-none">{timeLeft.days}</span>
-        <span className="text-[11px] text-white/50">{isZh ? '天' : 'days'}</span>
+      <div className="flex items-baseline gap-1">
+        <span className="text-[52px] font-[200] text-white leading-none tracking-tight">{timeLeft.days}</span>
+        <span className="text-base text-white/50">{isZh ? '天' : 'days'}</span>
       </div>
 
-      <div className="flex gap-3 mt-0.5">
+      <div className="flex gap-4 mt-1">
         {[
           { value: timeLeft.hours, label: isZh ? '时' : 'hrs' },
           { value: timeLeft.minutes, label: isZh ? '分' : 'min' },
           { value: timeLeft.seconds, label: isZh ? '秒' : 'sec' },
         ].map(({ value, label }) => (
           <div key={label} className="flex flex-col items-center">
-            <span className="text-[14px] font-light text-white/80">{String(value).padStart(2, '0')}</span>
-            <span className="text-[8px] text-white/40">{label}</span>
+            <span className="text-xl font-light text-white/80">{String(value).padStart(2, '0')}</span>
+            <span className="text-[10px] text-white/40">{label}</span>
           </div>
         ))}
       </div>
 
-      <div className="mt-0.5 px-2 py-0.5 rounded-full bg-white/[0.08] text-[9px] text-white/50">
+      <div className="mt-1 px-3 py-1 rounded-full bg-white/[0.08] text-xs text-white/50">
         {timeLeft.isPast ? (isZh ? '🏁 已过去' : '🏁 Passed') : (isZh ? '⏳ 倒计时' : '⏳ Counting')}
       </div>
     </div>

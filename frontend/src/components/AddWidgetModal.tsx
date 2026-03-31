@@ -3,13 +3,12 @@ import { useTranslation } from '../i18n/useTranslation';
 import type { TranslationKeys } from '../i18n/useTranslation';
 import type { WidgetType, WidgetSize, WidgetConfig } from '../store/layoutStore';
 import { useLayoutStore, WIDGET_SIZE_MAP } from '../store/layoutStore';
-import { CalendarWidget } from './widgets/CalendarWidget';
-import { WeatherWidget } from './widgets/WeatherWidget';
-import { CountdownWidget } from './widgets/CountdownWidget';
 
 interface AddWidgetModalProps {
   onClose: () => void;
   pageIndex?: number;
+  /** When provided, the modal enters "edit" mode for this existing widget. */
+  editItem?: import('../store/layoutStore').DesktopItem | null;
 }
 
 interface WidgetOption {
@@ -44,20 +43,31 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   },
 ];
 
-export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex }) => {
+export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
   const { t, language } = useTranslation();
   const isZh = language === 'zh';
   const addWidget = useLayoutStore(s => s.addWidget);
+  const updateWidgetConfig = useLayoutStore(s => s.updateWidgetConfig);
+  const updateDesktopItem = useLayoutStore(s => s.updateDesktopItem);
 
-  const [selectedType, setSelectedType] = useState<WidgetType | null>(null);
-  const [selectedSize, setSelectedSize] = useState<WidgetSize>('medium');
+  const isEditMode = !!editItem && editItem.type === 'widget';
+
+  // Pre-populate from editItem when in edit mode
+  const [selectedType, setSelectedType] = useState<WidgetType | null>(
+    isEditMode ? (editItem.widgetType ?? null) : null
+  );
+  const [selectedSize, setSelectedSize] = useState<WidgetSize>(
+    isEditMode ? (editItem.widgetSize ?? 'medium') : 'medium'
+  );
 
   // Countdown config
-  const [eventName, setEventName] = useState('');
-  const [targetDate, setTargetDate] = useState('');
+  const editCountdown = isEditMode && editItem.widgetConfig?.widgetType === 'countdown' ? editItem.widgetConfig : null;
+  const [eventName, setEventName] = useState(editCountdown?.eventName ?? '');
+  const [targetDate, setTargetDate] = useState(editCountdown?.targetDate ?? '');
   // Weather config
-  const [weatherCity, setWeatherCity] = useState('');
-  const [weatherUnit, setWeatherUnit] = useState<'C' | 'F'>('C');
+  const editWeather = isEditMode && editItem.widgetConfig?.widgetType === 'weather' ? editItem.widgetConfig : null;
+  const [weatherCity, setWeatherCity] = useState(editWeather?.city ?? '');
+  const [weatherUnit, setWeatherUnit] = useState<'C' | 'F'>(editWeather?.unit ?? 'C');
 
   const selectedOption = WIDGET_OPTIONS.find(w => w.type === selectedType);
 
@@ -88,7 +98,14 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         return;
     }
 
-    addWidget(selectedType, selectedSize, config, pageIndex);
+    if (isEditMode) {
+      // Update existing widget
+      updateWidgetConfig(editItem.id, config);
+      updateDesktopItem(editItem.id, { widgetSize: selectedSize });
+    } else {
+      // Add new widget
+      addWidget(selectedType, selectedSize, config, pageIndex);
+    }
     onClose();
   };
 
@@ -102,18 +119,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
     return `${name} (${rows}×${cols})`;
   };
 
-  // Preview widget dimensions (scaled down)
-  const previewScale = 0.65;
-  const previewDims = (() => {
-    const { cols, rows } = WIDGET_SIZE_MAP[selectedSize];
-    // Cell=80, Gap=20 (preview approximation)
-    const cell = 56;
-    const gap = 8;
-    return {
-      width: cols * cell + (cols - 1) * gap,
-      height: rows * cell + (rows - 1) * gap,
-    };
-  })();
+
+
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-lg animate-fadeIn" onClick={onClose}>
@@ -124,7 +131,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         {/* Header */}
         <div className="px-6 pt-6 pb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">
-            {selectedType ? t(selectedOption!.labelKey) : t('widget.addWidget')}
+            {isEditMode ? t('widget.editWidget') : (selectedType ? t(selectedOption!.labelKey) : t('widget.addWidget'))}
           </h2>
           <button
             onClick={onClose}
@@ -156,13 +163,15 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         ) : (
           /* Step 2: Configure widget */
           <div className="px-6 pb-6 space-y-4">
-            <button
-              onClick={() => setSelectedType(null)}
-              className="flex items-center gap-1.5 text-[12px] text-white/50 hover:text-white/80 transition-colors mb-2"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
-              {t('widget.backToList')}
-            </button>
+            {!isEditMode && (
+              <button
+                onClick={() => setSelectedType(null)}
+                className="flex items-center gap-1.5 text-[12px] text-white/50 hover:text-white/80 transition-colors mb-2"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+                {t('widget.backToList')}
+              </button>
+            )}
 
             {/* Size selector */}
             <div>
@@ -242,26 +251,19 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
               </div>
             )}
 
-            {/* Preview */}
-            <div>
-              <label className="text-[12px] text-white/50 uppercase tracking-wider mb-2 block">{t('widget.preview')}</label>
-              <div className="flex justify-center py-3">
-                <div
-                  className="rounded-[16px] bg-white/[0.08] backdrop-blur-2xl border border-white/[0.15] shadow-lg overflow-hidden"
-                  style={{
-                    width: previewDims.width * previewScale,
-                    height: previewDims.height * previewScale,
-                    transform: `scale(${previewScale})`,
-                    transformOrigin: 'center center',
-                  }}
-                >
-                  <div style={{ width: previewDims.width, height: previewDims.height, transform: `scale(${1 / previewScale})`, transformOrigin: 'top left' }}>
-                    {selectedType === 'calendar' && <CalendarWidget size={selectedSize} />}
-                    {selectedType === 'weather' && <WeatherWidget size={selectedSize} config={{ widgetType: 'weather', city: weatherCity || undefined, unit: weatherUnit }} />}
-                    {selectedType === 'countdown' && <CountdownWidget size={selectedSize} config={{ widgetType: 'countdown', targetDate: targetDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), eventName: eventName || (isZh ? '示例事件' : 'Sample Event') }} />}
-                  </div>
-                </div>
-              </div>
+            {/* Widget description hint (replaces the useless scaled-down preview) */}
+            <div className="rounded-2xl bg-white/[0.05] border border-white/[0.08] p-4">
+              <p className="text-[13px] text-white/60 leading-relaxed">
+                {selectedType === 'calendar' && (isZh
+                  ? '📅 日历小组件会自动显示当前月份，支持翻页浏览和高亮今天。小尺寸显示精简日期，中尺寸显示完整月历。'
+                  : '📅 The calendar widget automatically shows the current month with page navigation and today highlight. Small size shows a compact date, medium shows the full month grid.')}
+                {selectedType === 'weather' && (isZh
+                  ? '🌤️ 天气小组件会根据你的城市实时显示天气信息。小尺寸显示温度和天气图标，中尺寸额外显示湿度、风速等详情。'
+                  : '🌤️ The weather widget shows real-time weather for your city. Small size displays temperature and icon, medium size adds humidity, wind speed and more details.')}
+                {selectedType === 'countdown' && (isZh
+                  ? '⏱️ 倒计时小组件会显示距离目标日期的剩余天数。小尺寸显示天数和事件名，中尺寸额外显示时分秒倒计时。'
+                  : '⏱️ The countdown widget shows days remaining until your target date. Small size shows days and event name, medium size adds hours, minutes and seconds.')}
+              </p>
             </div>
 
             {/* Add button */}
@@ -274,7 +276,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   : 'bg-white/20 text-white hover:bg-white/30 active:scale-[0.98]'
               }`}
             >
-              {t('widget.add')}
+              {isEditMode ? t('widget.save') : t('widget.add')}
             </button>
           </div>
         )}

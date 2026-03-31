@@ -272,7 +272,6 @@ export const zh = {
   'widget.countdown': '倒计时',
   'widget.countdownDesc': '重要日期倒计时',
   'widget.size': '尺寸',
-  'widget.preview': '预览',
   'widget.add': '添加小组件',
   'widget.backToList': '返回',
   'widget.eventName': '事件名称',
@@ -280,6 +279,7 @@ export const zh = {
   'widget.city': '城市',
   'widget.unit': '温度单位',
   'widget.editWidget': '编辑小组件',
+  'widget.save': '保存',
   'widget.deleteWidget': '移除小组件',
   'desktop.addWidget': '添加小组件',
 };

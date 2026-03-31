@@ -65,7 +65,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     setViewMonth(now.getMonth());
   };
 
-  // Small (1×2): horizontal bar — icon + date + day of week
+  // Small (1×2): horizontal bar — large date + day of week + month
   if (size === 'small') {
     const dayOfWeek = isZh
       ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()]
@@ -74,11 +74,11 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
       ? `${now.getMonth() + 1}月${today}日`
       : now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
     return (
-      <div className="w-full h-full flex items-center justify-center gap-2 select-none px-3">
-        <span className="text-2xl font-extralight text-white leading-none">{today}</span>
-        <div className="flex flex-col gap-0">
-          <span className="text-[10px] font-semibold text-red-400 uppercase leading-tight">{dayOfWeek}</span>
-          <span className="text-[9px] font-medium text-white/60 leading-tight">{monthShort}</span>
+      <div className="w-full h-full flex items-center justify-center gap-3 select-none px-4">
+        <span className="text-5xl font-[200] text-white leading-none tracking-tight">{today}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-base font-bold text-red-400 uppercase leading-tight">{dayOfWeek}</span>
+          <span className="text-sm font-medium text-white/60 leading-tight">{monthShort}</span>
         </div>
       </div>
     );

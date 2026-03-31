@@ -145,7 +145,7 @@ const DesktopIconContent: React.FC<{
                 ? 'shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
                 : ''
             }`
-          : `bg-white/[0.12] backdrop-blur-xl border shadow-lg flex items-center justify-center ${
+          : `${isFolder ? 'bg-white/[0.06]' : 'bg-white/[0.12] backdrop-blur-xl'} border shadow-lg flex items-center justify-center ${
               isDraggedOver
                 ? 'scale-125 bg-white/30 border-white/50 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
                 : isOverlay
@@ -156,7 +156,7 @@ const DesktopIconContent: React.FC<{
         {isFolder ? (
           <div className="grid grid-cols-3 grid-rows-3 gap-1 p-2.5 w-full h-full">
             {miniIcons.map((url, i) => (
-              <div key={`${i}-${url}`} className="rounded-[3px] overflow-hidden bg-white/10 flex items-center justify-center">
+              <div key={`${i}-${url}`} className="rounded-[3px] overflow-hidden bg-white/[0.04] flex items-center justify-center">
                 <img 
                   src={getSmartFaviconUrl(url, 64)}
                   className="w-[88%] h-[88%] object-contain"
@@ -682,6 +682,8 @@ export const Desktop: React.FC = () => {
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
+  // Edit Widget state
+  const [editingWidget, setEditingWidget] = useState<DesktopItem | null>(null);
 
   // Folder rename state
   const [isEditingFolderName, setIsEditingFolderName] = useState(false);
@@ -844,6 +846,11 @@ export const Desktop: React.FC = () => {
     } else if (item.type === 'app') {
       if (item.id === 'app-bookmarks') {
         setIsBookmarkBrowserOpen(true);
+      }
+    } else if (item.type === 'widget') {
+      // Calendar has no config — skip the edit modal
+      if (item.widgetType !== 'calendar') {
+        setEditingWidget(item);
       }
     }
   };
@@ -1949,6 +1956,7 @@ export const Desktop: React.FC = () => {
       {isBookmarkBrowserOpen && <BookmarkBrowser onClose={() => setIsBookmarkBrowserOpen(false)} />}
       {isExploreOpen && <ExploreWorld onClose={() => setIsExploreOpen(false)} />}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
+      {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 
         onClose={() => { setIsAddModalOpen(false); setEditingItem(null); setAddToFolderId(undefined); setAddToPageIndex(undefined); }}
         editItem={editingItem}
@@ -1964,18 +1972,31 @@ export const Desktop: React.FC = () => {
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[180px] animate-scaleIn"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
           >
-            {/* Edit button — not for app or widget types */}
-            {contextMenu.item.type !== 'app' && contextMenu.item.type !== 'widget' && (
-              <>
-                <button 
-                  className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
-                  onClick={() => handleEdit(contextMenu.item)}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                  {t('desktop.editItem')}
-                </button>
-                <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
-              </>
+            {/* Edit button — not for app types, not for calendar widget (no config) */}
+            {contextMenu.item.type !== 'app' && (
+              contextMenu.item.type === 'widget' ? (
+                // Only show edit for non-calendar widgets (calendar has no configuration)
+                contextMenu.item.widgetType !== 'calendar' ? (
+                  <button 
+                    className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+                    onClick={() => { setEditingWidget(contextMenu.item); setContextMenu(null); }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                    {t('widget.editWidget')}
+                  </button>
+                ) : null
+              ) : (
+                <>
+                  <button 
+                    className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+                    onClick={() => handleEdit(contextMenu.item)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                    {t('desktop.editItem')}
+                  </button>
+                  <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
+                </>
+              )
             )}
             
             {/* Move to/from Dock — not for widget types */}

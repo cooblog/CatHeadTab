@@ -272,7 +272,6 @@ export const en = {
   'widget.countdown': 'Countdown',
   'widget.countdownDesc': 'Countdown to an important date',
   'widget.size': 'Size',
-  'widget.preview': 'Preview',
   'widget.add': 'Add Widget',
   'widget.backToList': 'Back',
   'widget.eventName': 'Event Name',
@@ -280,6 +279,7 @@ export const en = {
   'widget.city': 'City',
   'widget.unit': 'Temperature Unit',
   'widget.editWidget': 'Edit Widget',
+  'widget.save': 'Save',
   'widget.deleteWidget': 'Remove Widget',
   'desktop.addWidget': 'Add Widget',
 };
