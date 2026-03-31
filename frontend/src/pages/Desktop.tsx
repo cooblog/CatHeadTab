@@ -499,57 +499,7 @@ const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: Re
   );
 };
 
-// === Droppable zone: "Move out of folder" ===
-// Shown at the bottom of the folder overlay when the user starts dragging an item
-// inside the folder. Dropping here moves the item back to the desktop page.
-const FOLDER_DROP_OUT_ID = '__folder-drop-out__';
 
-const FolderDropOutZone: React.FC<{ isActive: boolean }> = ({ isActive }) => {
-  const { isOver, setNodeRef } = useDroppable({
-    id: FOLDER_DROP_OUT_ID,
-    data: { isFolderDropOut: true },
-  });
-  const { t } = useTranslation();
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`
-        transition-[max-height,opacity,margin] duration-300 ease-out overflow-hidden
-        ${isActive ? 'max-h-24 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
-      `}
-    >
-      <div
-        className={`
-          flex items-center justify-center gap-2 py-4 px-6 mx-4 sm:mx-8 rounded-2xl
-          border-2 border-dashed transition-[border-color,background-color,transform,box-shadow] duration-200
-          ${isOver
-            ? 'border-white/60 bg-white/20 scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.15)]'
-            : 'border-white/20 bg-white/[0.06]'
-          }
-        `}
-      >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`transition-colors duration-200 ${isOver ? 'text-white' : 'text-white/40'}`}
-        >
-          <path d="M12 5v14" />
-          <path d="m19 12-7 7-7-7" />
-        </svg>
-        <span className={`text-sm font-medium transition-colors duration-200 ${isOver ? 'text-white' : 'text-white/40'}`}>
-          {t('desktop.dropOutOfFolder')}
-        </span>
-      </div>
-    </div>
-  );
-};
 
 
 // === Search Modes ===
@@ -604,7 +554,7 @@ function createFolderAwareCollision(
     // they should not be subject to distance filtering or debounce.
     const isSpecialZone = (id: string | number) => {
       const idStr = String(id);
-      return idStr === FOLDER_DROP_OUT_ID || idStr.startsWith(PAGE_DROP_PREFIX);
+      return idStr.startsWith(PAGE_DROP_PREFIX);
     };
     const specialCollisions = collisions.filter((c) => isSpecialZone(c.id));
 
@@ -1131,18 +1081,7 @@ export const Desktop: React.FC = () => {
     const sourceId = active.id as string;
     const targetId = over?.id as string | null;
 
-    // --- Drop onto the "move out of folder" zone ---
-    if (targetId === FOLDER_DROP_OUT_ID && openedFolder) {
-      const isSourceInFolder = openedFolder.children?.some(c => c.id === sourceId);
-      if (isSourceInFolder) {
-        moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
-        setActiveId(null);
-        setFolderDropTargetId(null);
-        lastFolderOverRef.current = null;
-        setIsFolderDropPending(false);
-        return;
-      }
-    }
+
 
     // --- Drop onto a page blank area ---
     // If the item was dropped on the page droppable zone (not on a specific icon),
@@ -1221,6 +1160,12 @@ export const Desktop: React.FC = () => {
           reorderInsideFolder(openedFolder.id, sourceId, targetId);
         } else if (isSourceInFolder && !isTargetInFolder) {
           moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
+          // If the folder is now empty, delete it
+          const remainingChildren = openedFolder.children?.filter(c => c.id !== sourceId) ?? [];
+          if (remainingChildren.length === 0) {
+            removeDesktopItem(openedFolder.id);
+            setOpenedFolder(null);
+          }
         }
       } else {
         flipManager.snapshot(); // Capture positions before reorder for FLIP animation
@@ -1236,7 +1181,7 @@ export const Desktop: React.FC = () => {
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
-  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout, flipManager]);
+  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, removeDesktopItem, reorderDesktopItem, currentPage, layout, flipManager]);
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
@@ -1881,7 +1826,7 @@ export const Desktop: React.FC = () => {
           onDragStart={(e) => e.preventDefault()}
           onSelectCapture={(e) => e.preventDefault()}
         >
-          <div className="w-full max-w-5xl flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="w-auto max-w-[90vw] flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             {/* Folder name - outside the rounded container, at top-left */}
             <div className="pl-6 sm:pl-10 pb-5 shrink-0">
               {isEditingFolderName ? (
@@ -1959,9 +1904,8 @@ export const Desktop: React.FC = () => {
                 </div>
               </SortableContext>
             </div>
-            {/* Drop-out zone: visible only when dragging a folder item */}
-            <FolderDropOutZone isActive={!!activeId && !!openedFolder?.children?.some(c => c.id === activeId)} />
             </div>
+
           </div>
         </div>
       )}
