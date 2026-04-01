@@ -137,7 +137,7 @@ const DesktopIconContent: React.FC<{
   
   return (
     <div className={`flex select-none flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
-      <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-[transform,box-shadow] duration-200 relative ${
+      <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined, isolation: 'isolate', willChange: 'transform' }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-[transform,box-shadow] duration-200 relative ${
         hasImageIcon
           ? `shadow-lg ${isDraggedOver
               ? 'scale-125 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
@@ -145,7 +145,7 @@ const DesktopIconContent: React.FC<{
                 ? 'shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
                 : ''
             }`
-          : `${isFolder ? 'bg-white/[0.06]' : 'bg-white/[0.12] backdrop-blur-xl'} border shadow-lg flex items-center justify-center ${
+          : `${isFolder ? 'bg-white/[0.06]' : 'bg-white/[0.08]'} border shadow-lg flex items-center justify-center ${
               isDraggedOver
                 ? 'scale-125 bg-white/30 border-white/50 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
                 : isOverlay
@@ -377,6 +377,7 @@ const SortableDesktopIcon: React.FC<{
     style = {
       opacity: isDragging ? 0.3 : 1,
       zIndex: isDragging ? 0 : 1,
+      isolation: 'isolate',
     };
   } else {
     // Dock / folder grid: use dnd-kit's transform (uniform item sizes → accurate)
@@ -450,6 +451,7 @@ const SortableWidget: React.FC<{
     gridRow: `span ${rows}`,
     justifySelf: 'stretch',
     alignSelf: 'stretch',
+    isolation: 'isolate',
   };
 
   return (
@@ -472,7 +474,7 @@ const SortableWidget: React.FC<{
         onContextMenu?.(e, item);
       }}
     >
-      <div className="w-full h-full transition-transform duration-200 group-hover:scale-[1.02] group-active:scale-[0.98]">
+      <div className="w-full h-full transition-transform duration-200 group-hover:scale-[1.05] group-active:scale-[0.98]">
         <DesktopWidget item={item} />
       </div>
     </div>
@@ -2025,7 +2027,10 @@ export const Desktop: React.FC = () => {
             {/* Delete — for non-app types (includes widget) */}
             {contextMenu.item.type !== 'app' && (
               <>
-                <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
+                {/* Only show divider when there are items above (edit or move-to-dock buttons) */}
+                {(contextMenu.item.type !== 'widget' || (contextMenu.item.type === 'widget' && contextMenu.item.widgetType !== 'calendar')) && (
+                  <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
+                )}
                 <button 
                   className="w-full text-left px-4 py-2.5 text-[13px] text-red-400 hover:bg-red-500/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
                   onClick={() => handleDelete(contextMenu.item)}

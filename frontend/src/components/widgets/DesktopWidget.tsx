@@ -41,9 +41,12 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
 
   return (
     <div
-      className={`widget-container relative w-full h-full overflow-hidden rounded-[20px] bg-white/[0.08] backdrop-blur-2xl border border-white/[0.15] shadow-[0_4px_24px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] transition-[transform,box-shadow] duration-300 ${
-        isOverlay ? 'shadow-[0_16px_50px_rgba(0,0,0,0.5)] scale-[1.02]' : 'hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:border-white/25'
+      className={`widget-container relative w-full h-full overflow-hidden rounded-[20px] border border-white/[0.15] shadow-[0_4px_24px_rgba(0,0,0,0.3)] ${
+        isOverlay ? 'shadow-[0_16px_50px_rgba(0,0,0,0.5)] scale-[1.02]' : ''
       }`}
+      style={{
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0.15) 100%)',
+      }}
     >
       {renderWidget()}
     </div>

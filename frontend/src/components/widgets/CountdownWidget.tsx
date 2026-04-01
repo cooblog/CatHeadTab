@@ -49,16 +49,18 @@ export const CountdownWidget: React.FC<CountdownWidgetProps> = ({ size, config }
   // Small (1×2): horizontal bar — days + event name
   if (size === 'small') {
     return (
-      <div className="w-full h-full flex items-center justify-center gap-2 select-none px-3">
-        <div className="flex items-baseline gap-0.5 shrink-0">
-          <span className="text-xl font-light text-white leading-none">{timeLeft.days}</span>
-          <span className="text-[9px] text-white/50">{isZh ? '天' : 'd'}</span>
+      <div className="w-full h-full flex items-center justify-center gap-3 select-none px-4">
+        <div className="flex items-baseline gap-1 shrink-0">
+          <span className="text-4xl font-light text-white leading-none">{timeLeft.days}</span>
+          <span className="text-sm text-white/50">{isZh ? '天' : 'd'}</span>
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-[9px] font-semibold text-orange-400 uppercase leading-tight truncate">
-            {timeLeft.isPast ? (isZh ? '已过' : 'PAST') : (isZh ? '还有' : 'IN')}
+          <span className="text-xs text-white/50 truncate">{eventName}</span>
+          <span className="text-xs font-semibold text-orange-400 uppercase leading-tight truncate">
+            {timeLeft.isPast
+              ? (isZh ? '已过去' : 'PASSED')
+              : (isZh ? '倒计时' : 'TO GO')}
           </span>
-          <span className="text-[9px] text-white/50 truncate">{eventName}</span>
         </div>
       </div>
     );

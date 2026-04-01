@@ -120,11 +120,53 @@ async function reverseGeocode(lat: number, lon: number, lang?: string): Promise<
   }
 }
 
+/** Cache duration: 30 minutes in milliseconds. */
+const WEATHER_CACHE_TTL = 30 * 60 * 1000;
+
+/** Build a deterministic cache key based on widget config. */
+function weatherCacheKey(city?: string, unit?: string, lang?: string): string {
+  return `weather_cache_${city || '_auto'}_${unit || 'C'}_${lang || 'en'}`;
+}
+
+interface WeatherCache {
+  data: WeatherData;
+  timestamp: number;
+}
+
+/** Read cached weather from localStorage. Returns data even if stale, with a fresh flag. */
+function readWeatherCache(key: string): { data: WeatherData; fresh: boolean } | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const cached: WeatherCache = JSON.parse(raw);
+    const fresh = Date.now() - cached.timestamp < WEATHER_CACHE_TTL;
+    return { data: cached.data, fresh };
+  } catch {
+    // Corrupted cache — ignore
+  }
+  return null;
+}
+
+/** Write weather data to localStorage cache. */
+function writeWeatherCache(key: string, data: WeatherData): void {
+  try {
+    const cached: WeatherCache = { data, timestamp: Date.now() };
+    localStorage.setItem(key, JSON.stringify(cached));
+  } catch {
+    // Storage full or unavailable — ignore
+  }
+}
+
 export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const lang = isZh ? 'zh' : 'en';
+  const cacheKey = weatherCacheKey(config?.city, config?.unit, lang);
+
+  // Attempt to load cached data for instant display (even if stale)
+  const initialCache = readWeatherCache(cacheKey);
+  const [weather, setWeather] = useState<WeatherData | null>(initialCache?.data ?? null);
+  const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
 
@@ -132,12 +174,19 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
     if (fetchedRef.current) return;
     fetchedRef.current = true;
 
+    const cached = readWeatherCache(cacheKey);
+
+    // If cache is fresh, no need to refetch
+    if (cached?.fresh) return;
+
     const fetchWeather = async () => {
       try {
-        setLoading(true);
+        // Only show spinner if we have absolutely no cached data
+        if (!cached) {
+          setLoading(true);
+        }
         setError(null);
 
-        const lang = isZh ? 'zh' : 'en';
         const { lat, lon, cityName } = await getCoordinates(config?.city, lang);
 
         // Build Open-Meteo API URL
@@ -156,7 +205,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
         const weatherCode = current.weather_code ?? 0;
         const wmoInfo = getWmoInfo(weatherCode, isDay);
 
-        setWeather({
+        const weatherData: WeatherData = {
           temp: Math.round(current.temperature_2m),
           description: isZh ? wmoInfo.zh : wmoInfo.en,
           descriptionEn: wmoInfo.en,
@@ -168,10 +217,16 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
           high: Math.round(daily?.temperature_2m_max?.[0] ?? 0),
           low: Math.round(daily?.temperature_2m_min?.[0] ?? 0),
           isDay,
-        });
+        };
+
+        setWeather(weatherData);
+        writeWeatherCache(cacheKey, weatherData);
       } catch (err) {
         console.error('Weather fetch error:', err);
-        setError(isZh ? '无法获取天气' : 'Unable to fetch weather');
+        // Only show error if we have no cached fallback at all
+        if (!cached) {
+          setError(isZh ? '无法获取天气' : 'Unable to fetch weather');
+        }
       } finally {
         setLoading(false);
       }
@@ -202,49 +257,47 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
   // Small (1×2): horizontal bar — icon + temp + city
   if (size === 'small') {
     return (
-      <div className="w-full h-full flex items-center justify-center gap-2.5 select-none px-3">
-        <span className="text-xl leading-none">{weather.icon}</span>
-        <span className="text-lg font-light text-white leading-none">{weather.temp}{unitLabel}</span>
-        <span className="text-[9px] text-white/50 truncate">{weather.city}</span>
+      <div className="w-full h-full flex items-center justify-center gap-3 select-none px-4">
+        <span className="text-3xl leading-none">{weather.icon}</span>
+        <span className="text-3xl font-light text-white leading-none">{weather.temp}{unitLabel}</span>
+        <span className="text-xs text-white/50 truncate">{weather.city}</span>
       </div>
     );
   }
 
-  // Medium (2×2): redesigned clean layout
+  // Medium (2×2): compact layout — no wasted space
   return (
-    <div className="w-full h-full flex flex-col select-none p-3.5 overflow-hidden">
+    <div className="w-full h-full flex flex-col justify-between select-none p-3.5 overflow-hidden">
       {/* Top: Large temp + icon */}
-      <div className="flex items-start justify-between mb-1">
+      <div className="flex items-start justify-between">
         <div className="flex flex-col">
-          <span className="text-[32px] font-extralight text-white leading-none tracking-tight">{weather.temp}{unitLabel}</span>
-          <span className="text-[11px] text-white/60 mt-0.5">{weather.description}</span>
+          <span className="text-[36px] font-[200] text-white leading-none tracking-tight">{weather.temp}{unitLabel}</span>
+          <span className="text-xs text-white/60 mt-1">{weather.description}</span>
+          <span className="text-[11px] text-white/40 mt-0.5 truncate">{weather.city}</span>
         </div>
-        <span className="text-[36px] leading-none mt-[-2px]">{weather.icon}</span>
+        <span className="text-[40px] leading-none mt-[-2px]">{weather.icon}</span>
       </div>
 
-      {/* City name */}
-      <span className="text-[10px] text-white/40 truncate mb-auto">{weather.city}</span>
-
       {/* Bottom: Key stats in a single row */}
-      <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-white/[0.06]">
+      <div className="flex items-center justify-between gap-1 pt-2 border-t border-white/[0.06]">
         <div className="flex flex-col items-center flex-1">
-          <span className="text-[8px] text-white/30 uppercase tracking-wider">{isZh ? '体感' : 'Feels'}</span>
-          <span className="text-[12px] text-white/80 font-light">{weather.feelsLike}°</span>
+          <span className="text-[9px] text-white/30 uppercase tracking-wider">{isZh ? '体感' : 'Feels'}</span>
+          <span className="text-sm text-white/80 font-light">{weather.feelsLike}°</span>
         </div>
         <div className="w-px h-5 bg-white/[0.08]" />
         <div className="flex flex-col items-center flex-1">
-          <span className="text-[8px] text-white/30 uppercase tracking-wider">{isZh ? '湿度' : 'Humid'}</span>
-          <span className="text-[12px] text-white/80 font-light">{weather.humidity}%</span>
+          <span className="text-[9px] text-white/30 uppercase tracking-wider">{isZh ? '湿度' : 'Humid'}</span>
+          <span className="text-sm text-white/80 font-light">{weather.humidity}%</span>
         </div>
         <div className="w-px h-5 bg-white/[0.08]" />
         <div className="flex flex-col items-center flex-1">
-          <span className="text-[8px] text-white/30 uppercase tracking-wider">H</span>
-          <span className="text-[12px] text-white/80 font-light">{weather.high}°</span>
+          <span className="text-[9px] text-white/30 uppercase tracking-wider">H</span>
+          <span className="text-sm text-white/80 font-light">{weather.high}°</span>
         </div>
         <div className="w-px h-5 bg-white/[0.08]" />
         <div className="flex flex-col items-center flex-1">
-          <span className="text-[8px] text-white/30 uppercase tracking-wider">L</span>
-          <span className="text-[12px] text-white/80 font-light">{weather.low}°</span>
+          <span className="text-[9px] text-white/30 uppercase tracking-wider">L</span>
+          <span className="text-sm text-white/80 font-light">{weather.low}°</span>
         </div>
       </div>
     </div>
