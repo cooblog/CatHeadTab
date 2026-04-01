@@ -46,20 +46,25 @@ export const CountdownWidget: React.FC<CountdownWidgetProps> = ({ size, config }
     return () => clearInterval(timer);
   }, [targetDate]);
 
-  // Small (1×2): horizontal bar — days + event name
+  // Small (1×2): horizontal bar — days left + details right
   if (size === 'small') {
     return (
-      <div className="w-full h-full flex items-center justify-center gap-3 select-none px-4">
+      <div className="w-full h-full flex items-center justify-center select-none px-5 gap-3">
+        {/* Left: large day count */}
         <div className="flex items-baseline gap-1 shrink-0">
-          <span className="text-4xl font-light text-white leading-none">{timeLeft.days}</span>
-          <span className="text-sm text-white/50">{isZh ? '天' : 'd'}</span>
+          <span className="text-[42px] font-[200] text-white leading-none">{timeLeft.days}</span>
+          <span className="text-[13px] text-white/40">{isZh ? '天' : 'd'}</span>
         </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-xs text-white/50 truncate">{eventName}</span>
-          <span className="text-xs font-semibold text-orange-400 uppercase leading-tight truncate">
+        {/* Right: event name + status + h/m/s */}
+        <div className="flex flex-col justify-center gap-[1px] min-w-0">
+          <span className="text-[13px] font-semibold text-white/85 leading-snug truncate">{eventName}</span>
+          <span className="text-[12px] font-semibold text-orange-400 leading-snug truncate">
             {timeLeft.isPast
               ? (isZh ? '已过去' : 'PASSED')
               : (isZh ? '倒计时' : 'TO GO')}
+          </span>
+          <span className="text-[11px] text-white/35 leading-snug tabular-nums">
+            {String(timeLeft.hours).padStart(2, '0')}:{String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}
           </span>
         </div>
       </div>

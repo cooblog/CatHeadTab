@@ -850,10 +850,7 @@ export const Desktop: React.FC = () => {
         setIsBookmarkBrowserOpen(true);
       }
     } else if (item.type === 'widget') {
-      // Calendar has no config — skip the edit modal
-      if (item.widgetType !== 'calendar') {
-        setEditingWidget(item);
-      }
+      setEditingWidget(item);
     }
   };
 
@@ -1974,19 +1971,16 @@ export const Desktop: React.FC = () => {
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[180px] animate-scaleIn"
             style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
           >
-            {/* Edit button — not for app types, not for calendar widget (no config) */}
+            {/* Edit button — not for app types */}
             {contextMenu.item.type !== 'app' && (
               contextMenu.item.type === 'widget' ? (
-                // Only show edit for non-calendar widgets (calendar has no configuration)
-                contextMenu.item.widgetType !== 'calendar' ? (
-                  <button 
-                    className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
-                    onClick={() => { setEditingWidget(contextMenu.item); setContextMenu(null); }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                    {t('widget.editWidget')}
-                  </button>
-                ) : null
+                <button 
+                  className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+                  onClick={() => { setEditingWidget(contextMenu.item); setContextMenu(null); }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                  {t('widget.editWidget')}
+                </button>
               ) : (
                 <>
                   <button 
@@ -2028,9 +2022,7 @@ export const Desktop: React.FC = () => {
             {contextMenu.item.type !== 'app' && (
               <>
                 {/* Only show divider when there are items above (edit or move-to-dock buttons) */}
-                {(contextMenu.item.type !== 'widget' || (contextMenu.item.type === 'widget' && contextMenu.item.widgetType !== 'calendar')) && (
-                  <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
-                )}
+                <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
                 <button 
                   className="w-full text-left px-4 py-2.5 text-[13px] text-red-400 hover:bg-red-500/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
                   onClick={() => handleDelete(contextMenu.item)}

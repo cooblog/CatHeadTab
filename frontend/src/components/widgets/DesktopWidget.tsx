@@ -45,7 +45,7 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         isOverlay ? 'shadow-[0_16px_50px_rgba(0,0,0,0.5)] scale-[1.02]' : ''
       }`}
       style={{
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0.15) 100%)',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0.2) 100%)',
       }}
     >
       {renderWidget()}

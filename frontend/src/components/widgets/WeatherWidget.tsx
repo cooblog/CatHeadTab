@@ -168,16 +168,20 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
   const [weather, setWeather] = useState<WeatherData | null>(initialCache?.data ?? null);
   const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
+  const lastCacheKeyRef = useRef(cacheKey);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
+    const isConfigChange = lastCacheKeyRef.current !== cacheKey;
+    lastCacheKeyRef.current = cacheKey;
 
     const cached = readWeatherCache(cacheKey);
 
-    // If cache is fresh, no need to refetch
-    if (cached?.fresh) return;
+    // If cache is fresh and config didn't change, no need to refetch
+    if (cached?.fresh && !isConfigChange) {
+      // Update state if we have fresher cached data
+      if (cached.data) setWeather(cached.data);
+      return;
+    }
 
     const fetchWeather = async () => {
       try {
@@ -254,20 +258,28 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
     );
   }
 
-  // Small (1×2): horizontal bar — icon + temp + city
+  // Small (1×2): horizontal layout — icon+temp left, details right
   if (size === 'small') {
     return (
-      <div className="w-full h-full flex items-center justify-center gap-3 select-none px-4">
-        <span className="text-3xl leading-none">{weather.icon}</span>
-        <span className="text-3xl font-light text-white leading-none">{weather.temp}{unitLabel}</span>
-        <span className="text-xs text-white/50 truncate">{weather.city}</span>
+      <div className="w-full h-full flex items-center justify-center select-none px-4 gap-3">
+        {/* Left: icon + temperature */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[26px] leading-none">{weather.icon}</span>
+          <span className="text-[26px] font-[200] text-white leading-none">{weather.temp}{unitLabel}</span>
+        </div>
+        {/* Right: city + description + H/L */}
+        <div className="flex flex-col justify-center gap-[1px] min-w-0">
+          <span className="text-[13px] font-semibold text-white/85 leading-snug truncate">{weather.city}</span>
+          <span className="text-[12px] text-white/50 leading-snug truncate">{isZh ? weather.description : weather.descriptionEn}</span>
+          <span className="text-[11px] text-white/35 leading-snug">{weather.low}~{weather.high}°</span>
+        </div>
       </div>
     );
   }
 
   // Medium (2×2): compact layout — no wasted space
   return (
-    <div className="w-full h-full flex flex-col justify-between select-none p-3.5 overflow-hidden">
+    <div className="w-full h-full flex flex-col justify-center select-none p-3.5 overflow-hidden gap-3">
       {/* Top: Large temp + icon */}
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
@@ -291,13 +303,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
         </div>
         <div className="w-px h-5 bg-white/[0.08]" />
         <div className="flex flex-col items-center flex-1">
-          <span className="text-[9px] text-white/30 uppercase tracking-wider">H</span>
-          <span className="text-sm text-white/80 font-light">{weather.high}°</span>
-        </div>
-        <div className="w-px h-5 bg-white/[0.08]" />
-        <div className="flex flex-col items-center flex-1">
-          <span className="text-[9px] text-white/30 uppercase tracking-wider">L</span>
-          <span className="text-sm text-white/80 font-light">{weather.low}°</span>
+          <span className="text-[9px] text-white/30 uppercase tracking-wider">{isZh ? '温差' : 'Range'}</span>
+          <span className="text-sm text-white/80 font-light">{weather.low}~{weather.high}°</span>
         </div>
       </div>
     </div>

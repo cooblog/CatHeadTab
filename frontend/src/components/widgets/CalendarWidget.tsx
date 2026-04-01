@@ -195,7 +195,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     setViewMonth(now.getMonth());
   };
 
-  // Small (1×2): horizontal bar — large date + month/weekday/lunar
+  // Small (1×2): horizontal bar — large date + details
   if (size === 'small') {
     const dayOfWeek = isZh
       ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()]
@@ -210,12 +210,14 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
       : now.toLocaleDateString('en-US', { weekday: 'long' });
 
     return (
-      <div className="w-full h-full flex items-center justify-center gap-3.5 select-none px-4">
-        <span className="text-6xl font-[200] text-white leading-none tracking-tight">{today}</span>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-bold text-red-400 uppercase leading-tight">{monthText}</span>
-          <span className="text-base font-semibold text-white/80 leading-tight">{dayOfWeek}</span>
-          <span className="text-xs text-white/45 leading-tight">{lunarText}</span>
+      <div className="w-full h-full flex items-center justify-center select-none px-5 gap-3">
+        {/* Left: large date number */}
+        <span className="text-[48px] font-[200] text-white leading-none tracking-tight shrink-0">{today}</span>
+        {/* Right: month + weekday + lunar stacked */}
+        <div className="flex flex-col justify-center gap-[1px] min-w-0">
+          <span className="text-[15px] font-bold text-red-400 uppercase leading-snug tracking-wide">{monthText}</span>
+          <span className="text-[15px] font-semibold text-white/85 leading-snug">{dayOfWeek}</span>
+          <span className="text-[12px] text-white/40 leading-snug truncate">{lunarText}</span>
         </div>
       </div>
     );

@@ -138,12 +138,6 @@ export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange, classNa
     });
   }, []);
 
-  const selectDate = (day: number) => {
-    const dateStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
-    onChange(dateStr);
-    setOpen(false);
-  };
-
   const goToday = () => {
     setViewYear(today.getFullYear());
     setViewMonth(today.getMonth());
