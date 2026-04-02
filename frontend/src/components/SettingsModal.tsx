@@ -1268,7 +1268,11 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
             <img
               src={wpPreviewItem.fullUrl}
               alt={`Preview ${wpPreviewItem.id}`}
-              className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+              width={wpPreviewItem.width}
+              height={wpPreviewItem.height}
+              style={{ aspectRatio: `${wpPreviewItem.width} / ${wpPreviewItem.height}` }}
+              className="max-w-full max-h-full rounded-lg shadow-2xl object-contain opacity-0 transition-opacity duration-300"
+              onLoad={e => { (e.target as HTMLImageElement).classList.remove('opacity-0'); }}
             />
           </div>
 
@@ -1323,8 +1327,9 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           <img
             src={currentPreviewUrl}
             alt="Wallpaper fullscreen preview"
-            className="max-w-[95vw] max-h-[95vh] rounded-lg shadow-2xl object-contain"
+            className="max-w-[95vw] max-h-[95vh] rounded-lg shadow-2xl object-contain opacity-0 transition-opacity duration-300"
             onClick={e => e.stopPropagation()}
+            onLoad={e => { (e.target as HTMLImageElement).classList.remove('opacity-0'); }}
           />
         </div>
       )}
@@ -1360,7 +1365,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
               <img
                 src={localPreview.url}
                 alt={localPreview.name}
-                className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+                className="max-w-full max-h-full rounded-lg shadow-2xl object-contain opacity-0 transition-opacity duration-300"
+                onLoad={e => { (e.target as HTMLImageElement).classList.remove('opacity-0'); }}
               />
             )}
           </div>

@@ -1999,6 +1999,13 @@ export const Desktop: React.FC = () => {
         editItem={editingItem}
         parentFolderId={addToFolderId}
         pageIndex={addToPageIndex}
+        onSwitchToWidget={() => {
+          setIsAddModalOpen(false);
+          setEditingItem(null);
+          setAddToFolderId(undefined);
+          setAddToPageIndex(undefined);
+          setIsAddWidgetOpen(true);
+        }}
       />}
 
       {/* Context Menu */}

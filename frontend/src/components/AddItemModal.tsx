@@ -27,9 +27,11 @@ interface AddItemModalProps {
   editItem?: DesktopItem | null;
   parentFolderId?: string;
   pageIndex?: number;
+  /** Called when the user taps the "Widget" tab — parent should close this modal and open AddWidgetModal */
+  onSwitchToWidget?: () => void;
 }
 
-export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, parentFolderId, pageIndex }) => {
+export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, parentFolderId, pageIndex, onSwitchToWidget }) => {
   const { addDesktopItem, updateDesktopItem, checkDuplicate } = useLayoutStore();
   const { t } = useTranslation();
   const isEditing = !!editItem;
@@ -193,18 +195,27 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
               <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
                 <button 
                   type="button"
-                  className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                  className={`px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
                   onClick={() => setMode('link')}
                 >
                   🔗 {t('desktop.addLink')}
                 </button>
                 <button 
                   type="button"
-                  className={`px-5 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                  className={`px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
                   onClick={() => setMode('folder')}
                 >
                   📁 {t('desktop.addFolder')}
                 </button>
+                {onSwitchToWidget && (
+                  <button 
+                    type="button"
+                    className="px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all text-white/50 hover:text-white/80"
+                    onClick={onSwitchToWidget}
+                  >
+                    🧩 {t('desktop.addWidget')}
+                  </button>
+                )}
               </div>
             </div>
           )}
