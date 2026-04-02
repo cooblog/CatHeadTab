@@ -136,7 +136,7 @@ const DesktopIconContent: React.FC<{
   );
   
   return (
-    <div className={`flex select-none flex-col items-center ${isDock ? 'w-auto' : 'w-[72px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
+    <div className={`flex select-none flex-col items-center ${isDock ? 'w-auto' : 'w-[80px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
       <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined, isolation: 'isolate', willChange: 'transform' }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-[transform,box-shadow] duration-200 relative ${
         hasImageIcon
           ? `shadow-lg ${isDraggedOver
@@ -481,6 +481,27 @@ const SortableWidget: React.FC<{
   );
 };
 
+// === Droppable zone: folder overlay background (catch drops outside folder content) ===
+const FOLDER_DROP_OUT_ID = '__folder-drop-out';
+const FolderDropOutZone: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({ children, onClick }) => {
+  const { setNodeRef } = useDroppable({
+    id: FOLDER_DROP_OUT_ID,
+    data: { isFolderDropOut: true },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className="fixed inset-0 z-50 flex select-none items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
+      onClick={onClick}
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
+      onSelectCapture={(e) => e.preventDefault()}
+    >
+      {children}
+    </div>
+  );
+};
+
 // === Droppable zone: page background (catch drops on blank areas) ===
 const PAGE_DROP_PREFIX = '__page-drop-';
 const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: React.ReactNode }> = ({ pageIdx, totalPages, children }) => {
@@ -556,7 +577,7 @@ function createFolderAwareCollision(
     // they should not be subject to distance filtering or debounce.
     const isSpecialZone = (id: string | number) => {
       const idStr = String(id);
-      return idStr.startsWith(PAGE_DROP_PREFIX);
+      return idStr.startsWith(PAGE_DROP_PREFIX) || idStr === FOLDER_DROP_OUT_ID;
     };
     const specialCollisions = collisions.filter((c) => isSpecialZone(c.id));
 
@@ -1087,7 +1108,30 @@ export const Desktop: React.FC = () => {
     const sourceId = active.id as string;
     const targetId = over?.id as string | null;
 
+    // --- Drop out of folder (onto the backdrop or into empty area) ---
+    // When the folder overlay is open and the user drags an icon outside the
+    // folder content area, the drop target will be either the FOLDER_DROP_OUT_ID
+    // droppable zone (the backdrop) or null (dragged beyond any droppable).
+    // In both cases we should move the item out of the folder.
+    if (openedFolder) {
+      const isSourceInFolder = openedFolder.children?.some(c => c.id === sourceId);
+      const droppedOutOfFolder = !targetId || targetId === FOLDER_DROP_OUT_ID;
 
+      if (isSourceInFolder && droppedOutOfFolder) {
+        moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
+        // If the folder is now empty, delete it
+        const remainingChildren = openedFolder.children?.filter(c => c.id !== sourceId) ?? [];
+        if (remainingChildren.length === 0) {
+          removeDesktopItem(openedFolder.id);
+          setOpenedFolder(null);
+        }
+        setActiveId(null);
+        setFolderDropTargetId(null);
+        lastFolderOverRef.current = null;
+        setIsFolderDropPending(false);
+        return;
+      }
+    }
 
     // --- Drop onto a page blank area ---
     // If the item was dropped on the page droppable zone (not on a specific icon),
@@ -1528,8 +1572,8 @@ export const Desktop: React.FC = () => {
 
   // For the Add (+) icon
   const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
-    <div className="flex flex-col items-center w-[72px] md:w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
-      <div className="w-[60px] h-[60px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-[transform,background-color,border-color] duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
+    <div className="flex flex-col items-center w-[80px] md:w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
+      <div className="w-[68px] h-[68px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-[transform,background-color,border-color] duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
           <path d="M12 5v14M5 12h14" />
         </svg>
@@ -1562,7 +1606,7 @@ export const Desktop: React.FC = () => {
     <div className="w-full h-full flex flex-col overflow-hidden relative">
       
       {/* 1. Search Bar */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-24 md:pt-20 px-6 pointer-events-none">
+      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-16 md:pt-20 px-6 pointer-events-none">
         <div className="w-full max-w-[580px] pointer-events-auto">
           <form onSubmit={handleSearchSubmit} className="relative group flex items-center">
             {isDropdownOpen && (
@@ -1616,7 +1660,7 @@ export const Desktop: React.FC = () => {
 
       {/* 2. Pages Area */}
       <div 
-        className="flex-1 overflow-hidden pt-48 md:pt-56 pb-28 md:pb-32"
+        className="flex-1 overflow-hidden pt-36 md:pt-56 pb-28 md:pb-32"
         onDoubleClick={(e) => {
           // Only trigger on blank area (the container itself or the page wrapper)
           const target = e.target as HTMLElement;
@@ -1825,13 +1869,7 @@ export const Desktop: React.FC = () => {
 
       {/* 7. Folder Overlay */}
       {openedFolder && (
-        <div 
-          className="fixed inset-0 z-50 flex select-none items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
-          onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}
-          onContextMenu={(e) => e.preventDefault()}
-          onDragStart={(e) => e.preventDefault()}
-          onSelectCapture={(e) => e.preventDefault()}
-        >
+        <FolderDropOutZone onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}>
           <div className="w-auto max-w-[90vw] flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             {/* Folder name - outside the rounded container, at top-left */}
             <div className="pl-6 sm:pl-10 pb-5 shrink-0">
@@ -1913,7 +1951,7 @@ export const Desktop: React.FC = () => {
             </div>
 
           </div>
-        </div>
+        </FolderDropOutZone>
       )}
 
       {/* DragOverlay - the floating icon that follows cursor */}
@@ -1929,10 +1967,10 @@ export const Desktop: React.FC = () => {
               const { cols: oCols, rows: oRows } = WIDGET_SIZE_MAP[overlaySize];
               // Match actual CSS grid cell sizes for the current viewport
               const isMd = typeof window !== 'undefined' && window.innerWidth >= 768;
-              const cellW = isMd ? 80 : 72;
-              const cellH = isMd ? 100 : 96;
+              const cellW = isMd ? 80 : 80;
+              const cellH = isMd ? 100 : 108;
               const gapX = isMd ? (window.innerWidth >= 1280 ? 40 : window.innerWidth >= 1024 ? 36 : 32) : 20;
-              const gapY = isMd ? (window.innerWidth >= 1024 ? 24 : 20) : 16;
+              const gapY = isMd ? (window.innerWidth >= 1024 ? 24 : 20) : 18;
               return (
                 <div style={{
                   width: oCols * cellW + (oCols - 1) * gapX,

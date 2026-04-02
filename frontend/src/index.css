@@ -231,9 +231,9 @@ body {
 /* 桌面图标网格：显式列数，支持 widget 跨多格子 (grid-column/row span) */
 /* cell 尺寸包含图标+下方文字区域，widget 跨越的 span 自然包含 gap */
 .desktop-icon-grid {
-  grid-template-columns: repeat(4, 72px) !important;
-  grid-auto-rows: 96px !important;
-  gap: 16px 20px !important;
+  grid-template-columns: repeat(4, 80px) !important;
+  grid-auto-rows: 108px !important;
+  gap: 18px 20px !important;
   justify-content: center !important;
   -webkit-user-select: none;
   user-select: none;
