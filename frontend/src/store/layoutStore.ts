@@ -128,33 +128,45 @@ const defaultLayout: DesktopLayout = {
   dock: defaultDock,
 };
 
+// --- Helper: ensure all system apps exist in the Dock ---
+function ensureSystemAppsInDock(dock: DesktopItem[]): DesktopItem[] {
+  const result = [...dock];
+  for (const app of defaultDock) {
+    if (!result.some(i => i.id === app.id)) {
+      result.push({ ...app });
+    }
+  }
+  return result;
+}
+
 // --- Helper: migrate old flat format to new pages+dock format ---
 function migrateLayout(raw: any): DesktopLayout {
   // Already new format
   if (raw && raw.pages && Array.isArray(raw.pages)) {
+    const dock = Array.isArray(raw.dock) ? raw.dock : [...defaultDock];
     return {
       pages: raw.pages.length > 0 ? raw.pages : [[]],
-      dock: Array.isArray(raw.dock) ? raw.dock : [...defaultDock],
+      dock: ensureSystemAppsInDock(dock),
     };
   }
   // Old format: { desktopItems: DesktopItem[] }
   if (raw && Array.isArray(raw.desktopItems)) {
     const items: DesktopItem[] = raw.desktopItems;
-    const bookmarkApp = items.find(i => i.id === 'app-bookmarks');
-    const desktopOnly = items.filter(i => i.id !== 'app-bookmarks');
+    const systemApps = items.filter(i => i.id.startsWith('app-'));
+    const desktopOnly = items.filter(i => !i.id.startsWith('app-'));
     return {
       pages: desktopOnly.length > 0 ? [desktopOnly] : [[]],
-      dock: bookmarkApp ? [bookmarkApp] : [...defaultDock],
+      dock: ensureSystemAppsInDock(systemApps),
     };
   }
   // Cloud format: { items: DesktopItem[] }
   if (raw && Array.isArray(raw.items)) {
     const items: DesktopItem[] = raw.items;
-    const bookmarkApp = items.find(i => i.id === 'app-bookmarks');
-    const desktopOnly = items.filter(i => i.id !== 'app-bookmarks');
+    const systemApps = items.filter(i => i.id.startsWith('app-'));
+    const desktopOnly = items.filter(i => !i.id.startsWith('app-'));
     return {
       pages: desktopOnly.length > 0 ? [desktopOnly] : [[]],
-      dock: bookmarkApp ? [bookmarkApp] : [...defaultDock],
+      dock: ensureSystemAppsInDock(systemApps),
     };
   }
   return { ...defaultLayout };
@@ -859,7 +871,15 @@ export const useLayoutStore = create<LayoutState>()(
       // Migrate persisted state on load
       migrate: (persisted: any) => {
         if (persisted && persisted.layout && persisted.layout.pages) {
-          return persisted; // Already new format
+          // Already new format — but ensure system apps (bookmarks, history) exist in dock
+          const dock = Array.isArray(persisted.layout.dock) ? persisted.layout.dock : [...defaultDock];
+          return {
+            ...persisted,
+            layout: {
+              ...persisted.layout,
+              dock: ensureSystemAppsInDock(dock),
+            },
+          };
         }
         // Old format had desktopItems at top level
         if (persisted && persisted.desktopItems) {
