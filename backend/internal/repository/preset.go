@@ -16,6 +16,7 @@ type PresetRepository interface {
 	ListSitesByCategory(categoryID uuid.UUID) ([]model.PresetSite, error)
 	ListAllWithSites() ([]model.PresetCategory, error)
 	SearchSites(query string, limit int) ([]model.PresetSiteSearchResult, error)
+	DeleteSiteByDomain(domain string) (int64, error)
 }
 
 type postgresPresetRepository struct {
@@ -180,4 +181,15 @@ func (r *postgresPresetRepository) SearchSites(query string, limit int) ([]model
 		results = append(results, r)
 	}
 	return results, rows.Err()
+}
+
+// DeleteSiteByDomain deletes preset sites whose URL contains the given domain.
+// Returns the number of rows deleted.
+func (r *postgresPresetRepository) DeleteSiteByDomain(domain string) (int64, error) {
+	pattern := "%" + domain + "%"
+	result, err := r.db.Exec(`DELETE FROM preset_sites WHERE url ILIKE $1`, pattern)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

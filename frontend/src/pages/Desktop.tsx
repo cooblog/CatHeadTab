@@ -6,6 +6,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { AuthModal } from '../components/AuthModal';
 import { ProfileModal } from '../components/ProfileModal';
 import { BookmarkBrowser } from '../components/apps/BookmarkBrowser';
+import { HistoryBrowser } from '../components/apps/HistoryBrowser';
 import { AddItemModal } from '../components/AddItemModal';
 import { ExploreWorld } from '../components/ExploreWorld';
 import { AddWidgetModal } from '../components/AddWidgetModal';
@@ -689,6 +690,7 @@ export const Desktop: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isBookmarkBrowserOpen, setIsBookmarkBrowserOpen] = useState(false);
+  const [isHistoryBrowserOpen, setIsHistoryBrowserOpen] = useState(false);
   const [openedFolder, setOpenedFolder] = useState<DesktopItem | null>(null);
   const [searchResults, setSearchResults] = useState<DesktopItem[]>([]);
   
@@ -869,6 +871,8 @@ export const Desktop: React.FC = () => {
     } else if (item.type === 'app') {
       if (item.id === 'app-bookmarks') {
         setIsBookmarkBrowserOpen(true);
+      } else if (item.id === 'app-history') {
+        setIsHistoryBrowserOpen(true);
       }
     } else if (item.type === 'widget') {
       setEditingWidget(item);
@@ -1652,8 +1656,23 @@ export const Desktop: React.FC = () => {
               }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/30 backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-black/40 focus:bg-black/50 focus:border-white/30 rounded-full py-3 md:py-3.5 pl-14 pr-6 text-[14px] font-medium text-white shadow-2xl outline-none placeholder-white/40 transition-colors duration-300"
+              className="w-full bg-black/30 backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-black/40 focus:bg-black/50 focus:border-white/30 rounded-full py-3 md:py-3.5 pl-14 pr-10 text-[14px] font-medium text-white shadow-2xl outline-none placeholder-white/40 transition-colors duration-300"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-3 inset-y-0 flex items-center justify-center text-white/40 hover:text-white/80 transition-colors cursor-pointer"
+                aria-label="Clear search"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
           </form>
         </div>
       </div>
@@ -1991,6 +2010,7 @@ export const Desktop: React.FC = () => {
       {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
       {isProfileOpen && <ProfileModal onClose={() => setIsProfileOpen(false)} />}
       {isBookmarkBrowserOpen && <BookmarkBrowser onClose={() => setIsBookmarkBrowserOpen(false)} />}
+      {isHistoryBrowserOpen && <HistoryBrowser onClose={() => setIsHistoryBrowserOpen(false)} />}
       {isExploreOpen && <ExploreWorld onClose={() => setIsExploreOpen(false)} />}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
@@ -2117,6 +2137,13 @@ export const Desktop: React.FC = () => {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
               {t('desktop.openBookmarks')}
+            </button>
+            <button 
+              className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+              onClick={() => { setBlankContextMenu(null); setIsHistoryBrowserOpen(true); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              {t('desktop.openHistory')}
             </button>
             <button 
               className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"

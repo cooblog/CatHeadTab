@@ -6,6 +6,41 @@ import { DesktopItem, DesktopItemType, useLayoutStore } from '../store/layoutSto
 import { getSmartFaviconUrl } from '../utils/favicon';
 
 // ---------------------------------------------------------------------------
+// PagePicker — small dropdown to choose which desktop page to add to
+// ---------------------------------------------------------------------------
+interface PagePickerProps {
+  pageCount: number;
+  onSelect: (pageIndex: number) => void;
+  onClose: () => void;
+  pageLabel: string;
+  pageSuffix: string;
+}
+
+function PagePicker({ pageCount, onSelect, onClose, pageLabel, pageSuffix }: PagePickerProps) {
+  return (
+    <div
+      className="absolute right-0 bottom-full mb-1 z-50 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl py-1.5 min-w-[120px] animate-fadeIn"
+      onClick={(e) => e.stopPropagation()}
+      onMouseLeave={onClose}
+    >
+      {Array.from({ length: pageCount }, (_, i) => (
+        <button
+          key={i}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(i);
+          }}
+          className="w-full text-left px-3.5 py-2 text-[12px] text-white/80 hover:bg-white/[0.12] hover:text-white transition-colors flex items-center gap-2"
+        >
+          <span className="text-[10px] w-4 h-4 rounded bg-white/10 flex items-center justify-center font-bold text-white/50">{i + 1}</span>
+          {pageLabel} {i + 1} {pageSuffix}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 const INITIAL_RENDER_COUNT = 30;
@@ -61,8 +96,11 @@ interface SiteRowProps {
   site: PresetSite | SearchResult;
   isAdded: boolean;
   existsOnDesktop: boolean;
-  onAdd: (site: PresetSite | SearchResult) => void;
+  onAdd: (site: PresetSite | SearchResult, pageIndex: number) => void;
   getCategoryDisplayName: (name: string) => string;
+  pageCount: number;
+  pageLabel: string;
+  pageSuffix: string;
   copyLabel: string;
   addedLabel: string;
   alreadyOnDesktopLabel: string;
@@ -75,6 +113,9 @@ const SiteRow = memo(function SiteRow({
   existsOnDesktop,
   onAdd,
   getCategoryDisplayName,
+  pageCount,
+  pageLabel,
+  pageSuffix,
   copyLabel,
   addedLabel,
   alreadyOnDesktopLabel,
@@ -82,6 +123,17 @@ const SiteRow = memo(function SiteRow({
 }: SiteRowProps) {
   const categoryLabel = 'category_name' in site ? getCategoryDisplayName(site.category_name) : null;
   const categoryIcon = 'category_icon' in site ? site.category_icon : null;
+  const [showPagePicker, setShowPagePicker] = useState(false);
+
+  const handleAddClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (pageCount <= 1) {
+      // Only one page — add directly without picker
+      onAdd(site, 0);
+    } else {
+      setShowPagePicker(true);
+    }
+  };
 
   return (
     <div
@@ -133,25 +185,36 @@ const SiteRow = memo(function SiteRow({
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onAdd(site);
-          }}
-          disabled={isAdded || existsOnDesktop}
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-            isAdded || existsOnDesktop
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default'
-              : 'bg-blue-500/15 hover:bg-blue-500/90 text-blue-400 hover:text-white border border-blue-500/25 hover:border-blue-500'
-          }`}
-          title={isAdded ? addedLabel : existsOnDesktop ? alreadyOnDesktopLabel : addToDesktopLabel}
-        >
-          {isAdded || existsOnDesktop ? (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          ) : (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        <div className="relative">
+          <button
+            onClick={handleAddClick}
+            disabled={isAdded || existsOnDesktop}
+            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+              isAdded || existsOnDesktop
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-default'
+                : 'bg-blue-500/15 hover:bg-blue-500/90 text-blue-400 hover:text-white border border-blue-500/25 hover:border-blue-500'
+            }`}
+            title={isAdded ? addedLabel : existsOnDesktop ? alreadyOnDesktopLabel : addToDesktopLabel}
+          >
+            {isAdded || existsOnDesktop ? (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            )}
+          </button>
+          {showPagePicker && (
+            <PagePicker
+              pageCount={pageCount}
+              pageLabel={pageLabel}
+              pageSuffix={pageSuffix}
+              onSelect={(pi) => {
+                onAdd(site, pi);
+                setShowPagePicker(false);
+              }}
+              onClose={() => setShowPagePicker(false)}
+            />
           )}
-        </button>
+        </div>
       </div>
     </div>
   );
@@ -358,7 +421,15 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
     return translated === key ? name : translated;
   }, [t]);
 
-  const handleAddSite = useCallback((site: PresetSite | SearchResult) => {
+  // Desktop page count (for the page picker)
+  const pageCount = useMemo(() => {
+    const pages = layout.pages;
+    // If last page has content, user can also add to a "new" page
+    const lastPage = pages[pages.length - 1];
+    return lastPage && lastPage.length > 0 ? pages.length + 1 : pages.length;
+  }, [layout.pages]);
+
+  const handleAddSite = useCallback((site: PresetSite | SearchResult, pageIndex: number) => {
     const newItem: DesktopItem = {
       id: `preset-${site.id}-${Date.now()}`,
       type: 'link',
@@ -366,14 +437,15 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
       url: site.url,
       icon: site.icon || undefined,
     };
-    addDesktopItem(newItem);
+    addDesktopItem(newItem, pageIndex);
     setAddedSites((prev) => new Set(prev).add(site.id));
   }, [addDesktopItem]);
 
   // Add all sites in a category as a folder to the desktop
   const [folderAdded, setFolderAdded] = useState<Set<string>>(new Set());
+  const [showFolderPagePicker, setShowFolderPagePicker] = useState(false);
 
-  function handleAddCategoryAsFolder(category: CategorySummary) {
+  function handleAddCategoryAsFolder(category: CategorySummary, pageIndex: number) {
     const categoryName = getCategoryDisplayName(category.name);
     const sites = siteCacheRef.current.get(category.id) || activeSites;
     const children: DesktopItem[] = sites.map((site) => ({
@@ -389,7 +461,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
       title: `${category.icon} ${categoryName}`,
       children,
     };
-    addDesktopItem(folder);
+    addDesktopItem(folder, pageIndex);
     setFolderAdded((prev) => new Set(prev).add(category.id));
   }
 
@@ -474,13 +546,13 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/></svg>
             </button>
             <div className="hidden md:flex gap-2.5">
-              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20">
+              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
-              <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20">
+              <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
               </button>
-              <button onClick={() => setIsFullScreen(!isFullScreen)} className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20">
+              <button onClick={() => setIsFullScreen(!isFullScreen)} className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
               </button>
             </div>
@@ -568,28 +640,49 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                 </h1>
                 <div className="flex items-center gap-2">
                   {activeCategory && !searchResults && (
-                    <button
-                      onClick={() => handleAddCategoryAsFolder(activeCategory)}
-                      disabled={folderAdded.has(activeCategory.id)}
-                      className={`flex items-center gap-1.5 text-[12px] md:text-[13px] font-medium px-2.5 md:px-3 py-0.5 md:py-1 rounded-full transition-all ${
-                        folderAdded.has(activeCategory.id)
-                          ? 'bg-green-500/15 text-green-400 border border-green-500/25 cursor-default'
-                          : 'bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/40 cursor-pointer'
-                      }`}
-                      title={t('explore.addCategoryAsFolder')}
-                    >
-                      {folderAdded.has(activeCategory.id) ? (
-                        <>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                          {t('explore.folderAdded')}
-                        </>
-                      ) : (
-                        <>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-                          {t('explore.addCategoryAsFolder')}
-                        </>
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          if (folderAdded.has(activeCategory.id)) return;
+                          if (pageCount <= 1) {
+                            handleAddCategoryAsFolder(activeCategory, 0);
+                          } else {
+                            setShowFolderPagePicker(true);
+                          }
+                        }}
+                        disabled={folderAdded.has(activeCategory.id)}
+                        className={`flex items-center gap-1.5 text-[12px] md:text-[13px] font-medium px-2.5 md:px-3 py-0.5 md:py-1 rounded-full transition-all ${
+                          folderAdded.has(activeCategory.id)
+                            ? 'bg-green-500/15 text-green-400 border border-green-500/25 cursor-default'
+                            : 'bg-blue-500/10 hover:bg-blue-500/25 text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/40 cursor-pointer'
+                        }`}
+                        title={t('explore.addCategoryAsFolder')}
+                      >
+                        {folderAdded.has(activeCategory.id) ? (
+                          <>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            {t('explore.folderAdded')}
+                          </>
+                        ) : (
+                          <>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                            {t('explore.addCategoryAsFolder')}
+                          </>
+                        )}
+                      </button>
+                      {showFolderPagePicker && (
+                        <PagePicker
+                          pageCount={pageCount}
+                          pageLabel={t('explore.page')}
+                          pageSuffix={t('explore.pageSuffix')}
+                          onSelect={(pi) => {
+                            handleAddCategoryAsFolder(activeCategory, pi);
+                            setShowFolderPagePicker(false);
+                          }}
+                          onClose={() => setShowFolderPagePicker(false)}
+                        />
                       )}
-                    </button>
+                    </div>
                   )}
                   <span className="text-white/40 text-[12px] md:text-[13px] font-medium bg-white/5 px-2.5 md:px-3 py-0.5 md:py-1 rounded-full">
                     {rightPaneCount} {t('explore.sites')}
@@ -622,6 +715,9 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                       existsOnDesktop={existingUrls.has(normalizeUrlForCompare(site.url))}
                       onAdd={handleAddSite}
                       getCategoryDisplayName={getCategoryDisplayName}
+                      pageCount={pageCount}
+                      pageLabel={t('explore.page')}
+                      pageSuffix={t('explore.pageSuffix')}
                       copyLabel={t('bookmark.copyUrl')}
                       addedLabel={t('explore.added')}
                       alreadyOnDesktopLabel={t('explore.alreadyOnDesktop')}

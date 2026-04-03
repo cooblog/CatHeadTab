@@ -96,7 +96,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	userHandler := handler.NewUserHandler(userRepo)
 	bgHandler := handler.NewBackgroundHandler(bgRepo)
 	presetHandler := handler.NewPresetHandler(presetRepo)
-	faviconHandler := handler.NewFaviconHandler()
+	faviconHandler := handler.NewFaviconHandler(presetRepo)
 	wallpaperHandler := handler.NewWallpaperHandler(wallpaperSvc)
 
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)

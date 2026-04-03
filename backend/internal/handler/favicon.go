@@ -22,9 +22,12 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
+	favicon "github.com/DeaglePC/go-favicon"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/CatHeadTab/backend/internal/repository"
 )
 
 const (
@@ -54,26 +57,32 @@ type faviconResult struct {
 
 // FaviconHandler handles HTTP requests for favicon proxy with disk caching.
 type FaviconHandler struct {
-	cacheDir   string
-	httpClient *http.Client
-	sfGroup    singleflight.Group        // deduplicates concurrent fetches for the same domain+size
-	sem        *semaphore.Weighted       // limits concurrent outbound HTTP requests
+	cacheDir      string
+	httpClient    *http.Client
+	sfGroup       singleflight.Group        // deduplicates concurrent fetches for the same domain+size
+	sem           *semaphore.Weighted       // limits concurrent outbound HTTP requests
+	presetRepo    repository.PresetRepository // for removing dead sites from ExploreWorld
+	faviconFinder *favicon.Finder           // go-favicon library for discovering favicons from websites
 }
 
 // NewFaviconHandler creates a new FaviconHandler and ensures the cache directory exists.
-func NewFaviconHandler() *FaviconHandler {
-	h := &FaviconHandler{
-		cacheDir: faviconCacheDir,
-		httpClient: &http.Client{
-			Timeout: faviconFetchTimeout,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 5 {
-					return fmt.Errorf("too many redirects")
-				}
-				return nil
-			},
+func NewFaviconHandler(presetRepo repository.PresetRepository) *FaviconHandler {
+	client := &http.Client{
+		Timeout: faviconFetchTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			return nil
 		},
-		sem: semaphore.NewWeighted(faviconMaxConcurrentFetches),
+	}
+
+	h := &FaviconHandler{
+		cacheDir:      faviconCacheDir,
+		httpClient:    client,
+		sem:           semaphore.NewWeighted(faviconMaxConcurrentFetches),
+		presetRepo:    presetRepo,
+		faviconFinder: favicon.New(favicon.WithClient(client)),
 	}
 
 	if err := os.MkdirAll(h.cacheDir, 0755); err != nil {
@@ -156,7 +165,12 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 //  2. DuckDuckGo API — fast response, ico format
 //  3. Favicone (Vercel) — modern API with smart fallback, supports size parameter
 //  4. Direct /favicon.ico from the website
-//  5. HTML <link rel="icon"> parsing
+//  5. HTML <link rel="icon"> parsing (manual)
+//  6. go-favicon library — comprehensive discovery (HTML + manifest + well-known paths)
+//
+// If all sources fail, we check if the website is reachable at all. If the domain
+// is completely unreachable (DNS failure, connection refused, timeout), we consider
+// the site dead and remove it from the preset_sites (ExploreWorld) database.
 func (h *FaviconHandler) fetchFavicon(domain, sz string) ([]byte, string, error) {
 	desiredSize := parseDesiredSize(sz)
 
@@ -190,14 +204,86 @@ func (h *FaviconHandler) fetchFavicon(domain, sz string) ([]byte, string, error)
 		return data, ct, nil
 	}
 
-	// Source 5: Parse HTML <link rel="icon"> tag
+	// Source 5: Parse HTML <link rel="icon"> tag (manual parser)
 	if iconURL := h.parseHTMLFavicon(domain); iconURL != "" {
 		if data, ct, err := h.fetchWithSemaphore(iconURL); err == nil && len(data) > 0 && isValidImage(data) {
 			return data, ct, nil
 		}
 	}
 
+	// Source 6: go-favicon library — comprehensive discovery
+	// Parses HTML, manifest.json, and well-known paths to find all available icons
+	if data, ct, err := h.fetchViaGoFavicon(domain); err == nil && len(data) > 0 {
+		return data, ct, nil
+	}
+
+	// All sources failed — check if the website is reachable at all.
+	// If the domain is completely unreachable, remove it from ExploreWorld.
+	go h.checkAndRemoveDeadSite(domain)
+
 	return nil, "", fmt.Errorf("all favicon sources failed for %s", domain)
+}
+
+// fetchViaGoFavicon uses the go-favicon library to discover favicon URLs from a website,
+// then fetches the best one. This handles complex cases like manifest.json icons,
+// apple-touch-icon, and other non-standard icon locations.
+func (h *FaviconHandler) fetchViaGoFavicon(domain string) ([]byte, string, error) {
+	targetURL := fmt.Sprintf("https://%s", domain)
+	icons, err := h.faviconFinder.Find(targetURL)
+	if err != nil || len(icons) == 0 {
+		return nil, "", fmt.Errorf("go-favicon found no icons for %s: %v", domain, err)
+	}
+
+	// Try each discovered icon URL until we get a valid image
+	for _, icon := range icons {
+		if icon.URL == "" {
+			continue
+		}
+		if data, ct, fetchErr := h.fetchWithSemaphore(icon.URL); fetchErr == nil && len(data) > 0 && isValidImage(data) {
+			log.Printf("ℹ️  go-favicon found icon for %s: %s", domain, icon.URL)
+			return data, ct, nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("go-favicon icons all failed for %s", domain)
+}
+
+// checkAndRemoveDeadSite checks whether a domain is reachable. If the site is
+// completely unreachable (connection refused, DNS failure, timeout), it is
+// considered dead and removed from the preset_sites table in ExploreWorld.
+// This runs asynchronously (in a goroutine) and is best-effort.
+func (h *FaviconHandler) checkAndRemoveDeadSite(domain string) {
+	if h.presetRepo == nil {
+		return
+	}
+
+	// Use a short timeout — we only want to know if the server responds at all
+	client := &http.Client{Timeout: 10 * time.Second}
+	targetURL := fmt.Sprintf("https://%s", domain)
+
+	req, err := http.NewRequest("HEAD", targetURL, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Network-level failure: DNS resolution failed, connection refused,
+		// timeout, TLS handshake failed, etc. The site is likely dead.
+		log.Printf("🗑️  Site %s is unreachable (%v), removing from ExploreWorld", domain, err)
+		deleted, delErr := h.presetRepo.DeleteSiteByDomain(domain)
+		if delErr != nil {
+			log.Printf("⚠️  Failed to delete dead site %s: %v", domain, delErr)
+		} else if deleted > 0 {
+			log.Printf("✅  Removed %d dead site(s) matching domain %s from ExploreWorld", deleted, domain)
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	// If the server responds (even with 4xx/5xx), the site is still alive.
+	// We only remove sites that are completely unreachable at the network level.
 }
 
 // fetchWithSemaphore wraps fetchURL with semaphore-based concurrency control.

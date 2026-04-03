@@ -13,6 +13,9 @@ require (
 )
 
 require (
+	github.com/DeaglePC/go-favicon v0.0.0-20250426104944-da376789bdc7 // indirect
+	github.com/PuerkitoBio/goquery v1.9.1 // indirect
+	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/bytedance/sonic v1.11.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect

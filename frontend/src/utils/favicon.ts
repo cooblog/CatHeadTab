@@ -118,13 +118,13 @@ export function getFaviconProxyUrl(domain: string, sz: number = 64): string {
 
 /**
  * Get a favicon URL for display. Returns either:
- * - A blob: URL from local cache (instant)
- * - The backend proxy URL (needs network)
+ * - A blob: URL from local cache (instant, no network)
+ * - The backend proxy URL (needs network, first load only)
  *
- * When returning a proxy URL, we only check IndexedDB in the background
- * (NOT fetch). The actual fetch+cache is handled by the <img> tag's onload
- * event via `cacheImageFromElement`, avoiding duplicate requests and CORS
- * issues with fetch().
+ * When returning a proxy URL, an async background task checks IndexedDB
+ * and — on miss — fetches the favicon from the backend, storing it in
+ * IndexedDB. On subsequent page loads the IndexedDB hit returns a blob
+ * URL instantly, skipping the backend entirely.
  */
 export function getFaviconUrl(urlOrDomain: string, sz: number = 64): string {
   const domain = urlOrDomain.includes('://') ? extractDomain(urlOrDomain) : urlOrDomain;
@@ -170,8 +170,10 @@ export async function getFaviconUrlAsync(urlOrDomain: string, sz: number = 64): 
 }
 
 /**
- * Background loader: check IndexedDB only (no network fetch).
- * If found in IndexedDB, promotes to in-memory blob URL cache.
+ * Background loader: check IndexedDB first, then fetch from backend if missed.
+ * If found in IndexedDB, promotes to in-memory blob URL cache (no network).
+ * If not in IndexedDB, fetches from backend proxy and writes to IndexedDB
+ * so the next page load can use the local cache directly.
  */
 function loadFromIndexedDB(domain: string, sz: number): void {
   const key = cacheKey(domain, sz);
@@ -184,7 +186,9 @@ function loadFromIndexedDB(domain: string, sz: number): void {
       blobURLCache.set(key, blobUrl);
       return blobUrl;
     }
-    return null;
+
+    // IndexedDB miss — fetch from backend and write to cache for next time
+    return fetchAndCache(domain, sz);
   })();
 
   pendingFetches.set(key, promise);

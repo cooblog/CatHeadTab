@@ -120,6 +120,7 @@ export const MAX_DOCK_ITEMS = 8;
 
 const defaultDock: DesktopItem[] = [
   { id: 'app-bookmarks', type: 'app', title: 'Bookmarks', icon: '🔖' },
+  { id: 'app-history', type: 'app', title: 'History', icon: '🕐' },
 ];
 
 const defaultLayout: DesktopLayout = {
