@@ -568,13 +568,53 @@ func (h *AuthHandler) UnlinkAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%s account unlinked", provider)})
 }
 
-// GetOAuthConfig returns the configured OAuth client IDs for the frontend.
+// GetOAuthConfig returns the configured OAuth client IDs and callback URL for the frontend.
 // GET /api/v1/auth/oauth-config
 func (h *AuthHandler) GetOAuthConfig(c *gin.Context) {
+	backendURL := h.cfg.GetBackendURL()
 	c.JSON(http.StatusOK, gin.H{
-		"github_client_id": h.cfg.GitHubClientID,
-		"google_client_id": h.cfg.GoogleClientID,
+		"github_client_id":   h.cfg.GitHubClientID,
+		"google_client_id":   h.cfg.GoogleClientID,
+		"oauth_callback_url": backendURL + "/api/v1/auth/callback",
 	})
+}
+
+// oauthCallbackHTML is the HTML page served after OAuth provider redirects back.
+// It uses postMessage to send the authorization code and provider back to the
+// opener window (works for both web pages and Chrome extension popups).
+const oauthCallbackHTML = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>OAuth Callback</title></head>
+<body style="background:#1c1c1e;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+<div style="text-align:center">
+<div style="width:32px;height:32px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px"></div>
+<p style="color:rgba(255,255,255,.6);font-size:14px">Authenticating...</p>
+</div>
+<style>@keyframes s{to{transform:rotate(360deg)}}</style>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var code = params.get("code");
+  var state = params.get("state") || "";
+  if (code && window.opener) {
+    window.opener.postMessage({type:"oauth_callback",code:code,provider:state.replace("link_","")}, "*");
+  }
+  setTimeout(function(){ window.close(); }, 800);
+})();
+</script>
+</body>
+</html>`
+
+// GitHubOAuthCallback handles the redirect from GitHub after user authorization.
+// GET /api/v1/auth/callback/github
+func (h *AuthHandler) GitHubOAuthCallback(c *gin.Context) {
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(oauthCallbackHTML))
+}
+
+// GoogleOAuthCallback handles the redirect from Google after user authorization.
+// GET /api/v1/auth/callback/google
+func (h *AuthHandler) GoogleOAuthCallback(c *gin.Context) {
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(oauthCallbackHTML))
 }
 
 // ---- Shared OAuth logic ----
@@ -846,7 +886,7 @@ func (h *AuthHandler) exchangeGoogleCode(code string) (string, error) {
 	q.Add("client_secret", h.cfg.GoogleClientSecret)
 	q.Add("code", code)
 	q.Add("grant_type", "authorization_code")
-	q.Add("redirect_uri", h.cfg.FrontendURL+"/oauth/callback")
+	q.Add("redirect_uri", h.cfg.GetBackendURL()+"/api/v1/auth/callback/google")
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 

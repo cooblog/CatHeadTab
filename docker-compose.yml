@@ -37,6 +37,8 @@ services:
       - GIN_MODE=${GIN_MODE:-debug}
       # Frontend URL (used in email links: verification, password reset)
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-80}}
+      # Backend URL (externally accessible, used as OAuth redirect_uri)
+      - BACKEND_URL=${BACKEND_URL:-http://localhost:${PORT:-8080}}
 
       # ---- SMTP Email (optional, for email verification & password reset) ----
       - SMTP_HOST=${SMTP_HOST:-}

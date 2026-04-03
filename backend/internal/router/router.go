@@ -131,6 +131,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 		// OAuth login (public — user is not yet authenticated)
 		auth.POST("/github", authHandler.GitHubLogin)
 		auth.POST("/google", authHandler.GoogleLogin)
+		// OAuth callback endpoints (GitHub/Google redirect here after authorization)
+		auth.GET("/callback/github", authHandler.GitHubOAuthCallback)
+		auth.GET("/callback/google", authHandler.GoogleOAuthCallback)
 	}
 
 	// Protected routes (JWT required)

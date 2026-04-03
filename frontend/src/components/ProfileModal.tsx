@@ -29,7 +29,7 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
   // Linked accounts
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([]);
-  const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string } | null>(null);
+  const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string; oauth_callback_url: string } | null>(null);
 
   useEffect(() => {
     // Fallback: if userProfile is missing, fetch it now
@@ -120,7 +120,10 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const handleLinkOAuth = (provider: 'github' | 'google') => {
     if (!oauthConfig) return;
 
-    const redirectUri = encodeURIComponent(window.location.origin + '/oauth/callback');
+    const callbackBase = oauthConfig.oauth_callback_url;
+    if (!callbackBase) return;
+
+    const redirectUri = encodeURIComponent(callbackBase + '/' + provider);
     let authUrl = '';
 
     if (provider === 'github') {

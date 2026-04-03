@@ -24,7 +24,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string } | null>(null);
+  const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string; oauth_callback_url: string } | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
 
   // Rate limit countdown
@@ -161,7 +161,13 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const handleOAuth = (provider: 'github' | 'google') => {
     if (!oauthConfig) return;
 
-    const redirectUri = encodeURIComponent(window.location.origin + '/oauth/callback');
+    const callbackBase = oauthConfig.oauth_callback_url;
+    if (!callbackBase) {
+      setError(t('auth.oauthNotConfigured'));
+      return;
+    }
+
+    const redirectUri = encodeURIComponent(callbackBase + '/' + provider);
 
     let authUrl = '';
     if (provider === 'github') {

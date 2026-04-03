@@ -16,6 +16,11 @@ type Config struct {
 	// Frontend URL for building callback links (email verification, password reset)
 	FrontendURL string
 
+	// BackendURL is the externally accessible base URL of this backend server.
+	// Used as the OAuth redirect_uri so that GitHub/Google always callback to
+	// the backend regardless of where the frontend is hosted (web or extension).
+	BackendURL string
+
 	// SMTP email settings
 	SMTPHost     string
 	SMTPPort     string
@@ -58,6 +63,7 @@ func Load() *Config {
 		GinMode:   getEnv("GIN_MODE", "debug"),
 
 		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:5173"),
+		BackendURL:  getEnv("BACKEND_URL", ""),
 
 		SMTPHost:     getEnv("SMTP_HOST", ""),
 		SMTPPort:     getEnv("SMTP_PORT", "587"),
@@ -86,6 +92,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// GetBackendURL returns the externally accessible base URL of the backend.
+// If BACKEND_URL is not explicitly set, it falls back to http://localhost:{Port}.
+func (c *Config) GetBackendURL() string {
+	if c.BackendURL != "" {
+		return c.BackendURL
+	}
+	return "http://localhost:" + c.Port
 }
 
 // getDurationEnv reads an integer from the environment variable identified by
