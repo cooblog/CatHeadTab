@@ -350,6 +350,8 @@ export const zh = {
   'widget.weatherDesc': '当前天气和温度',
   'widget.countdown': '倒计时',
   'widget.countdownDesc': '重要日期倒计时',
+  'widget.systemMonitor': '系统监控',
+  'widget.systemMonitorDesc': 'CPU 和内存实时监控',
   'widget.size': '尺寸',
   'widget.add': '添加小组件',
   'widget.backToList': '返回',

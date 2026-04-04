@@ -350,6 +350,8 @@ export const en = {
   'widget.weatherDesc': 'Current weather and temperature',
   'widget.countdown': 'Countdown',
   'widget.countdownDesc': 'Countdown to an important date',
+  'widget.systemMonitor': 'System Monitor',
+  'widget.systemMonitorDesc': 'Real-time CPU & memory usage',
   'widget.size': 'Size',
   'widget.add': 'Add Widget',
   'widget.backToList': 'Back',

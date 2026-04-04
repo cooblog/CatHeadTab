@@ -126,7 +126,7 @@ const DesktopIconContent: React.FC<{
   // When a custom dockIconSize is provided, use inline styles; otherwise use Tailwind classes
   const iconSize = (isDock && dockIconSize)
     ? '' // will use inline style instead
-    : isDock ? 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]' : 'w-[60px] h-[60px] md:w-[68px] md:h-[68px]';
+    : isDock ? 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]' : 'w-[56px] h-[56px] md:w-[60px] md:h-[60px]';
   const iconSizeStyle: React.CSSProperties = (isDock && dockIconSize)
     ? { width: dockIconSize, height: dockIconSize }
     : {};
@@ -205,7 +205,7 @@ const DesktopIconContent: React.FC<{
         )}
       </div>
       {!isDock && (
-        <span className="pointer-events-none mt-1.5 w-full truncate px-0.5 text-center text-[12px] font-medium tracking-wide text-white drop-shadow-md">
+        <span className="pointer-events-none mt-1 w-full truncate px-0.5 text-center text-[11px] font-medium tracking-wide text-white drop-shadow-md">
           {item.title || 'Untitled'}
         </span>
       )}
@@ -1578,13 +1578,13 @@ export const Desktop: React.FC = () => {
 
   // For the Add (+) icon
   const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
-    <div className="flex flex-col items-center w-[80px] md:w-[90px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
-      <div className="w-[68px] h-[68px] md:w-[78px] md:h-[78px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-[transform,background-color,border-color] duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
+    <div className="flex flex-col items-center w-[80px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
+      <div className="w-[56px] h-[56px] md:w-[60px] md:h-[60px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-[transform,background-color,border-color] duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
           <path d="M12 5v14M5 12h14" />
         </svg>
       </div>
-      <span className="mt-1.5 text-[12px] font-medium text-white/30 group-hover:text-white/70 tracking-wide transition-colors">
+      <span className="mt-1 text-[11px] font-medium text-white/30 group-hover:text-white/70 tracking-wide transition-colors">
         {t('desktop.addLink')}
       </span>
     </div>
@@ -2000,15 +2000,15 @@ export const Desktop: React.FC = () => {
                 ? activeItem.widgetSize : 'small';
               const { cols: oCols, rows: oRows } = WIDGET_SIZE_MAP[overlaySize];
               // Match actual CSS grid cell sizes for the current viewport
+              // cellW = cellH = 80px (72px on sm), gap is uniform per breakpoint
+              const isSm = typeof window !== 'undefined' && window.innerWidth >= 640;
               const isMd = typeof window !== 'undefined' && window.innerWidth >= 768;
-              const cellW = isMd ? 80 : 80;
-              const cellH = isMd ? 100 : 108;
-              const gapX = isMd ? (window.innerWidth >= 1280 ? 40 : window.innerWidth >= 1024 ? 36 : 32) : 20;
-              const gapY = isMd ? (window.innerWidth >= 1024 ? 24 : 20) : 18;
+              const cellSize = (!isSm) ? 80 : (!isMd) ? 72 : 80;
+              const gap = (!isSm) ? 28 : (!isMd) ? 32 : (window.innerWidth >= 1280 ? 44 : window.innerWidth >= 1024 ? 40 : 36);
               return (
                 <div style={{
-                  width: oCols * cellW + (oCols - 1) * gapX,
-                  height: oRows * cellH + (oRows - 1) * gapY,
+                  width: oCols * cellSize + (oCols - 1) * gap,
+                  height: oRows * cellSize + (oRows - 1) * gap,
                 }}>
                   <DesktopWidget item={activeItem} isOverlay />
                 </div>

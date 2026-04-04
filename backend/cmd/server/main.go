@@ -46,6 +46,7 @@ Available Commands:
   serve                        Start the API server (default)
   user create                  Create a new user interactively
   user reset-password          Reset a user's password interactively
+  user set-role                Change an existing user's role
 
 If no command is specified, the server starts by default.`)
 }
@@ -57,7 +58,8 @@ func printUserUsage() {
 
 Available Actions:
   create           Create a new user
-  reset-password   Reset an existing user's password`)
+  reset-password   Reset an existing user's password
+  set-role         Change an existing user's role`)
 }
 
 // handleUserCommand dispatches user management subcommands.
@@ -81,6 +83,8 @@ func handleUserCommand(args []string) {
 		cmdUserCreate()
 	case "reset-password":
 		cmdUserResetPassword()
+	case "set-role":
+		cmdUserSetRole()
 	default:
 		printUserUsage()
 		os.Exit(1)
@@ -191,6 +195,64 @@ func cmdUserResetPassword() {
 	}
 
 	fmt.Printf("✅ Password updated successfully for user %q\n", user.Username)
+}
+
+// cmdUserSetRole interactively changes a user's role.
+func cmdUserSetRole() {
+	reader := bufio.NewReader(os.Stdin)
+
+	identifier := promptInput(reader, "Username or Email: ")
+	if identifier == "" {
+		log.Fatal("❌ Username or email is required")
+	}
+
+	userRepo := repository.NewUserRepository(repository.DB)
+
+	// Try to find the user by username first, then by email
+	user, err := userRepo.GetByUsername(identifier)
+	if err != nil {
+		log.Fatalf("❌ Failed to query user: %v", err)
+	}
+	if user == nil {
+		user, err = userRepo.GetByEmail(identifier)
+		if err != nil {
+			log.Fatalf("❌ Failed to query user: %v", err)
+		}
+	}
+	if user == nil {
+		log.Fatalf("❌ User %q not found", identifier)
+	}
+
+	fmt.Printf("   Found user: %s (%s)\n", user.Username, user.Email)
+	fmt.Printf("   Current role: %s\n", user.Role)
+
+	// Build a list of valid roles for display
+	validRoles := make([]string, 0, len(model.ValidRoles))
+	for r := range model.ValidRoles {
+		validRoles = append(validRoles, string(r))
+	}
+	fmt.Printf("   Available roles: %s\n", strings.Join(validRoles, ", "))
+
+	newRole := promptInput(reader, "New role: ")
+	if newRole == "" {
+		log.Fatal("❌ Role is required")
+	}
+
+	role := model.UserRole(newRole)
+	if !model.ValidRoles[role] {
+		log.Fatalf("❌ Invalid role %q. Valid roles: %s", newRole, strings.Join(validRoles, ", "))
+	}
+
+	if user.Role == role {
+		fmt.Printf("ℹ️  User %q already has role %q, no change needed\n", user.Username, role)
+		return
+	}
+
+	if err := userRepo.UpdateRole(user.ID, role); err != nil {
+		log.Fatalf("❌ Failed to update role: %v", err)
+	}
+
+	fmt.Printf("✅ Role updated: %s → %s (user: %s)\n", user.Role, role, user.Username)
 }
 
 // promptInput prints a prompt and reads a line of input from the reader.

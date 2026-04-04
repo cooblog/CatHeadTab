@@ -4,6 +4,7 @@ import { WIDGET_SIZE_MAP } from '../../store/layoutStore';
 import { CalendarWidget } from './CalendarWidget';
 import { WeatherWidget } from './WeatherWidget';
 import { CountdownWidget } from './CountdownWidget';
+import { SystemMonitorWidget } from './SystemMonitorWidget';
 
 interface DesktopWidgetProps {
   item: DesktopItem;
@@ -30,6 +31,8 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         return <WeatherWidget size={size} config={item.widgetConfig as WeatherWidgetConfig} />;
       case 'countdown':
         return <CountdownWidget size={size} config={item.widgetConfig as CountdownWidgetConfig} />;
+      case 'systemMonitor':
+        return <SystemMonitorWidget size={size} />;
       default:
         return (
           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">

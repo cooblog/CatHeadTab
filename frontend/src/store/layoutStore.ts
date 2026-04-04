@@ -16,7 +16,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium';
@@ -48,7 +48,11 @@ export interface CountdownWidgetConfig {
   eventName: string;
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig;
+export interface SystemMonitorWidgetConfig {
+  widgetType: 'systemMonitor';
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig;
 
 export interface DesktopItem {
   id: string;

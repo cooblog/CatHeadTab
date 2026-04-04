@@ -20,6 +20,7 @@ type UserRepository interface {
 	UpdatePassword(id uuid.UUID, passwordHash string) error
 	SetEmailVerified(id uuid.UUID, verified bool) error
 	UpdateAvatar(id uuid.UUID, avatarURL string) error
+	UpdateRole(id uuid.UUID, role model.UserRole) error
 }
 
 type postgresUserRepository struct {
@@ -190,5 +191,10 @@ func (r *postgresUserRepository) SetEmailVerified(id uuid.UUID, verified bool) e
 
 func (r *postgresUserRepository) UpdateAvatar(id uuid.UUID, avatarURL string) error {
 	_, err := r.db.Exec(`UPDATE users SET avatar_url = $1 WHERE id = $2`, avatarURL, id)
+	return err
+}
+
+func (r *postgresUserRepository) UpdateRole(id uuid.UUID, role model.UserRole) error {
+	_, err := r.db.Exec(`UPDATE users SET role = $1 WHERE id = $2`, string(role), id)
 	return err
 }

@@ -9,16 +9,30 @@ interface WeatherWidgetProps {
 
 interface WeatherData {
   temp: number;
-  description: string;
-  descriptionEn: string;
+  description: string;   // Chinese description
+  descriptionEn: string; // English description
   icon: string;
-  city: string;
+  city: string;           // city name (from the fetch language)
+  cityZh?: string;        // Chinese city name (if available)
+  cityEn?: string;        // English city name (if available)
   humidity: number;
   windSpeed: number;
   feelsLike: number;
   high: number;
   low: number;
   isDay: boolean;
+  weatherCode?: number;   // WMO code for re-deriving descriptions
+}
+
+/** Fetch with a timeout — avoids hanging forever on slow/unreachable APIs. */
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // WMO Weather Code mapping → { emoji, zh, en }
@@ -64,7 +78,7 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
   // If user specified a city, geocode it via Open-Meteo
   if (city) {
     const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=${lang || 'en'}&format=json`;
-    const res = await fetch(geoUrl);
+    const res = await fetchWithTimeout(geoUrl, 6000);
     const data = await res.json();
     if (data.results && data.results.length > 0) {
       const r = data.results[0];
@@ -95,7 +109,7 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
 
   // Fallback: IP-based geolocation
   try {
-    const ipRes = await fetch('https://ipapi.co/json/');
+    const ipRes = await fetchWithTimeout('https://ipapi.co/json/', 5000);
     const ipData = await ipRes.json();
     return {
       lat: ipData.latitude,
@@ -112,7 +126,7 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
 async function reverseGeocode(lat: number, lon: number, lang?: string): Promise<string> {
   try {
     // Use a lightweight reverse geocode service
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=${lang || 'en'}&zoom=10`);
+    const res = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=${lang || 'en'}&zoom=10`, 5000);
     const data = await res.json();
     return data.address?.city || data.address?.town || data.address?.county || data.display_name?.split(',')[0] || (lang === 'zh' ? '当前位置' : 'Current Location');
   } catch {
@@ -123,9 +137,9 @@ async function reverseGeocode(lat: number, lon: number, lang?: string): Promise<
 /** Cache duration: 30 minutes in milliseconds. */
 const WEATHER_CACHE_TTL = 30 * 60 * 1000;
 
-/** Build a deterministic cache key based on widget config. */
-function weatherCacheKey(city?: string, unit?: string, lang?: string): string {
-  return `weather_cache_${city || '_auto'}_${unit || 'C'}_${lang || 'en'}`;
+/** Build a deterministic cache key based on widget config (language-independent). */
+function weatherCacheKey(city?: string, unit?: string): string {
+  return `weather_cache_${city || '_auto'}_${unit || 'C'}`;
 }
 
 interface WeatherCache {
@@ -161,7 +175,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
   const { language } = useTranslation();
   const isZh = language === 'zh';
   const lang = isZh ? 'zh' : 'en';
-  const cacheKey = weatherCacheKey(config?.city, config?.unit, lang);
+  const cacheKey = weatherCacheKey(config?.city, config?.unit);
 
   // Attempt to load cached data for instant display (even if stale)
   const initialCache = readWeatherCache(cacheKey);
@@ -170,26 +184,39 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
   const [error, setError] = useState<string | null>(null);
   const lastCacheKeyRef = useRef(cacheKey);
 
+  // Use a ref to track latest weather state so async code never reads stale values.
+  const weatherRef = useRef(weather);
+  weatherRef.current = weather;
+
   useEffect(() => {
+    let cancelled = false;
     const isConfigChange = lastCacheKeyRef.current !== cacheKey;
     lastCacheKeyRef.current = cacheKey;
 
     const cached = readWeatherCache(cacheKey);
 
-    // If cache is fresh and config didn't change, no need to refetch
+    // If cache is fresh and config didn't change, use cached data directly.
+    // Weather numbers are language-independent; city name is resolved at render time.
     if (cached?.fresh && !isConfigChange) {
-      // Update state if we have fresher cached data
       if (cached.data) setWeather(cached.data);
+      setLoading(false);
       return;
     }
 
+    // Show any available cached/existing data immediately while we refetch.
+    if (cached?.data) {
+      setWeather(cached.data);
+    }
+    // Clear any previous error so we don't flash an error while refetching
+    setError(null);
+
     const fetchWeather = async () => {
       try {
-        // Only show spinner if we have absolutely no cached data
-        if (!cached) {
+        // Only show spinner if we have absolutely no data to display
+        const hasExistingData = !!cached || weatherRef.current !== null;
+        if (!hasExistingData) {
           setLoading(true);
         }
-        setError(null);
 
         const { lat, lon, cityName } = await getCoordinates(config?.city, lang);
 
@@ -197,7 +224,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
         const unitParam = config?.unit === 'F' ? '&temperature_unit=fahrenheit' : '';
         const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1${unitParam}`;
 
-        const res = await fetch(apiUrl);
+        const res = await fetchWithTimeout(apiUrl, 8000);
         if (!res.ok) throw new Error('Weather fetch failed');
         const data = await res.json();
 
@@ -205,41 +232,95 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
         const daily = data.daily;
         if (!current) throw new Error('Invalid weather data');
 
+        if (cancelled) return;
+
         const isDay = current.is_day === 1;
         const weatherCode = current.weather_code ?? 0;
         const wmoInfo = getWmoInfo(weatherCode, isDay);
 
+        // Merge with existing cached data to preserve city names from both languages
+        const prev = weatherRef.current;
         const weatherData: WeatherData = {
           temp: Math.round(current.temperature_2m),
-          description: isZh ? wmoInfo.zh : wmoInfo.en,
+          description: wmoInfo.zh,
           descriptionEn: wmoInfo.en,
           icon: wmoInfo.emoji,
           city: cityName,
+          cityZh: lang === 'zh' ? cityName : (prev?.cityZh ?? undefined),
+          cityEn: lang === 'en' ? cityName : (prev?.cityEn ?? undefined),
           humidity: current.relative_humidity_2m,
           windSpeed: Math.round(current.wind_speed_10m),
           feelsLike: Math.round(current.apparent_temperature),
           high: Math.round(daily?.temperature_2m_max?.[0] ?? 0),
           low: Math.round(daily?.temperature_2m_min?.[0] ?? 0),
           isDay,
+          weatherCode,
         };
 
         setWeather(weatherData);
+        setError(null);
         writeWeatherCache(cacheKey, weatherData);
       } catch (err) {
+        if (cancelled) return;
         console.error('Weather fetch error:', err);
-        // Only show error if we have no cached fallback at all
-        if (!cached) {
+        // Only show error if we truly have no data at all
+        if (weatherRef.current === null) {
           setError(isZh ? '无法获取天气' : 'Unable to fetch weather');
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchWeather();
-  }, [config?.city, config?.unit, isZh]);
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config?.city, config?.unit, cacheKey]);
+
+  // When language changes and we already have weather data but are missing the
+  // localised city name, do a lightweight reverse-geocode / geocode to fill it in.
+  useEffect(() => {
+    if (!weather) return;
+    const needsCityName = isZh ? !weather.cityZh : !weather.cityEn;
+    if (!needsCityName) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { cityName } = await getCoordinates(config?.city, lang);
+        if (cancelled) return;
+        setWeather(prev => {
+          if (!prev) return prev;
+          const updated: WeatherData = {
+            ...prev,
+            cityZh: lang === 'zh' ? cityName : prev.cityZh,
+            cityEn: lang === 'en' ? cityName : prev.cityEn,
+          };
+          writeWeatherCache(cacheKey, updated);
+          return updated;
+        });
+      } catch {
+        // Non-critical — fallback city name will be used
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang, weather?.cityZh, weather?.cityEn]);
 
   const unitLabel = config?.unit === 'F' ? '°F' : '°C';
+
+  // Derive localized display values from weather data
+  const displayCity = weather
+    ? (isZh ? (weather.cityZh || weather.city) : (weather.cityEn || weather.city))
+    : '';
+  const displayDesc = weather
+    ? (isZh ? weather.description : weather.descriptionEn)
+    : '';
 
   if (loading) {
     return (
@@ -269,8 +350,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
         </div>
         {/* Right: city + description + H/L */}
         <div className="flex flex-col justify-center gap-[1px] min-w-0">
-          <span className="text-[13px] font-semibold text-white/85 leading-snug truncate">{weather.city}</span>
-          <span className="text-[12px] text-white/50 leading-snug truncate">{isZh ? weather.description : weather.descriptionEn}</span>
+          <span className="text-[13px] font-semibold text-white/85 leading-snug truncate">{displayCity}</span>
+          <span className="text-[12px] text-white/50 leading-snug truncate">{displayDesc}</span>
           <span className="text-[11px] text-white/35 leading-snug">{weather.low}~{weather.high}°</span>
         </div>
       </div>
@@ -284,8 +365,8 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
           <span className="text-[36px] font-[200] text-white leading-none tracking-tight">{weather.temp}{unitLabel}</span>
-          <span className="text-xs text-white/60 mt-1">{weather.description}</span>
-          <span className="text-[11px] text-white/40 mt-0.5 truncate">{weather.city}</span>
+          <span className="text-xs text-white/60 mt-1">{displayDesc}</span>
+          <span className="text-[11px] text-white/40 mt-0.5 truncate">{displayCity}</span>
         </div>
         <span className="text-[40px] leading-none mt-[-2px]">{weather.icon}</span>
       </div>

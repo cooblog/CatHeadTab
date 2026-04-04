@@ -42,6 +42,13 @@ const WIDGET_OPTIONS: WidgetOption[] = [
     descKey: 'widget.countdownDesc',
     sizes: ['small', 'medium'],
   },
+  {
+    type: 'systemMonitor',
+    icon: '🖥️',
+    labelKey: 'widget.systemMonitor',
+    descKey: 'widget.systemMonitorDesc',
+    sizes: ['small', 'medium'],
+  },
 ];
 
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
@@ -94,6 +101,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
           targetDate,
           eventName: eventName || (isZh ? '未命名事件' : 'Unnamed Event'),
         };
+        break;
+      case 'systemMonitor':
+        config = { widgetType: 'systemMonitor' };
         break;
       default:
         return;
@@ -295,6 +305,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'countdown' && (isZh
                     ? '⏱️ 倒计时小组件会显示距离目标日期的剩余天数。小尺寸显示天数和事件名，中尺寸额外显示时分秒倒计时。'
                     : '⏱️ The countdown widget shows days remaining until your target date. Small size shows days and event name, medium size adds hours, minutes and seconds.')}
+                  {selectedType === 'systemMonitor' && (isZh
+                    ? '🖥️ 系统监控小组件实时显示 CPU 和内存使用率。小尺寸显示双环形图概览，中尺寸额外显示处理器型号、核心数等详细信息。'
+                    : '🖥️ The system monitor widget shows real-time CPU and memory usage. Small size displays dual ring gauges, medium size adds processor model, core count and more details.')}
                 </p>
               </div>
 
