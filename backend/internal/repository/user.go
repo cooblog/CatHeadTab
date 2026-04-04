@@ -33,13 +33,18 @@ func NewUserRepository(db *sql.DB) UserRepository {
 
 func (r *postgresUserRepository) Create(user *model.User) error {
 	query := `
-		INSERT INTO users (id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, email_verified)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO users (id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, email_verified, role)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING created_at
 	`
 
 	if user.ID == uuid.Nil {
 		user.ID = uuid.New()
+	}
+
+	// Default to regular user if no role is set
+	if user.Role == "" {
+		user.Role = model.RoleUser
 	}
 
 	err := r.db.QueryRow(
@@ -52,6 +57,7 @@ func (r *postgresUserRepository) Create(user *model.User) error {
 		user.Username,
 		user.AvatarURL,
 		user.EmailVerified,
+		string(user.Role),
 	).Scan(&user.CreatedAt)
 
 	return err
@@ -59,7 +65,7 @@ func (r *postgresUserRepository) Create(user *model.User) error {
 
 func (r *postgresUserRepository) GetByID(id uuid.UUID) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, created_at 
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, role, created_at 
 		FROM users WHERE id = $1
 	`
 	return r.scanRow(r.db.QueryRow(query, id))
@@ -67,7 +73,7 @@ func (r *postgresUserRepository) GetByID(id uuid.UUID) (*model.User, error) {
 
 func (r *postgresUserRepository) GetByEmail(email string) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, created_at 
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, role, created_at 
 		FROM users WHERE email = $1
 	`
 	return r.scanRow(r.db.QueryRow(query, email))
@@ -75,7 +81,7 @@ func (r *postgresUserRepository) GetByEmail(email string) (*model.User, error) {
 
 func (r *postgresUserRepository) GetByUsername(username string) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, created_at 
+		SELECT id, email, password_hash, oauth_provider, oauth_id, username, avatar_url, preferences, email_verified, role, created_at 
 		FROM users WHERE username = $1
 	`
 	return r.scanRow(r.db.QueryRow(query, username))
@@ -87,6 +93,7 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 	var email sql.NullString
 	var passwordHash sql.NullString
 	var prefsJSON []byte
+	var role string
 
 	err := row.Scan(
 		&u.ID,
@@ -98,6 +105,7 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 		&u.AvatarURL,
 		&prefsJSON,
 		&u.EmailVerified,
+		&role,
 		&u.CreatedAt,
 	)
 
@@ -128,6 +136,13 @@ func (r *postgresUserRepository) scanRow(row *sql.Row) (*model.User, error) {
 		}
 	} else {
 		u.Preferences = make(map[string]interface{})
+	}
+
+	// Map role string to UserRole; default to regular user for unknown values
+	if model.ValidRoles[model.UserRole(role)] {
+		u.Role = model.UserRole(role)
+	} else {
+		u.Role = model.RoleUser
 	}
 
 	return &u, nil

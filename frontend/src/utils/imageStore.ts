@@ -228,3 +228,52 @@ function canvasToWebP(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
     );
   });
 }
+
+// --- Avatar Compression ---
+
+// Avatar max dimensions (square, optimised for profile display)
+const AVATAR_MAX_SIZE = 512;
+// Avatar max file size after compression (2 MB — same as backend limit)
+const AVATAR_MAX_FILE_SIZE = 2 * 1024 * 1024;
+
+/**
+ * compressAvatarToWebP resizes and compresses an image for use as a user
+ * avatar. The output is a square-cropped (center) WebP blob that fits within
+ * 512×512 px and 2 MB.
+ */
+export async function compressAvatarToWebP(blob: Blob): Promise<Blob> {
+  const img = await createImageFromBlob(blob);
+
+  // Calculate a centered square crop from the original image
+  const srcSize = Math.min(img.width, img.height);
+  const sx = (img.width - srcSize) / 2;
+  const sy = (img.height - srcSize) / 2;
+
+  const dim = Math.min(srcSize, AVATAR_MAX_SIZE);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = dim;
+  canvas.height = dim;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, dim, dim);
+
+  // Progressive quality reduction to stay under file size limit
+  let quality = 0.88;
+  let result = await canvasToWebP(canvas, quality);
+
+  while (result.size > AVATAR_MAX_FILE_SIZE && quality > 0.3) {
+    quality -= 0.1;
+    result = await canvasToWebP(canvas, quality);
+  }
+
+  // Last resort: reduce dimensions further
+  if (result.size > AVATAR_MAX_FILE_SIZE) {
+    const scale = Math.sqrt(AVATAR_MAX_FILE_SIZE / result.size) * 0.9;
+    canvas.width = Math.round(dim * scale);
+    canvas.height = Math.round(dim * scale);
+    ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, canvas.width, canvas.height);
+    result = await canvasToWebP(canvas, 0.7);
+  }
+
+  return result;
+}

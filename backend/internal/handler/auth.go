@@ -160,6 +160,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"username":       user.Username,
 			"email":          user.Email,
 			"email_verified": user.EmailVerified,
+			"role":           user.Role,
 		},
 	})
 }
@@ -646,6 +647,7 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 				"email":          user.Email,
 				"email_verified": user.EmailVerified,
 				"avatar_url":     user.AvatarURL,
+				"role":           user.Role,
 			},
 		})
 		return
@@ -712,6 +714,7 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 			"email":          user.Email,
 			"email_verified": user.EmailVerified,
 			"avatar_url":     user.AvatarURL,
+			"role":           user.Role,
 		},
 	})
 }

@@ -6,6 +6,27 @@ import (
 	"github.com/google/uuid"
 )
 
+// UserRole represents the role/permission level of a user.
+type UserRole string
+
+const (
+	// RoleUser is the default role for regular users.
+	RoleUser UserRole = "user"
+	// RoleAdmin grants administrative privileges (e.g. wallpaper search).
+	RoleAdmin UserRole = "admin"
+)
+
+// ValidRoles contains all recognised user roles for validation.
+var ValidRoles = map[UserRole]bool{
+	RoleUser:  true,
+	RoleAdmin: true,
+}
+
+// IsAdmin reports whether the role has admin privileges.
+func (r UserRole) IsAdmin() bool {
+	return r == RoleAdmin
+}
+
 // User represents a registered user with OAuth credentials.
 type User struct {
 	ID            uuid.UUID              `json:"id"`
@@ -16,6 +37,7 @@ type User struct {
 	OAuthID       *string                `json:"oauth_id,omitempty"`
 	Username      string                 `json:"username"`
 	AvatarURL     string                 `json:"avatar_url"`
+	Role          UserRole               `json:"role"`
 	Preferences   map[string]interface{} `json:"preferences"`
 	CreatedAt     time.Time              `json:"created_at"`
 }

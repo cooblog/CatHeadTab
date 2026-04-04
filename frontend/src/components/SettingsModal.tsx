@@ -40,7 +40,8 @@ const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
 
 export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> = ({ onClose, initialTab = 'wallpaper' }) => {
-  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, jwtToken } = useConfigStore();
+  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, jwtToken, userProfile } = useConfigStore();
+  const isAdmin = userProfile?.role === 'admin';
   const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
@@ -53,7 +54,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const [currentBgFullscreen, setCurrentBgFullscreen] = useState(false);
 
   // --- Wallpaper source state ---
-  const [wpSource, setWpSource] = useState<WallpaperSource>('wallhaven');
+  const [wpSource, setWpSource] = useState<WallpaperSource>(isAdmin ? 'wallhaven' : 'builtin');
   const [wpSourceDropdownOpen, setWpSourceDropdownOpen] = useState(false);
   const wpSourceRef = useRef<HTMLDivElement>(null);
 
@@ -538,6 +539,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const currentPreviewUrl = bg.startsWith('idb://') ? bgPreview : bg;
 
   // Wallpaper source options (builtin sources + dynamic ones from backend)
+  // All users can see wallhaven; only the search bar is admin-only.
   const wpSourceOptions: { value: WallpaperSource; label: string }[] = [
     { value: 'builtin', label: t('settings.wpSourceBuiltin') },
     { value: 'local', label: t('settings.wpSourceLocal') },
@@ -934,7 +936,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                       {/* === Source: Wallhaven === */}
                       {wpSource === 'wallhaven' && (
                         <>
-                          {/* Search bar */}
+                          {/* Search bar — admin only */}
+                          {isAdmin && (
                           <div className="flex gap-2">
                             <input
                               type="text"
@@ -953,6 +956,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                               {wpLoading ? '...' : t('settings.wpSearch')}
                             </button>
                           </div>
+                          )}
 
                           {/* Filters row */}
                           <div className="flex flex-wrap gap-2.5 sm:gap-2 items-center">

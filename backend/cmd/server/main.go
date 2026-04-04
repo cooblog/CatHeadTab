@@ -135,6 +135,7 @@ func cmdUserCreate() {
 		Email:         email,
 		PasswordHash:  string(hashedPassword),
 		EmailVerified: true, // Admin-created users are pre-verified
+		Role:          model.RoleAdmin, // CLI-created users are admins
 	}
 
 	if err := userRepo.Create(user); err != nil {

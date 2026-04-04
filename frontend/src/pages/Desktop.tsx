@@ -12,7 +12,7 @@ import { ExploreWorld } from '../components/ExploreWorld';
 import { AddWidgetModal } from '../components/AddWidgetModal';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
-import { getSmartFaviconUrl } from '../utils/favicon';
+import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
 import {
   DndContext,
   DragOverlay,
@@ -164,6 +164,7 @@ const DesktopIconContent: React.FC<{
                   alt=""
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
+                  onLoad={(e) => cacheImageFromElement(e.currentTarget, url, 64)}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               </div>
@@ -193,6 +194,7 @@ const DesktopIconContent: React.FC<{
                 alt={item.title}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
+                onLoad={(e) => cacheImageFromElement(e.currentTarget, item.url!, 128)}
                 onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
               />
             ) : null}
@@ -679,7 +681,7 @@ function createFolderAwareCollision(
 export const Desktop: React.FC = () => {
   const { fetchBookmarks } = useBookmarkStore();
   const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem, mergeItemsToNewFolder } = useLayoutStore();
-  const { jwtToken, setLocked, language } = useConfigStore();
+  const { jwtToken, setLocked, language, userProfile } = useConfigStore();
   const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -1607,7 +1609,23 @@ export const Desktop: React.FC = () => {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-    <div className="w-full h-full flex flex-col overflow-hidden relative">
+    <div
+      className="w-full h-full flex flex-col overflow-hidden relative"
+      onContextMenu={(e) => {
+        // Right-click on blank area — show desktop context menu
+        // Skip if the click landed on an icon, button, input, or interactive element
+        const target = e.target as HTMLElement;
+        if (
+          target.closest('[data-desktop-icon]') ||
+          target.closest('[data-add-button]') ||
+          target.closest('button') ||
+          target.closest('input') ||
+          target.closest('a')
+        ) return;
+        e.preventDefault();
+        setBlankContextMenu({ x: e.clientX, y: e.clientY });
+      }}
+    >
       
       {/* 1. Search Bar */}
       <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-16 md:pt-20 px-6 pointer-events-none">
@@ -1685,13 +1703,6 @@ export const Desktop: React.FC = () => {
           const target = e.target as HTMLElement;
           if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
           setIsExploreOpen(true);
-        }}
-        onContextMenu={(e) => {
-          // Right-click on blank area (not on an icon)
-          const target = e.target as HTMLElement;
-          if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
-          e.preventDefault();
-          setBlankContextMenu({ x: e.clientX, y: e.clientY });
         }}
       >
         {isLocalSearchActive ? (
@@ -1879,10 +1890,14 @@ export const Desktop: React.FC = () => {
       {/* 6. User/Auth Button */}
       <div className="fixed top-4 right-4 md:top-6 md:right-6 z-30">
         <button 
-          className={`w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-[background-color,color,transform] duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer ${jwtToken ? 'bg-[#72d565]/80 text-black border-[#72d565]' : 'bg-black/30 text-white/60 border-white/10 hover:bg-white/15 hover:text-white'}`}
+          className={`w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-[background-color,color,transform] duration-300 shadow-xl hover:scale-110 active:scale-95 cursor-pointer overflow-hidden ${jwtToken ? 'bg-[#72d565]/80 text-black border-[#72d565]' : 'bg-black/30 text-white/60 border-white/10 hover:bg-white/15 hover:text-white'}`}
           onClick={handleAuthClick}
         >
-          <UserAvatarIcon />
+          {userProfile?.avatar_url ? (
+            <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <UserAvatarIcon />
+          )}
         </button>
       </div>
 

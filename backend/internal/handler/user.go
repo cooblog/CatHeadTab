@@ -1,11 +1,19 @@
 package handler
 
 import (
+	"encoding/base64"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+)
+
+const (
+	// maxAvatarSize is the maximum allowed avatar upload size (2 MB).
+	maxAvatarSize = 2 << 20
 )
 
 // UserHandler handles user preference operations.
@@ -74,5 +82,111 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		"email_verified": user.EmailVerified,
 		"avatar_url":     user.AvatarURL,
 		"has_password":   user.PasswordHash != "",
+		"role":           user.Role,
+	})
+}
+
+// UploadAvatar handles avatar image upload and stores it as a data URI.
+// POST /api/v1/user/avatar
+// Accepts multipart/form-data with field "avatar" or raw binary body.
+// Max size: 2 MB. Allowed types: image/webp, image/jpeg, image/png, image/gif.
+func (h *UserHandler) UploadAvatar(c *gin.Context) {
+	userIDStr := c.GetString("user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	// Limit request body size
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAvatarSize)
+
+	var imageData []byte
+	var contentType string
+
+	// Try multipart form first
+	file, header, err := c.Request.FormFile("avatar")
+	if err == nil {
+		defer file.Close()
+
+		if header.Size > maxAvatarSize {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("file too large: %d bytes, max allowed: %d bytes", header.Size, maxAvatarSize),
+			})
+			return
+		}
+
+		imageData, err = io.ReadAll(file)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read uploaded file"})
+			return
+		}
+		contentType = header.Header.Get("Content-Type")
+	} else {
+		// Fallback: read raw body
+		imageData, err = io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
+			return
+		}
+		contentType = c.ContentType()
+	}
+
+	if len(imageData) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "empty image data"})
+		return
+	}
+
+	// Validate content type
+	if contentType == "" {
+		contentType = http.DetectContentType(imageData)
+	}
+
+	allowedTypes := map[string]bool{
+		"image/webp": true,
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+	}
+	if !allowedTypes[contentType] {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("unsupported content type: %s", contentType),
+		})
+		return
+	}
+
+	// Encode as data URI and store in the avatar_url column
+	dataURI := "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(imageData)
+
+	if err := h.userRepo.UpdateAvatar(userID, dataURI); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update avatar"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Avatar updated successfully",
+		"avatar_url": dataURI,
+		"file_size":  len(imageData),
+	})
+}
+
+// DeleteAvatar removes the user's custom avatar.
+// DELETE /api/v1/user/avatar
+func (h *UserHandler) DeleteAvatar(c *gin.Context) {
+	userIDStr := c.GetString("user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	if err := h.userRepo.UpdateAvatar(userID, ""); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete avatar"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Avatar removed successfully",
+		"avatar_url": "",
 	})
 }

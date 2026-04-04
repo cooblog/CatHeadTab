@@ -132,7 +132,16 @@ export const en = {
   'profile.passwordChangeFailed': 'Failed to change password',
   'profile.verifyEmail': 'Verify Email',
   'profile.emailVerified': 'Email Verified',
+  'profile.roleAdmin': 'Admin',
+  'profile.roleUser': 'User',
   'profile.verificationSent': 'Verification email sent! Check your inbox.',
+  'profile.avatarChange': 'Change Avatar',
+  'profile.avatarRemove': 'Remove Avatar',
+  'profile.avatarRemoveConfirm': 'Are you sure you want to remove your custom avatar?',
+  'profile.avatarUpdated': 'Avatar updated successfully!',
+  'profile.avatarRemoved': 'Avatar removed!',
+  'profile.avatarTooLarge': 'Avatar file is too large. Max allowed: 2 MB.',
+  'profile.avatarUploading': 'Uploading...',
 
   // Auth Modal
   'auth.signIn': 'SIGN IN',

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useConfigStore } from '../store/configStore';
 import { useLayoutStore } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
+import { compressAvatarToWebP } from '../utils/imageStore';
 import client from '../api/client';
 
 interface LinkedAccount {
@@ -30,6 +31,11 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   // Linked accounts
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([]);
   const [oauthConfig, setOAuthConfig] = useState<{ github_client_id: string; google_client_id: string; oauth_callback_url: string } | null>(null);
+
+  // Avatar upload
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const MAX_AVATAR_FILE_SIZE = 20 * 1024 * 1024; // 20 MB before compression
 
   useEffect(() => {
     // Fallback: if userProfile is missing, fetch it now
@@ -188,6 +194,65 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset file input so the same file can be re-selected
+    e.target.value = '';
+
+    if (file.size > MAX_AVATAR_FILE_SIZE) {
+      setErrorMsg(t('profile.avatarTooLarge'));
+      return;
+    }
+
+    setAvatarUploading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      // Compress to WebP, square-cropped, max 512px
+      const compressed = await compressAvatarToWebP(file);
+
+      const formData = new FormData();
+      formData.append('avatar', compressed, 'avatar.webp');
+
+      const res = await client.post('/api/v1/user/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      // Update local profile with new avatar URL
+      if (userProfile && res.data.avatar_url) {
+        setUserProfile({ ...userProfile, avatar_url: res.data.avatar_url });
+      }
+      setSuccessMsg(t('profile.avatarUpdated'));
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Failed to upload avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!window.confirm(t('profile.avatarRemoveConfirm'))) return;
+
+    setAvatarUploading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await client.delete('/api/v1/user/avatar');
+      if (userProfile) {
+        setUserProfile({ ...userProfile, avatar_url: '' });
+      }
+      setSuccessMsg(t('profile.avatarRemoved'));
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Failed to remove avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleLogout = () => {
     if (window.confirm(t('profile.logoutWarning'))) {
       logout();
@@ -251,12 +316,49 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
           {/* Avatar & Name */}
           <div className="flex flex-col items-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#72d565] to-[#24a148] flex items-center justify-center text-3xl font-bold text-black shadow-lg mb-4 ring-4 ring-[#72d565]/20 overflow-hidden">
-              {userProfile?.avatar_url ? (
-                <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                userProfile?.username?.charAt(0).toUpperCase() || '?'
+            {/* Avatar with upload overlay */}
+            <div className="relative group mb-4">
+              <div
+                className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#72d565] to-[#24a148] flex items-center justify-center text-3xl font-bold text-black shadow-lg ring-4 ring-[#72d565]/20 overflow-hidden cursor-pointer"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {avatarUploading ? (
+                  <svg className="animate-spin w-8 h-8 text-black/60" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : userProfile?.avatar_url ? (
+                  <img src={userProfile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  userProfile?.username?.charAt(0).toUpperCase() || '?'
+                )}
+                {/* Hover overlay */}
+                <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </div>
+              </div>
+              {/* Remove avatar button (only when user has a custom avatar) */}
+              {userProfile?.avatar_url && !avatarUploading && (
+                <button
+                  onClick={handleAvatarRemove}
+                  className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-500/80 hover:bg-red-500 border-2 border-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title={t('profile.avatarRemove')}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
               )}
+              {/* Hidden file input */}
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                disabled={avatarUploading}
+              />
             </div>
             <h2 className="text-2xl font-bold text-white">{userProfile?.username || 'User'}</h2>
             <p className="text-white/50 text-[14px] mt-1">{userProfile?.email || 'Connected Account'}</p>
@@ -276,6 +378,14 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
               <span className="mt-2 flex items-center gap-1.5 text-[#72d565] text-[12px] bg-[#72d565]/10 px-3 py-1.5 rounded-full border border-[#72d565]/20">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 {t('profile.emailVerified')}
+              </span>
+            )}
+
+            {/* Role badge */}
+            {userProfile?.role === 'admin' && (
+              <span className="mt-2 flex items-center gap-1.5 text-amber-400 text-[12px] bg-amber-400/10 px-3 py-1.5 rounded-full border border-amber-400/20">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                {t('profile.roleAdmin')}
               </span>
             )}
           </div>

@@ -10,6 +10,7 @@ import (
 	"github.com/CatHeadTab/backend/internal/config"
 	"github.com/CatHeadTab/backend/internal/handler"
 	"github.com/CatHeadTab/backend/internal/middleware"
+	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/CatHeadTab/backend/internal/service"
 )
@@ -111,10 +112,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Public routes (no auth) — Favicon proxy with disk caching
 	r.GET("/api/v1/favicon", faviconHandler.Get)
 
-	// Public routes (no auth) — Wallpaper source browsing
+	// Public routes (no auth) — Wallpaper source browsing (config/providers are public for UI adaptation)
 	r.GET("/api/v1/wallpapers/providers", wallpaperHandler.ListProviders)
 	r.GET("/api/v1/wallpapers/config", wallpaperHandler.GetConfig)
-	r.GET("/api/v1/wallpapers/search", wallpaperHandler.Search)
 	r.GET("/api/v1/wallpapers/cache/stats", wallpaperHandler.CacheStats)
 
 	// Public routes (no auth)
@@ -144,9 +144,13 @@ func Setup(cfg *config.Config) *gin.Engine {
 		// need to see their profile to trigger verification from the UI)
 		user := api.Group("/user")
 		{
-			user.GET("/profile", userHandler.GetProfile)
-			user.GET("/preferences", userHandler.GetPreferences)
-			user.PUT("/preferences", userHandler.UpdatePreferences)
+		user.GET("/profile", userHandler.GetProfile)
+		user.GET("/preferences", userHandler.GetPreferences)
+		user.PUT("/preferences", userHandler.UpdatePreferences)
+
+		// Avatar upload/delete (no email verification required)
+		user.POST("/avatar", userHandler.UploadAvatar)
+		user.DELETE("/avatar", userHandler.DeleteAvatar)
 
 			// Account management (authenticated, no verification required)
 			user.POST("/change-password", authHandler.ChangePassword)
@@ -179,6 +183,16 @@ func Setup(cfg *config.Config) *gin.Engine {
 			verified.POST("/user/background", bgHandler.Upload)
 			verified.GET("/user/background", bgHandler.Download)
 			verified.DELETE("/user/background", bgHandler.Delete)
+
+			// Wallpaper search — available to all verified users (search input is admin-only in UI)
+			verified.GET("/wallpapers/search", wallpaperHandler.Search)
+		}
+
+		// Admin-only routes (JWT + admin role required)
+		admin := api.Group("")
+		admin.Use(middleware.RequireRole(userRepo, model.RoleAdmin))
+		{
+			// Reserved for future admin-only endpoints
 		}
 	}
 

@@ -17,6 +17,8 @@ export const ENV_API_URL: string = (import.meta.env.VITE_API_URL as string || ''
  */
 export const isEnvConfigured: boolean = !!ENV_API_URL;
 
+export type UserRole = 'user' | 'admin';
+
 export interface UserProfile {
   username: string;
   email: string;
@@ -24,6 +26,7 @@ export interface UserProfile {
   avatar_url: string;
   has_password: boolean;
   user_id: string;
+  role: UserRole;
 }
 
 interface ConfigState {

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import ReactDOM from 'react-dom';
 import client from '../api/client';
 import { useTranslation, TranslationKeys } from '../i18n/useTranslation';
 import { useConfigStore } from '../store/configStore';
 import { DesktopItem, DesktopItemType, useLayoutStore } from '../store/layoutStore';
-import { getSmartFaviconUrl } from '../utils/favicon';
+import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
 
 // ---------------------------------------------------------------------------
 // PagePicker — small dropdown to choose which desktop page to add to
@@ -14,29 +15,58 @@ interface PagePickerProps {
   onClose: () => void;
   pageLabel: string;
   pageSuffix: string;
+  /** Ref to the trigger button so we can position the picker via fixed layout */
+  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
-function PagePicker({ pageCount, onSelect, onClose, pageLabel, pageSuffix }: PagePickerProps) {
-  return (
-    <div
-      className="absolute right-0 bottom-full mb-1 z-50 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl py-1.5 min-w-[120px] animate-fadeIn"
-      onClick={(e) => e.stopPropagation()}
-      onMouseLeave={onClose}
-    >
-      {Array.from({ length: pageCount }, (_, i) => (
-        <button
-          key={i}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(i);
-          }}
-          className="w-full text-left px-3.5 py-2 text-[12px] text-white/80 hover:bg-white/[0.12] hover:text-white transition-colors flex items-center gap-2"
-        >
-          <span className="text-[10px] w-4 h-4 rounded bg-white/10 flex items-center justify-center font-bold text-white/50">{i + 1}</span>
-          {pageLabel} {i + 1} {pageSuffix}
-        </button>
-      ))}
-    </div>
+function PagePicker({ pageCount, onSelect, onClose, pageLabel, pageSuffix, anchorRef }: PagePickerProps) {
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!anchorRef?.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const pickerHeight = pageCount * 36 + 12; // approximate height
+    const pickerWidth = 150;
+    // Try to show above the button; if not enough space, show below
+    let top = rect.top - pickerHeight - 4;
+    if (top < 8) {
+      top = rect.bottom + 4;
+    }
+    let left = rect.right - pickerWidth;
+    if (left < 8) left = 8;
+    if (left + pickerWidth > window.innerWidth - 8) left = window.innerWidth - pickerWidth - 8;
+    setPos({ top, left });
+  }, [anchorRef, pageCount]);
+
+  if (!pos) return null;
+
+  return ReactDOM.createPortal(
+    <>
+      {/* Invisible backdrop to catch outside clicks */}
+      <div className="fixed inset-0 z-[9998]" onClick={(e) => { e.stopPropagation(); onClose(); }} />
+      <div
+        ref={pickerRef}
+        className="fixed z-[9999] bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/15 rounded-xl shadow-2xl py-1.5 min-w-[120px] animate-fadeIn"
+        style={{ top: pos.top, left: pos.left }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {Array.from({ length: pageCount }, (_, i) => (
+          <button
+            key={i}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(i);
+            }}
+            className="w-full text-left px-3.5 py-2 text-[12px] text-white/80 hover:bg-white/[0.12] hover:text-white transition-colors flex items-center gap-2"
+          >
+            <span className="text-[10px] w-4 h-4 rounded bg-white/10 flex items-center justify-center font-bold text-white/50">{i + 1}</span>
+            {pageLabel} {i + 1} {pageSuffix}
+          </button>
+        ))}
+      </div>
+    </>,
+    document.body,
   );
 }
 
@@ -124,6 +154,7 @@ const SiteRow = memo(function SiteRow({
   const categoryLabel = 'category_name' in site ? getCategoryDisplayName(site.category_name) : null;
   const categoryIcon = 'category_icon' in site ? site.category_icon : null;
   const [showPagePicker, setShowPagePicker] = useState(false);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleAddClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -147,6 +178,7 @@ const SiteRow = memo(function SiteRow({
             alt=""
             loading="lazy"
             className="w-4.5 h-4.5 object-contain"
+            onLoad={(e) => cacheImageFromElement(e.currentTarget, site.url, 64)}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';
@@ -187,6 +219,7 @@ const SiteRow = memo(function SiteRow({
         </button>
         <div className="relative">
           <button
+            ref={addBtnRef}
             onClick={handleAddClick}
             disabled={isAdded || existsOnDesktop}
             className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
@@ -207,6 +240,7 @@ const SiteRow = memo(function SiteRow({
               pageCount={pageCount}
               pageLabel={pageLabel}
               pageSuffix={pageSuffix}
+              anchorRef={addBtnRef}
               onSelect={(pi) => {
                 onAdd(site, pi);
                 setShowPagePicker(false);
@@ -444,6 +478,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
   // Add all sites in a category as a folder to the desktop
   const [folderAdded, setFolderAdded] = useState<Set<string>>(new Set());
   const [showFolderPagePicker, setShowFolderPagePicker] = useState(false);
+  const folderBtnRef = useRef<HTMLButtonElement>(null);
 
   function handleAddCategoryAsFolder(category: CategorySummary, pageIndex: number) {
     const categoryName = getCategoryDisplayName(category.name);
@@ -642,6 +677,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                   {activeCategory && !searchResults && (
                     <div className="relative">
                       <button
+                        ref={folderBtnRef}
                         onClick={() => {
                           if (folderAdded.has(activeCategory.id)) return;
                           if (pageCount <= 1) {
@@ -675,6 +711,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                           pageCount={pageCount}
                           pageLabel={t('explore.page')}
                           pageSuffix={t('explore.pageSuffix')}
+                          anchorRef={folderBtnRef}
                           onSelect={(pi) => {
                             handleAddCategoryAsFolder(activeCategory, pi);
                             setShowFolderPagePicker(false);

@@ -170,10 +170,12 @@ export async function getFaviconUrlAsync(urlOrDomain: string, sz: number = 64): 
 }
 
 /**
- * Background loader: check IndexedDB first, then fetch from backend if missed.
+ * Background loader: check IndexedDB only (no network fetch).
  * If found in IndexedDB, promotes to in-memory blob URL cache (no network).
- * If not in IndexedDB, fetches from backend proxy and writes to IndexedDB
- * so the next page load can use the local cache directly.
+ * If not in IndexedDB, we do NOT issue a fetch() here to avoid CORS errors.
+ * Instead, the <img> tag loads the image normally and then
+ * `cacheImageFromElement` (called via onLoad) writes it to IndexedDB so
+ * the next page load can use the local cache directly.
  */
 function loadFromIndexedDB(domain: string, sz: number): void {
   const key = cacheKey(domain, sz);
@@ -187,8 +189,10 @@ function loadFromIndexedDB(domain: string, sz: number): void {
       return blobUrl;
     }
 
-    // IndexedDB miss — fetch from backend and write to cache for next time
-    return fetchAndCache(domain, sz);
+    // IndexedDB miss — do NOT use fetch() here; the <img> tag will load
+    // the proxy URL directly (immune to CORS) and cacheImageFromElement
+    // will persist it to IndexedDB on successful load.
+    return null;
   })();
 
   pendingFetches.set(key, promise);

@@ -132,7 +132,16 @@ export const zh = {
   'profile.passwordChangeFailed': '密码修改失败',
   'profile.verifyEmail': '验证邮箱',
   'profile.emailVerified': '邮箱已验证',
+  'profile.roleAdmin': '管理员',
+  'profile.roleUser': '普通用户',
   'profile.verificationSent': '验证邮件已发送！请检查您的收件箱。',
+  'profile.avatarChange': '更换头像',
+  'profile.avatarRemove': '移除头像',
+  'profile.avatarRemoveConfirm': '确定要移除自定义头像吗？',
+  'profile.avatarUpdated': '头像更新成功！',
+  'profile.avatarRemoved': '头像已移除！',
+  'profile.avatarTooLarge': '头像文件过大，最大允许 2 MB。',
+  'profile.avatarUploading': '上传中...',
 
   // Auth Modal
   'auth.signIn': '登 录',

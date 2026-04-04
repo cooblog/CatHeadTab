@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -95,6 +96,61 @@ func RequireVerified(userRepo repository.UserRepository) gin.HandlerFunc {
 			return
 		}
 
+		// Store user in context for downstream handlers to avoid redundant DB queries
+		c.Set("user", user)
+		c.Next()
+	}
+}
+
+// RequireRole returns a Gin middleware that checks whether the authenticated
+// user has one of the specified roles. It must be used after the Auth
+// middleware so that "user_id" is available in the context.
+//
+// Usage:
+//
+//	router.Use(middleware.RequireRole(userRepo, model.RoleAdmin))
+func RequireRole(userRepo repository.UserRepository, roles ...model.UserRole) gin.HandlerFunc {
+	roleSet := make(map[model.UserRole]bool, len(roles))
+	for _, r := range roles {
+		roleSet[r] = true
+	}
+
+	return func(c *gin.Context) {
+		// Try to reuse user from context (set by RequireVerified or another middleware)
+		var user *model.User
+		if u, exists := c.Get("user"); exists {
+			user, _ = u.(*model.User)
+		}
+
+		if user == nil {
+			userIDStr := c.GetString("user_id")
+			userID, err := uuid.Parse(userIDStr)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "invalid user id",
+				})
+				return
+			}
+
+			var dbErr error
+			user, dbErr = userRepo.GetByID(userID)
+			if dbErr != nil || user == nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "user not found",
+				})
+				return
+			}
+		}
+
+		if !roleSet[user.Role] {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":         "insufficient permissions",
+				"required_role": roles[0],
+			})
+			return
+		}
+
+		c.Set("user", user)
 		c.Next()
 	}
 }

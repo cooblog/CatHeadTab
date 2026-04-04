@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
-import { getSmartFaviconUrl } from '../../utils/favicon';
+import { getSmartFaviconUrl, cacheImageFromElement } from '../../utils/favicon';
 
 // ---------------------------------------------------------------------------
 // HistoryItem — lightweight type for chrome.history.HistoryItem
@@ -333,6 +333,7 @@ export const HistoryBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) =
                               src={getSmartFaviconUrl(item.url, 64)}
                               alt=""
                               className="w-4.5 h-4.5 object-contain"
+                              onLoad={(e) => cacheImageFromElement(e.currentTarget, item.url!, 64)}
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
                                 e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';
