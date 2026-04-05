@@ -195,29 +195,31 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
     setViewMonth(now.getMonth());
   };
 
-  // Small (1×2): horizontal bar — large date + details
+  // Small (1×2): horizontal bar — big date left, month/weekday/lunar right
   if (size === 'small') {
     const dayOfWeek = isZh
       ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()]
-      : ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][now.getDay()];
+      : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
 
     const lunar = solarToLunar(now.getFullYear(), now.getMonth() + 1, today);
     const monthText = isZh
-      ? `${now.getMonth() + 1}月`
-      : now.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+      ? `${now.getFullYear()}年${now.getMonth() + 1}月`
+      : now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const lunarText = isZh
-      ? `${lunar.monthStr}${lunar.dayStr}`
-      : now.toLocaleDateString('en-US', { weekday: 'long' });
+      ? `${lunar.ganzhi}年 ${lunar.monthStr}${lunar.dayStr}`
+      : `${lunar.ganzhi} ${lunar.zodiac}`;
 
     return (
-      <div className="w-full h-full flex items-center justify-center select-none px-5 gap-3">
-        {/* Left: large date number */}
-        <span className="text-[48px] font-[200] text-white leading-none tracking-tight shrink-0">{today}</span>
-        {/* Right: month + weekday + lunar stacked */}
-        <div className="flex flex-col justify-center gap-[1px] min-w-0">
-          <span className="text-[15px] font-bold text-red-400 uppercase leading-snug tracking-wide">{monthText}</span>
-          <span className="text-[15px] font-semibold text-white/85 leading-snug">{dayOfWeek}</span>
-          <span className="text-[12px] text-white/40 leading-snug truncate">{lunarText}</span>
+      <div className="w-full h-full flex items-center justify-center select-none overflow-hidden">
+        {/* Left: big date + weekday stacked */}
+        <div className="flex flex-col items-center shrink-0" style={{ marginRight: '10px' }}>
+          <span className="text-[38px] font-[200] text-white leading-none">{today}</span>
+          <span className="text-[11px] font-semibold text-red-400 leading-none" style={{ marginTop: '4px' }}>{dayOfWeek}</span>
+        </div>
+        {/* Right: year-month + lunar — match left block height */}
+        <div className="flex flex-col justify-between min-w-0" style={{ height: '42px' }}>
+          <span className="text-[18px] font-semibold text-white/90 leading-none truncate">{monthText}</span>
+          <span className="text-[13px] text-white/40 leading-none truncate">{lunarText}</span>
         </div>
       </div>
     );

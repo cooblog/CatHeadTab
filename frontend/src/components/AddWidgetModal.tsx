@@ -49,6 +49,13 @@ const WIDGET_OPTIONS: WidgetOption[] = [
     descKey: 'widget.systemMonitorDesc',
     sizes: ['small', 'medium'],
   },
+  {
+    type: 'clock',
+    icon: '🕐',
+    labelKey: 'widget.clock',
+    descKey: 'widget.clockDesc',
+    sizes: ['small', 'medium'],
+  },
 ];
 
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
@@ -104,6 +111,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         break;
       case 'systemMonitor':
         config = { widgetType: 'systemMonitor' };
+        break;
+      case 'clock':
+        config = { widgetType: 'clock' };
         break;
       default:
         return;

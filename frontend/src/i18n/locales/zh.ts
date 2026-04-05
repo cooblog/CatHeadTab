@@ -352,6 +352,8 @@ export const zh = {
   'widget.countdownDesc': '重要日期倒计时',
   'widget.systemMonitor': '系统监控',
   'widget.systemMonitorDesc': 'CPU 和内存实时监控',
+  'widget.clock': '时钟',
+  'widget.clockDesc': '模拟时钟和数字时间',
   'widget.size': '尺寸',
   'widget.add': '添加小组件',
   'widget.backToList': '返回',

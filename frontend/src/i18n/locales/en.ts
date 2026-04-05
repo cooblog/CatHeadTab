@@ -352,6 +352,8 @@ export const en = {
   'widget.countdownDesc': 'Countdown to an important date',
   'widget.systemMonitor': 'System Monitor',
   'widget.systemMonitorDesc': 'Real-time CPU & memory usage',
+  'widget.clock': 'Clock',
+  'widget.clockDesc': 'Analog clock with digital time',
   'widget.size': 'Size',
   'widget.add': 'Add Widget',
   'widget.backToList': 'Back',
