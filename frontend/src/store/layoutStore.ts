@@ -16,7 +16,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium';
@@ -60,7 +60,15 @@ export interface ItToolsWidgetConfig {
   widgetType: 'itTools';
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig;
+export interface StickyNoteWidgetConfig {
+  widgetType: 'stickyNote';
+  /** The note content (plain text). */
+  content?: string;
+  /** Background color preset key. */
+  color?: 'yellow' | 'pink' | 'green' | 'blue' | 'purple' | 'orange';
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig;
 
 export interface DesktopItem {
   id: string;

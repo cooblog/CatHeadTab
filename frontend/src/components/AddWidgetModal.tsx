@@ -63,6 +63,13 @@ const WIDGET_OPTIONS: WidgetOption[] = [
     descKey: 'widget.itToolsDesc',
     sizes: ['small'],
   },
+  {
+    type: 'stickyNote',
+    icon: '📝',
+    labelKey: 'widget.stickyNote',
+    descKey: 'widget.stickyNoteDesc',
+    sizes: ['small', 'medium'],
+  },
 ];
 
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
@@ -134,6 +141,15 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
       case 'itTools':
         config = { widgetType: 'itTools' };
         break;
+      case 'stickyNote': {
+        const editStickyNote = isEditMode && editItem.widgetConfig?.widgetType === 'stickyNote' ? editItem.widgetConfig : null;
+        config = {
+          widgetType: 'stickyNote',
+          content: editStickyNote?.content ?? '',
+          color: editStickyNote?.color ?? 'yellow',
+        };
+        break;
+      }
       default:
         return;
     }
@@ -340,6 +356,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'itTools' && (isZh
                     ? '🛠️ IT 工具箱集合了开发者常用的在线工具（JSON 格式化、Base64 编解码、UUID 生成、哈希计算等）。点击小组件后会弹出工具窗口，所有工具均可在弹窗内直接使用。'
                     : '🛠️ IT Tools provides a collection of handy online tools for developers (JSON formatter, Base64 encoder/decoder, UUID generator, hash calculator, etc). Click the widget to open a tool window where you can use all tools directly.')}
+                  {selectedType === 'stickyNote' && (isZh
+                    ? '📝 便签小组件可以在桌面上快速记录备忘内容。小尺寸显示便签预览，中尺寸显示更多文字。点击后可以打开完整编辑器进行编辑，支持多种颜色主题。'
+                    : '📝 Sticky Notes lets you quickly jot down memos on your desktop. Small size shows a note preview, medium size shows more text. Click to open a full editor with multiple color themes.')}
                 </p>
               </div>
 
