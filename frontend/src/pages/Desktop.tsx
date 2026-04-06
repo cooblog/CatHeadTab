@@ -10,6 +10,7 @@ import { HistoryBrowser } from '../components/apps/HistoryBrowser';
 import { AddItemModal } from '../components/AddItemModal';
 import { ExploreWorld } from '../components/ExploreWorld';
 import { AddWidgetModal } from '../components/AddWidgetModal';
+import { ItToolsModal } from '../components/ItToolsModal';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
 import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
@@ -706,6 +707,8 @@ export const Desktop: React.FC = () => {
 
   // Explore World state
   const [isExploreOpen, setIsExploreOpen] = useState(false);
+  // IT Tools state
+  const [isItToolsOpen, setIsItToolsOpen] = useState(false);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -877,7 +880,11 @@ export const Desktop: React.FC = () => {
         setIsHistoryBrowserOpen(true);
       }
     } else if (item.type === 'widget') {
-      setEditingWidget(item);
+      if (item.widgetType === 'itTools') {
+        setIsItToolsOpen(true);
+      } else {
+        setEditingWidget(item);
+      }
     }
   };
 
@@ -2027,6 +2034,7 @@ export const Desktop: React.FC = () => {
       {isBookmarkBrowserOpen && <BookmarkBrowser onClose={() => setIsBookmarkBrowserOpen(false)} />}
       {isHistoryBrowserOpen && <HistoryBrowser onClose={() => setIsHistoryBrowserOpen(false)} />}
       {isExploreOpen && <ExploreWorld onClose={() => setIsExploreOpen(false)} />}
+      {isItToolsOpen && <ItToolsModal onClose={() => setIsItToolsOpen(false)} />}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 

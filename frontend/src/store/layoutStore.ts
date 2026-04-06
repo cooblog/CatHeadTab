@@ -16,7 +16,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium';
@@ -56,7 +56,11 @@ export interface ClockWidgetConfig {
   widgetType: 'clock';
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig;
+export interface ItToolsWidgetConfig {
+  widgetType: 'itTools';
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig;
 
 export interface DesktopItem {
   id: string;
@@ -131,8 +135,66 @@ const defaultDock: DesktopItem[] = [
   { id: 'app-history', type: 'app', title: 'History', icon: '🕐' },
 ];
 
+// --- Default desktop items for first-time users ---
+// Includes popular sites and three 2×2 widgets (clock, calendar, weather).
+// These only apply when there is no persisted layout data.
+const defaultDesktopItems: DesktopItem[] = [
+  // Row 1: Widgets (each occupies 2 cols × 2 rows)
+  {
+    id: 'widget-clock-default',
+    type: 'widget',
+    title: 'Clock',
+    widgetType: 'clock',
+    widgetSize: 'medium',
+    widgetConfig: { widgetType: 'clock' },
+  },
+  {
+    id: 'widget-calendar-default',
+    type: 'widget',
+    title: 'Calendar',
+    widgetType: 'calendar',
+    widgetSize: 'medium',
+    widgetConfig: { widgetType: 'calendar' },
+  },
+  {
+    id: 'widget-weather-default',
+    type: 'widget',
+    title: 'Weather',
+    widgetType: 'weather',
+    widgetSize: 'medium',
+    widgetConfig: { widgetType: 'weather' },
+  },
+  {
+    id: 'widget-ittools-default',
+    type: 'widget',
+    title: 'IT Tools',
+    widgetType: 'itTools',
+    widgetSize: 'small',
+    widgetConfig: { widgetType: 'itTools' },
+  },
+  // Popular sites — a curated selection of widely-used websites
+  { id: 'default-google', type: 'link', title: 'Google', url: 'https://www.google.com', icon: '' },
+  { id: 'default-youtube', type: 'link', title: 'YouTube', url: 'https://www.youtube.com', icon: '' },
+  { id: 'default-github', type: 'link', title: 'GitHub', url: 'https://github.com', icon: '' },
+  { id: 'default-bilibili', type: 'link', title: 'Bilibili', url: 'https://www.bilibili.com', icon: '' },
+  { id: 'default-chatgpt', type: 'link', title: 'ChatGPT', url: 'https://chat.openai.com', icon: '' },
+  { id: 'default-deepseek', type: 'link', title: 'DeepSeek', url: 'https://chat.deepseek.com', icon: '' },
+  { id: 'default-weibo', type: 'link', title: '微博', url: 'https://weibo.com', icon: '' },
+  { id: 'default-zhihu', type: 'link', title: '知乎', url: 'https://www.zhihu.com', icon: '' },
+  { id: 'default-xiaohongshu', type: 'link', title: '小红书', url: 'https://www.xiaohongshu.com', icon: '' },
+  { id: 'default-taobao', type: 'link', title: '淘宝', url: 'https://www.taobao.com', icon: '' },
+  { id: 'default-jd', type: 'link', title: '京东', url: 'https://www.jd.com', icon: '' },
+  { id: 'default-baidu', type: 'link', title: '百度', url: 'https://www.baidu.com', icon: '' },
+  { id: 'default-douyin', type: 'link', title: '抖音', url: 'https://www.douyin.com', icon: '' },
+  { id: 'default-qq-video', type: 'link', title: '腾讯视频', url: 'https://v.qq.com', icon: '' },
+  { id: 'default-iqiyi', type: 'link', title: '爱奇艺', url: 'https://www.iqiyi.com', icon: '' },
+  { id: 'default-twitter', type: 'link', title: 'X', url: 'https://x.com', icon: '' },
+  { id: 'default-reddit', type: 'link', title: 'Reddit', url: 'https://www.reddit.com', icon: '' },
+  { id: 'default-wikipedia', type: 'link', title: 'Wikipedia', url: 'https://www.wikipedia.org', icon: '' },
+];
+
 const defaultLayout: DesktopLayout = {
-  pages: [[]],
+  pages: [defaultDesktopItems],
   dock: defaultDock,
 };
 

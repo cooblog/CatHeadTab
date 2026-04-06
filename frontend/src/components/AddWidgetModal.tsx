@@ -56,6 +56,13 @@ const WIDGET_OPTIONS: WidgetOption[] = [
     descKey: 'widget.clockDesc',
     sizes: ['small', 'medium'],
   },
+  {
+    type: 'itTools',
+    icon: '🛠️',
+    labelKey: 'widget.itTools',
+    descKey: 'widget.itToolsDesc',
+    sizes: ['small'],
+  },
 ];
 
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
@@ -74,6 +81,15 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
   const [selectedSize, setSelectedSize] = useState<WidgetSize>(
     isEditMode ? (editItem.widgetSize ?? 'medium') : 'medium'
   );
+
+  // Auto-correct selectedSize when switching widget type if current size is not available
+  React.useEffect(() => {
+    if (!selectedType) return;
+    const option = WIDGET_OPTIONS.find(w => w.type === selectedType);
+    if (option && !option.sizes.includes(selectedSize)) {
+      setSelectedSize(option.sizes[0]);
+    }
+  }, [selectedType, selectedSize]);
 
   // Countdown config
   const editCountdown = isEditMode && editItem.widgetConfig?.widgetType === 'countdown' ? editItem.widgetConfig : null;
@@ -114,6 +130,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         break;
       case 'clock':
         config = { widgetType: 'clock' };
+        break;
+      case 'itTools':
+        config = { widgetType: 'itTools' };
         break;
       default:
         return;
@@ -318,6 +337,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'systemMonitor' && (isZh
                     ? '🖥️ 系统监控小组件实时显示 CPU 和内存使用率。小尺寸显示双环形图概览，中尺寸额外显示处理器型号、核心数等详细信息。'
                     : '🖥️ The system monitor widget shows real-time CPU and memory usage. Small size displays dual ring gauges, medium size adds processor model, core count and more details.')}
+                  {selectedType === 'itTools' && (isZh
+                    ? '🛠️ IT 工具箱集合了开发者常用的在线工具（JSON 格式化、Base64 编解码、UUID 生成、哈希计算等）。点击小组件后会弹出工具窗口，所有工具均可在弹窗内直接使用。'
+                    : '🛠️ IT Tools provides a collection of handy online tools for developers (JSON formatter, Base64 encoder/decoder, UUID generator, hash calculator, etc). Click the widget to open a tool window where you can use all tools directly.')}
                 </p>
               </div>
 
