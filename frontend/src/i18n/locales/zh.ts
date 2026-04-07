@@ -376,4 +376,19 @@ export const zh = {
   'widget.save': '保存',
   'widget.deleteWidget': '移除小组件',
   'desktop.addWidget': '添加小组件',
+
+  // Layout Import/Export
+  'settings.importExportTitle': '布局导入 & 导出',
+  'settings.importExportDesc': '将桌面布局导出为 JSON 文件，或从之前导出的文件中导入。',
+  'settings.exportLayout': '导出布局',
+  'settings.importLayout': '导入布局',
+  'settings.exportSuccess': '布局导出成功！',
+  'settings.importSuccess': '布局导入成功！',
+  'settings.importError': '导入布局失败，文件格式可能无效。',
+  'settings.importConfirmTitle': '导入布局',
+  'settings.importOverwrite': '覆盖',
+  'settings.importOverwriteDesc': '用导入的布局完全替换当前布局',
+  'settings.importMerge': '合并',
+  'settings.importMergeDesc': '将导入文件中不存在的项目添加到当前布局中',
+  'settings.importInvalidFile': '无效的布局文件，请选择有效的 CatHeadTab 布局 JSON。',
 };

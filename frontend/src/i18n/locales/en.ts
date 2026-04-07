@@ -376,4 +376,19 @@ export const en = {
   'widget.save': 'Save',
   'widget.deleteWidget': 'Remove Widget',
   'desktop.addWidget': 'Add Widget',
+
+  // Layout Import/Export
+  'settings.importExportTitle': 'Layout Import & Export',
+  'settings.importExportDesc': 'Export your desktop layout as a JSON file, or import from a previously exported file.',
+  'settings.exportLayout': 'Export Layout',
+  'settings.importLayout': 'Import Layout',
+  'settings.exportSuccess': 'Layout exported successfully!',
+  'settings.importSuccess': 'Layout imported successfully!',
+  'settings.importError': 'Failed to import layout. The file may be invalid.',
+  'settings.importConfirmTitle': 'Import Layout',
+  'settings.importOverwrite': 'Overwrite',
+  'settings.importOverwriteDesc': 'Replace current layout entirely with the imported one',
+  'settings.importMerge': 'Merge',
+  'settings.importMergeDesc': 'Add imported items that don\'t already exist to your current layout',
+  'settings.importInvalidFile': 'Invalid layout file. Please select a valid CatHeadTab layout JSON.',
 };

@@ -97,6 +97,10 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // --- Import/Export state ---
+  const [importConfirmData, setImportConfirmData] = useState<{ pages: any[][]; dock: any[] } | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
   // Show/hide scroll-to-top button based on scroll position
   useEffect(() => {
     const el = contentScrollRef.current;
@@ -533,6 +537,115 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const applyServerUrl = useCallback((newUrl: string) => {
     setServerUrl(newUrl.trim());
   }, [setServerUrl]);
+
+  // --- Export layout as JSON file ---
+  const handleExportLayout = useCallback(() => {
+    const { layout } = useLayoutStore.getState();
+    const exportData = {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      source: 'CatHeadTab',
+      pages: layout.pages,
+      dock: layout.dock,
+    };
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `catheadtab-layout-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // --- Import layout: parse file and show confirm dialog ---
+  const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        // Validate structure: must have pages array
+        if (!data || !Array.isArray(data.pages)) {
+          alert(t('settings.importInvalidFile'));
+          return;
+        }
+        const dock = Array.isArray(data.dock) ? data.dock : [];
+        setImportConfirmData({ pages: data.pages, dock });
+      } catch {
+        alert(t('settings.importInvalidFile'));
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+  }, [t]);
+
+  // --- Import: overwrite current layout ---
+  const handleImportOverwrite = useCallback(() => {
+    if (!importConfirmData) return;
+    const { setLayout } = useLayoutStore.getState();
+    setLayout({ pages: importConfirmData.pages, dock: importConfirmData.dock });
+    // Trigger cloud sync if logged in
+    const { jwtToken: token } = useConfigStore.getState();
+    if (token) {
+      useLayoutStore.getState().syncLayoutOnly().catch(err => {
+        console.error('Failed to sync imported layout to cloud', err);
+      });
+    }
+    setImportConfirmData(null);
+  }, [importConfirmData]);
+
+  // --- Import: merge with current layout ---
+  const handleImportMerge = useCallback(() => {
+    if (!importConfirmData) return;
+    const currentLayout = useLayoutStore.getState().layout;
+
+    // Collect all existing IDs
+    const existingIds = new Set<string>();
+    const collectIds = (items: any[]) => {
+      for (const item of items) {
+        existingIds.add(item.id);
+        if (item.children) collectIds(item.children);
+      }
+    };
+    currentLayout.pages.forEach(p => collectIds(p));
+    collectIds(currentLayout.dock);
+
+    // Find new items from imported data
+    const newItems: any[] = [];
+    const findNew = (items: any[]) => {
+      for (const item of items) {
+        if (!existingIds.has(item.id)) {
+          newItems.push(item);
+        }
+      }
+    };
+    importConfirmData.pages.forEach(p => findNew(p));
+    findNew(importConfirmData.dock);
+
+    if (newItems.length > 0) {
+      const merged = {
+        pages: [...currentLayout.pages],
+        dock: [...currentLayout.dock],
+      };
+      // Add new items to the last page
+      const lastIdx = merged.pages.length - 1;
+      merged.pages[lastIdx] = [...merged.pages[lastIdx], ...newItems];
+      const { setLayout } = useLayoutStore.getState();
+      setLayout(merged);
+    }
+
+    // Trigger cloud sync if logged in
+    const { jwtToken: token } = useConfigStore.getState();
+    if (token) {
+      useLayoutStore.getState().syncLayoutOnly().catch(err => {
+        console.error('Failed to sync merged layout to cloud', err);
+      });
+    }
+    setImportConfirmData(null);
+  }, [importConfirmData]);
 
 
   // Resolve display URL for the current wallpaper preview image
@@ -1221,6 +1334,52 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                       />
                     )}
                   </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* Layout Import/Export section */}
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">{t('settings.importExportTitle')}</h3>
+                    <p className="text-[13px] text-white/50 mb-5">{t('settings.importExportDesc')}</p>
+
+                    <div className="flex flex-wrap gap-3">
+                      {/* Export button */}
+                      <button
+                        type="button"
+                        onClick={handleExportLayout}
+                        className="flex items-center gap-2 px-5 py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] text-black font-semibold text-[13px] transition-colors active:scale-95 shadow-md"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                          <polyline points="7 10 12 15 17 10"/>
+                          <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        {t('settings.exportLayout')}
+                      </button>
+
+                      {/* Import button */}
+                      <button
+                        type="button"
+                        onClick={() => importFileRef.current?.click()}
+                        className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-semibold text-[13px] transition-colors active:scale-95 border border-white/10 shadow-md"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                          <polyline points="17 8 12 3 7 8"/>
+                          <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        {t('settings.importLayout')}
+                      </button>
+                      <input
+                        ref={importFileRef}
+                        type="file"
+                        accept=".json,application/json"
+                        className="hidden"
+                        onChange={handleImportFile}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1389,6 +1548,71 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
               type="button"
               onClick={closeLocalPreview}
               className="px-5 sm:px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium text-[13px] sm:text-[14px] transition-colors active:scale-95"
+            >
+              {t('settings.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* === Import confirm dialog (Overwrite / Merge) === */}
+      {importConfirmData && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
+          onClick={() => setImportConfirmData(null)}
+        >
+          <div
+            className="bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 p-6 animate-scaleIn"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Title */}
+            <h3 className="text-lg font-bold text-white mb-1">{t('settings.importConfirmTitle')}</h3>
+            <p className="text-[13px] text-white/50 mb-5">
+              {importConfirmData.pages.flat().length + importConfirmData.dock.length} items
+            </p>
+
+            {/* Options */}
+            <div className="space-y-3">
+              {/* Overwrite option */}
+              <button
+                type="button"
+                onClick={handleImportOverwrite}
+                className="w-full flex items-start gap-3 p-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 transition-all text-left group"
+              >
+                <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0 group-hover:bg-red-500/30 transition-colors">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400">
+                    <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                  </svg>
+                </div>
+                <div>
+                  <span className="block text-[14px] font-semibold text-red-300">{t('settings.importOverwrite')}</span>
+                  <span className="block text-[12px] text-white/40 mt-0.5">{t('settings.importOverwriteDesc')}</span>
+                </div>
+              </button>
+
+              {/* Merge option */}
+              <button
+                type="button"
+                onClick={handleImportMerge}
+                className="w-full flex items-start gap-3 p-4 rounded-xl bg-[#72d565]/10 hover:bg-[#72d565]/20 border border-[#72d565]/20 hover:border-[#72d565]/40 transition-all text-left group"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[#72d565]/20 flex items-center justify-center shrink-0 group-hover:bg-[#72d565]/30 transition-colors">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#72d565]">
+                    <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 009 9"/>
+                  </svg>
+                </div>
+                <div>
+                  <span className="block text-[14px] font-semibold text-[#72d565]">{t('settings.importMerge')}</span>
+                  <span className="block text-[12px] text-white/40 mt-0.5">{t('settings.importMergeDesc')}</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Cancel */}
+            <button
+              type="button"
+              onClick={() => setImportConfirmData(null)}
+              className="w-full mt-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 text-[13px] font-medium transition-colors"
             >
               {t('settings.cancel')}
             </button>
