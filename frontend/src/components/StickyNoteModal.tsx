@@ -100,7 +100,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   }, []);
 
   // Auto-save on change with debounce
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveNote = useCallback((newContent: string, newColor: NoteColor) => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
