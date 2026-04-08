@@ -70,6 +70,20 @@ const WIDGET_OPTIONS: WidgetOption[] = [
     descKey: 'widget.stickyNoteDesc',
     sizes: ['small', 'medium'],
   },
+  {
+    type: 'stock',
+    icon: '📈',
+    labelKey: 'widget.stock',
+    descKey: 'widget.stockDesc',
+    sizes: ['small', 'medium'],
+  },
+  {
+    type: 'exchangeRate',
+    icon: '💱',
+    labelKey: 'widget.exchangeRate',
+    descKey: 'widget.exchangeRateDesc',
+    sizes: ['small', 'medium'],
+  },
 ];
 
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
@@ -147,6 +161,22 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
           widgetType: 'stickyNote',
           content: editStickyNote?.content ?? '',
           color: editStickyNote?.color ?? 'yellow',
+        };
+        break;
+      }
+      case 'stock': {
+        const editStock = isEditMode && editItem.widgetConfig?.widgetType === 'stock' ? editItem.widgetConfig : null;
+        config = {
+          widgetType: 'stock',
+          watchlist: editStock?.watchlist ?? undefined,
+        };
+        break;
+      }
+      case 'exchangeRate': {
+        const editER = isEditMode && editItem.widgetConfig?.widgetType === 'exchangeRate' ? editItem.widgetConfig : null;
+        config = {
+          widgetType: 'exchangeRate',
+          pairs: editER?.pairs ?? undefined,
         };
         break;
       }
@@ -359,6 +389,12 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'stickyNote' && (isZh
                     ? '📝 便签小组件可以在桌面上快速记录备忘内容。小尺寸显示便签预览，中尺寸显示更多文字。点击后可以打开完整编辑器进行编辑，支持多种颜色主题。'
                     : '📝 Sticky Notes lets you quickly jot down memos on your desktop. Small size shows a note preview, medium size shows more text. Click to open a full editor with multiple color themes.')}
+                  {selectedType === 'stock' && (isZh
+                    ? '📈 股票小助手可以实时跟踪自选股行情。支持美股、港股、A股三大市场。小尺寸显示 3 只股票概览，中尺寸显示更多详情。点击可展开完整自选股列表，支持添加和删除股票。数据来源：Yahoo Finance。'
+                    : '📈 Stock Tracker monitors your watchlist in real-time. Supports US, Hong Kong and China A-share markets. Small size shows 3 stocks at a glance, medium shows more details. Click to open the full watchlist with add/remove capabilities. Data from Yahoo Finance.')}
+                  {selectedType === 'exchangeRate' && (isZh
+                    ? '💱 汇率助手实时显示主要货币汇率。支持美元、欧元、人民币、日元、英镑、港币等多种货币。小尺寸显示精简汇率列表，中尺寸显示更多详情。点击可打开管理面板添加或移除货币对。数据来源：Frankfurter API（欧洲央行）。'
+                    : '💱 Exchange Rate widget shows live currency exchange rates. Supports USD, EUR, CNY, JPY, GBP, HKD and more. Small size shows a compact list, medium shows more details. Click to open the management panel to add or remove currency pairs. Data from Frankfurter API (ECB).')}
                 </p>
               </div>
 

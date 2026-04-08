@@ -16,7 +16,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium';
@@ -68,7 +68,39 @@ export interface StickyNoteWidgetConfig {
   color?: 'yellow' | 'pink' | 'green' | 'blue' | 'purple' | 'orange';
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig;
+/** Stock market type. */
+export type StockMarket = 'US' | 'HK' | 'CN';
+
+export interface StockItem {
+  /** Yahoo Finance symbol (e.g. "AAPL", "0700.HK", "600519.SS"). */
+  symbol: string;
+  /** Display name (e.g. "Apple", "腾讯", "贵州茅台"). */
+  name: string;
+  /** Market type for display grouping. */
+  market: StockMarket;
+}
+
+export interface StockWidgetConfig {
+  widgetType: 'stock';
+  /** User's watchlist of stock symbols. */
+  watchlist?: StockItem[];
+}
+
+/** Exchange rate currency pair. */
+export interface ExchangeRatePair {
+  /** Base currency code (e.g. "USD"). */
+  from: string;
+  /** Target currency code (e.g. "CNY"). */
+  to: string;
+}
+
+export interface ExchangeRateWidgetConfig {
+  widgetType: 'exchangeRate';
+  /** User's selected currency pairs. */
+  pairs?: ExchangeRatePair[];
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig;
 
 export interface DesktopItem {
   id: string;

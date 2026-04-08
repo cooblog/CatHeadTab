@@ -887,6 +887,9 @@ export const Desktop: React.FC = () => {
         setIsItToolsOpen(true);
       } else if (item.widgetType === 'stickyNote') {
         setStickyNoteItem(item);
+      } else if (item.widgetType === 'stock') {
+        // Stock widget manages its own detail modal internally — do nothing here
+        return;
       } else {
         setEditingWidget(item);
       }

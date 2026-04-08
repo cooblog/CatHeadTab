@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DesktopItem, WidgetSize, WeatherWidgetConfig, CountdownWidgetConfig, StickyNoteWidgetConfig } from '../../store/layoutStore';
+import type { DesktopItem, WidgetSize, WeatherWidgetConfig, CountdownWidgetConfig, StickyNoteWidgetConfig, StockWidgetConfig, ExchangeRateWidgetConfig } from '../../store/layoutStore';
 import { WIDGET_SIZE_MAP } from '../../store/layoutStore';
 import { CalendarWidget } from './CalendarWidget';
 import { WeatherWidget } from './WeatherWidget';
@@ -7,6 +7,8 @@ import { CountdownWidget } from './CountdownWidget';
 import { SystemMonitorWidget } from './SystemMonitorWidget';
 import { ClockWidget } from './ClockWidget';
 import { StickyNoteWidget } from './StickyNoteWidget';
+import { StockWidget } from './StockWidget';
+import { ExchangeRateWidget } from './ExchangeRateWidget';
 
 interface DesktopWidgetProps {
   item: DesktopItem;
@@ -67,6 +69,10 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         );
       case 'stickyNote':
         return <StickyNoteWidget size={size} config={item.widgetConfig as StickyNoteWidgetConfig} />;
+      case 'stock':
+        return <StockWidget size={size} config={item.widgetConfig as StockWidgetConfig} itemId={item.id} />;
+      case 'exchangeRate':
+        return <ExchangeRateWidget size={size} config={item.widgetConfig as ExchangeRateWidgetConfig} itemId={item.id} />;
       default:
         return (
           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">

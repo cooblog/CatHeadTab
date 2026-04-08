@@ -12,8 +12,24 @@
     "bookmarks",
     "history",
     "system.cpu",
-    "system.memory"
+    "system.memory",
+    "declarativeNetRequest"
   ],
+  "host_permissions": [
+    "https://query1.finance.yahoo.com/*",
+    "https://query2.finance.yahoo.com/*",
+    "https://hq.sinajs.cn/*",
+    "https://api.frankfurter.app/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "sina_headers",
+        "enabled": true,
+        "path": "rules/sina_headers.json"
+      }
+    ]
+  },
   "icons": {
     "16": "icon-16.png",
     "32": "icon-32.png",
