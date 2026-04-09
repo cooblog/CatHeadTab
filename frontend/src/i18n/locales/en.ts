@@ -376,6 +376,7 @@ export const en = {
   'widget.targetDate': 'Target Date',
   'widget.city': 'City',
   'widget.unit': 'Temperature Unit',
+  'widget.opacity': 'Background Opacity',
   'widget.editWidget': 'Edit Widget',
   'widget.save': 'Save',
   'widget.deleteWidget': 'Remove Widget',

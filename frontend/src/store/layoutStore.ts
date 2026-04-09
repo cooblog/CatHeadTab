@@ -113,6 +113,8 @@ export interface DesktopItem {
   widgetType?: WidgetType;
   widgetSize?: WidgetSize;
   widgetConfig?: WidgetConfig;
+  /** Widget opacity (0–100, default 100 = fully opaque). */
+  widgetOpacity?: number;
 }
 
 export interface DesktopLayout {

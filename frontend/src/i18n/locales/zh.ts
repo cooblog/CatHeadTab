@@ -376,6 +376,7 @@ export const zh = {
   'widget.targetDate': '目标日期',
   'widget.city': '城市',
   'widget.unit': '温度单位',
+  'widget.opacity': '背景透明度',
   'widget.editWidget': '编辑小组件',
   'widget.save': '保存',
   'widget.deleteWidget': '移除小组件',

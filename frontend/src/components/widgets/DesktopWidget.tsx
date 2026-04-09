@@ -84,14 +84,14 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
 
   return (
     <div
-      className={`widget-container relative w-full h-full overflow-hidden rounded-[20px] border border-white/[0.15] shadow-[0_4px_24px_rgba(0,0,0,0.3)] ${
+      className={`widget-container relative w-full h-full overflow-hidden rounded-[20px] border border-white/[0.15] shadow-[0_4px_24px_rgba(0,0,0,0.3)] backdrop-blur-2xl ${
         isOverlay ? 'shadow-[0_16px_50px_rgba(0,0,0,0.5)] scale-[1.02]' : ''
       }`}
-      style={{
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0.2) 100%)',
-      }}
     >
-      {renderWidget()}
+      {/* Content layer */}
+      <div className="relative w-full h-full">
+        {renderWidget()}
+      </div>
     </div>
   );
 };

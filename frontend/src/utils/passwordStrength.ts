@@ -4,6 +4,17 @@
 export type PasswordStrengthLevel = 'weak' | 'fair' | 'good' | 'strong';
 
 /**
+ * PasswordRuleKey 密码规则的 i18n key 联合类型
+ */
+export type PasswordRuleKey =
+  | 'password.ruleMinLength'
+  | 'password.ruleMixedCase'
+  | 'password.ruleNumber'
+  | 'password.ruleSpecialChar'
+  | 'password.ruleCommon'
+  | 'password.ruleRepeating';
+
+/**
  * 密码强度校验结果
  */
 export interface PasswordStrengthResult {
@@ -12,7 +23,7 @@ export interface PasswordStrengthResult {
   /** 得分 0-4 */
   score: number;
   /** 未通过的规则 key（用于 i18n） */
-  failedRules: string[];
+  failedRules: PasswordRuleKey[];
 }
 
 /**
@@ -34,7 +45,7 @@ const COMMON_WEAK_PASSWORDS = new Set([
  * @returns 密码强度结果
  */
 export const checkPasswordStrength = (password: string): PasswordStrengthResult => {
-  const failedRules: string[] = [];
+  const failedRules: PasswordRuleKey[] = [];
   let score = 0;
 
   // 规则 1: 最少 8 个字符
