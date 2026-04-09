@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/google/uuid"
@@ -170,6 +171,9 @@ func (r *postgresUserRepository) UpdatePreferences(id uuid.UUID, prefs map[strin
 	for k, v := range prefs {
 		existing[k] = v
 	}
+
+	// Auto-inject update timestamp so the frontend can compare freshness
+	existing["_updatedAt"] = time.Now().UTC().Format(time.RFC3339Nano)
 
 	data, err := json.Marshal(existing)
 	if err != nil {

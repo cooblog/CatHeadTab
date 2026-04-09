@@ -5,7 +5,8 @@ import { useConfigStore, customStorage } from './configStore';
 import { getRawBlob, compressImageToWebP, saveImageBlob } from '../utils/imageStore';
 
 const triggerAutoSync = () => {
-  const { jwtToken } = useConfigStore.getState();
+  const { jwtToken, markLocalModified } = useConfigStore.getState();
+  markLocalModified();
   if (jwtToken) {
     useLayoutStore.getState().syncLayoutOnly().catch(err => {
       console.error('Failed to auto-sync layout to cloud', err);
@@ -820,7 +821,12 @@ export const useLayoutStore = create<LayoutState>()(
         set({ loading: true, error: null });
         try {
           const { layout } = get();
-          await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
+          const res = await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
+          // 使用服务器返回的 updated_at 更新本地时间戳，保持两端一致
+          if (res.data?.updated_at) {
+            const serverTs = new Date(res.data.updated_at).getTime();
+            useConfigStore.getState().setLastLocalModifiedAt(serverTs);
+          }
           set({ loading: false });
         } catch (err: any) {
           set({ error: err.message || 'Layout sync failed', loading: false });
@@ -830,6 +836,7 @@ export const useLayoutStore = create<LayoutState>()(
 
       syncPreferencesToCloud: async () => {
         set({ loading: true, error: null });
+        useConfigStore.getState().markLocalModified();
         try {
           const { backgroundImage, lockIdleTimeout } = useConfigStore.getState();
 
@@ -859,8 +866,14 @@ export const useLayoutStore = create<LayoutState>()(
         set({ loading: true, error: null });
         try {
           const { layout } = get();
-          await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
+          const layoutRes = await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
           
+          // 使用服务器返回的 updated_at 更新本地时间戳
+          if (layoutRes.data?.updated_at) {
+            const serverTs = new Date(layoutRes.data.updated_at).getTime();
+            useConfigStore.getState().setLastLocalModifiedAt(serverTs);
+          }
+
           const { backgroundImage, lockIdleTimeout } = useConfigStore.getState();
 
           if (backgroundImage.startsWith('idb://')) {
@@ -895,6 +908,12 @@ export const useLayoutStore = create<LayoutState>()(
           const cloudData = res.data.layout;
           const migrated = migrateLayout(cloudData);
           set({ layout: migrated });
+
+          // 使用云端布局的 updated_at 更新本地时间戳
+          if (res.data.updated_at) {
+            const serverTs = new Date(res.data.updated_at).getTime();
+            useConfigStore.getState().setLastLocalModifiedAt(serverTs);
+          }
 
           const prefsRes = await client.get('/api/v1/user/preferences');
           const bg = prefsRes.data.preferences?.backgroundImage;

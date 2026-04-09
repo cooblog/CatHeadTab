@@ -40,6 +40,7 @@ Thumbs.db
 # Frontend
 /frontend/.vite/
 /frontend/node_modules/
+*.tsbuildinfo
 
 # Docker - 数据库持久化数据
 data/

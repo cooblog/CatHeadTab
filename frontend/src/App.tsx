@@ -132,8 +132,10 @@ function App() {
     } catch (err) {
       console.error('Sync strategy failed:', err);
     } finally {
-      // 持久化"冲突已解决"时间戳，刷新后不再重复弹窗
-      setLastSyncResolvedAt(Date.now());
+      // 持久化"冲突已解决"时间戳 + 更新本地修改时间戳
+      const now = Date.now();
+      setLastSyncResolvedAt(now);
+      useConfigStore.getState().setLastLocalModifiedAt(now);
       setSyncing(false);
       setShowSyncConflict(false);
     }
@@ -158,8 +160,10 @@ function App() {
 
           let cloudCount = 0;
           let cloudData: any = null;
+          let cloudResData: any = null;
           try {
             const cloudRes = await client.get('/api/v1/layout');
+            cloudResData = cloudRes.data;
             cloudData = cloudRes.data.layout;
             if (cloudData && cloudData.pages) {
               const cloudDock = Array.isArray(cloudData.dock) ? cloudData.dock : [];
@@ -169,10 +173,11 @@ function App() {
             // Cloud layout fetch failed — treat as empty
           }
 
-          // Decision logic:
-          // 1. Both empty or cloud empty → upload local to cloud (no prompt needed)
-          // 2. Local is default (untouched) and cloud has data → pull from cloud (no prompt needed)
-          // 3. Both have data → compare content; if identical skip, otherwise check if recently resolved
+          // Decision logic based on timestamps ("last-write-wins"):
+          // 1. Both empty or cloud empty → upload local to cloud
+          // 2. Local empty/default, cloud has data → pull from cloud
+          // 3. Both have data → compare updated_at timestamps, newer side wins
+          //    - If item IDs differ significantly → show conflict modal
           const localHasContent = localCount > 2; // More than just the default dock apps
           const cloudHasContent = cloudCount > 0;
 
@@ -185,7 +190,31 @@ function App() {
             await pullLayoutFromCloud();
             setSyncing(false);
           } else {
-            // 两端都有内容 — 先比较数据是否实质一致
+            // 两端都有数据 — 基于时间戳决定谁覆盖谁
+
+            // 1. 获取云端时间戳
+            //    layout updated_at 来自后端响应顶层
+            //    preferences _updatedAt 嵌入在 preferences JSONB 中
+            const cloudLayoutUpdatedAt = cloudResData?.updated_at
+              ? new Date(cloudResData.updated_at).getTime()
+              : 0;
+
+            let cloudPrefsUpdatedAt = 0;
+            try {
+              const prefsRes = await client.get('/api/v1/user/preferences');
+              const prefsUpdatedStr = prefsRes.data.preferences?._updatedAt;
+              if (prefsUpdatedStr) {
+                cloudPrefsUpdatedAt = new Date(prefsUpdatedStr).getTime();
+              }
+            } catch {
+              console.warn('Failed to fetch cloud preferences');
+            }
+
+            // 云端最新修改时间 = layout 和 preferences 中较新的那个
+            const cloudLatest = Math.max(cloudLayoutUpdatedAt, cloudPrefsUpdatedAt);
+            const localLatest = useConfigStore.getState().lastLocalModifiedAt;
+
+            // 2. 比较 item ID 集合判断布局结构是否一致
             const localIds = new Set<string>();
             const collectLocalIds = (items: DesktopItem[]) => {
               for (const item of items) {
@@ -209,19 +238,35 @@ function App() {
               collectCloudIds(cloudDock);
             }
 
-            // 如果本地和云端包含完全相同的 item ID 集合，视为数据一致，静默跳过
             const idsMatch = localIds.size === cloudIds.size && [...localIds].every(id => cloudIds.has(id));
 
+            // 3. 决策
+            console.log('[Sync] idsMatch:', idsMatch, '| cloudLatest:', cloudLatest, '| localLatest:', localLatest);
+
             if (idsMatch) {
-              // 数据一致，无需弹窗，静默同步最新本地数据到云端
-              await uploadLayoutToCloud();
-              setSyncing(false);
-            } else if (Date.now() - useConfigStore.getState().lastSyncResolvedAt < 30 * 1000) {
-              // 用户在 30 秒内刚解决过冲突（可能刚刷新），静默用本地数据同步到云端
-              await uploadLayoutToCloud();
+              // 布局结构一致 — 按时间戳决定方向
+              // 允许 5 秒的误差（网络延迟 + 时钟偏移）
+              const THRESHOLD_MS = 5000;
+
+              if (cloudLatest > localLatest + THRESHOLD_MS) {
+                // 云端更新 — 拉取云端数据（布局 + 偏好 + 壁纸）
+                console.log('[Sync] Cloud is newer, pulling from cloud');
+                await pullLayoutFromCloud();
+                // 更新本地时间戳以与云端对齐，防止下次刷新误判
+                useConfigStore.getState().setLastLocalModifiedAt(cloudLatest);
+              } else if (localLatest > cloudLatest + THRESHOLD_MS) {
+                // 本地更新 — 推送到云端
+                console.log('[Sync] Local is newer, uploading to cloud');
+                await uploadLayoutToCloud();
+              } else {
+                // 时间戳接近 — 认为一致，跳过
+                console.log('[Sync] Local and cloud are in sync, skipping');
+              }
               setSyncing(false);
             } else {
-              // 数据确实不一致且不在冷却期，弹出冲突对话框
+              // 布局结构不同 — 始终弹出冲突对话框让用户选择
+              // （即使在冷却期内也弹窗，因为 ID 不同意味着两端数据差异较大，不能自动决策）
+              console.log('[Sync] IDs differ, showing conflict modal');
               setLocalItemCount(localCount);
               setCloudItemCount(cloudCount);
               setSyncing(false);

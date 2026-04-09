@@ -41,6 +41,8 @@ interface ConfigState {
   lockIdleTimeout: number
   /** Timestamp (ms) when the user last resolved a sync conflict. Used to suppress re-prompting after refresh. */
   lastSyncResolvedAt: number
+  /** Timestamp (ms) when local data (layout/preferences) was last modified by the user. */
+  lastLocalModifiedAt: number
   setServerUrl: (url: string) => void
   setLanguage: (lang: 'zh' | 'en') => void
   setJwtToken: (token: string | null) => void
@@ -49,6 +51,9 @@ interface ConfigState {
   setLocked: (locked: boolean) => void
   setLockIdleTimeout: (ms: number) => void
   setLastSyncResolvedAt: (ts: number) => void
+  setLastLocalModifiedAt: (ts: number) => void
+  /** Convenience: set lastLocalModifiedAt to Date.now(). Call when user changes layout/preferences. */
+  markLocalModified: () => void
   logout: () => void
   isConfigured: () => boolean
   /** Returns the effective API URL (env variable takes precedence over user input). */
@@ -91,6 +96,7 @@ export const useConfigStore = create<ConfigState>()(
       isLocked: false,
       lockIdleTimeout: 5 * 60 * 1000,
       lastSyncResolvedAt: 0,
+      lastLocalModifiedAt: 0,
       setServerUrl: (url) => set({ serverUrl: url }),
       setLanguage: (lang) => set({ language: lang }),
       setJwtToken: (token) => set({ jwtToken: token }),
@@ -99,6 +105,8 @@ export const useConfigStore = create<ConfigState>()(
       setLocked: (locked) => set({ isLocked: locked }),
       setLockIdleTimeout: (ms) => set({ lockIdleTimeout: ms }),
       setLastSyncResolvedAt: (ts) => set({ lastSyncResolvedAt: ts }),
+      setLastLocalModifiedAt: (ts) => set({ lastLocalModifiedAt: ts }),
+      markLocalModified: () => set({ lastLocalModifiedAt: Date.now() }),
       logout: () => set({ jwtToken: null, userProfile: null }),
       isConfigured: () => !!(ENV_API_URL || get().serverUrl),
       getEffectiveServerUrl: () => ENV_API_URL || get().serverUrl,

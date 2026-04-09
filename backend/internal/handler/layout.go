@@ -24,13 +24,17 @@ func (h *LayoutHandler) Get(c *gin.Context) {
 	userIDStr := c.GetString("user_id")
 	userID, _ := uuid.Parse(userIDStr)
 
-	data, err := h.layoutRepo.GetLayout(userID)
+	result, err := h.layoutRepo.GetLayout(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve layout"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"layout": data})
+	resp := gin.H{"layout": result.Data}
+	if result.UpdatedAt != nil {
+		resp["updated_at"] = result.UpdatedAt
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // Update saves the desktop layout for the authenticated user.
@@ -45,10 +49,15 @@ func (h *LayoutHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if err := h.layoutRepo.UpsertLayout(userID, req); err != nil {
+	updatedAt, err := h.layoutRepo.UpsertLayout(userID, req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save layout"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Layout saved successfully"})
+	resp := gin.H{"message": "Layout saved successfully"}
+	if updatedAt != nil {
+		resp["updated_at"] = updatedAt
+	}
+	c.JSON(http.StatusOK, resp)
 }
