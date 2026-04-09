@@ -103,6 +103,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
 	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
 
+	// Rate limiter for login endpoint (max 10 requests per minute per IP + progressive blocking)
+	loginRateLimiter := middleware.NewLoginRateLimiter(10)
+
 	// Public routes (no auth) — Preset sites (available to all users)
 	r.GET("/api/v1/preset-sites", presetHandler.ListAll)                       // Legacy: returns everything
 	r.GET("/api/v1/preset-sites/search", presetHandler.SearchSites)            // New: search sites by keyword
@@ -121,7 +124,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	auth := r.Group("/api/v1/auth")
 	{
 		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
+		auth.POST("/login", middleware.LoginRateLimit(loginRateLimiter), authHandler.Login)
 		auth.POST("/verify-email", authHandler.VerifyEmail)
 		auth.POST("/forgot-password", middleware.EmailRateLimit(emailRateLimiter), authHandler.ForgotPassword)
 		auth.POST("/reset-password", authHandler.ResetPassword)

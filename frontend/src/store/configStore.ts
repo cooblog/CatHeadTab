@@ -39,6 +39,8 @@ interface ConfigState {
   isLocked: boolean
   /** Idle timeout before auto-lock (milliseconds). Default 5 minutes. */
   lockIdleTimeout: number
+  /** Timestamp (ms) when the user last resolved a sync conflict. Used to suppress re-prompting after refresh. */
+  lastSyncResolvedAt: number
   setServerUrl: (url: string) => void
   setLanguage: (lang: 'zh' | 'en') => void
   setJwtToken: (token: string | null) => void
@@ -46,6 +48,7 @@ interface ConfigState {
   setUserProfile: (profile: UserProfile | null) => void
   setLocked: (locked: boolean) => void
   setLockIdleTimeout: (ms: number) => void
+  setLastSyncResolvedAt: (ts: number) => void
   logout: () => void
   isConfigured: () => boolean
   /** Returns the effective API URL (env variable takes precedence over user input). */
@@ -87,6 +90,7 @@ export const useConfigStore = create<ConfigState>()(
       userProfile: null,
       isLocked: false,
       lockIdleTimeout: 5 * 60 * 1000,
+      lastSyncResolvedAt: 0,
       setServerUrl: (url) => set({ serverUrl: url }),
       setLanguage: (lang) => set({ language: lang }),
       setJwtToken: (token) => set({ jwtToken: token }),
@@ -94,6 +98,7 @@ export const useConfigStore = create<ConfigState>()(
       setUserProfile: (profile) => set({ userProfile: profile }),
       setLocked: (locked) => set({ isLocked: locked }),
       setLockIdleTimeout: (ms) => set({ lockIdleTimeout: ms }),
+      setLastSyncResolvedAt: (ts) => set({ lastSyncResolvedAt: ts }),
       logout: () => set({ jwtToken: null, userProfile: null }),
       isConfigured: () => !!(ENV_API_URL || get().serverUrl),
       getEffectiveServerUrl: () => ENV_API_URL || get().serverUrl,

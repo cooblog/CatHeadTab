@@ -395,4 +395,30 @@ export const en = {
   'settings.importMerge': 'Merge',
   'settings.importMergeDesc': 'Add imported items that don\'t already exist to your current layout',
   'settings.importInvalidFile': 'Invalid layout file. Please select a valid CatHeadTab layout JSON.',
+
+  // Password Strength
+  'password.level_weak': 'Weak',
+  'password.level_fair': 'Fair',
+  'password.level_good': 'Good',
+  'password.level_strong': 'Strong',
+  'password.ruleMinLength': 'At least 8 characters',
+  'password.ruleMixedCase': 'Include uppercase and lowercase letters',
+  'password.ruleNumber': 'Include a number',
+  'password.ruleSpecialChar': 'Include a special character (e.g. !@#$%)',
+  'password.ruleCommon': 'Cannot use common weak passwords',
+  'password.ruleRepeating': 'Cannot be all repeating characters',
+  'password.tooWeak': 'Password is too weak. Please use a more complex password.',
+
+  // Sync Conflict
+  'sync.conflictTitle': 'Data Sync',
+  'sync.conflictDesc': 'Both local and cloud have data. How would you like to sync?',
+  'sync.localData': 'Local',
+  'sync.cloudData': 'Cloud',
+  'sync.items': 'items',
+  'sync.merge': 'Merge Data',
+  'sync.mergeDesc': 'Keep cloud data and append local-only items (recommended)',
+  'sync.cloudOverwriteLocal': 'Use Cloud Data',
+  'sync.cloudOverwriteLocalDesc': 'Overwrite local with cloud data. Local-only items will be lost',
+  'sync.localOverwriteCloud': 'Use Local Data',
+  'sync.localOverwriteCloudDesc': 'Overwrite cloud with local data. Cloud-only items will be lost',
 };

@@ -1,11 +1,12 @@
-import { useEffect, useState, useCallback, useSyncExternalStore, lazy, Suspense } from 'react'
+import { useEffect, useState, useCallback, useRef, useSyncExternalStore, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
-import { useLayoutStore } from './store/layoutStore'
+import { useLayoutStore, DesktopItem } from './store/layoutStore'
 import client from './api/client'
 import { Desktop } from './pages/Desktop'
 import { loadImageBlob } from './utils/imageStore'
 import { LockScreen } from './components/LockScreen'
+import { SyncConflictModal, SyncStrategy } from './components/SyncConflictModal'
 import { useIdleTimer } from './hooks/useIdleTimer'
 
 // Lazy-loaded routes (not needed on first render)
@@ -31,11 +32,20 @@ function useStoreHydrated() {
 }
 
 function App() {
-  const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout } = useConfigStore();
-  const { pullLayoutFromCloud } = useLayoutStore();
+  const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout, setLastSyncResolvedAt } = useConfigStore();
+  const { pullLayoutFromCloud, uploadLayoutToCloud, mergeLayoutWithCloud } = useLayoutStore();
   const hydrated = useStoreHydrated();
   const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
+
+  // Sync conflict modal state
+  const [showSyncConflict, setShowSyncConflict] = useState(false);
+  const [localItemCount, setLocalItemCount] = useState(0);
+  const [cloudItemCount, setCloudItemCount] = useState(0);
+
+  // Track which token has already been synced so we don't re-prompt on every render.
+  // The ref stores the jwtToken value for which we've already completed (or skipped) the sync flow.
+  const syncedTokenRef = useRef<string | null>(null);
 
   // Lock screen on idle — disabled while already locked or when set to "never" (0)
   const handleIdle = useCallback(() => {
@@ -94,16 +104,130 @@ function App() {
     }
   }, [backgroundImage]);
 
-  // Token freshness check + pull cloud data on page load
+  // Helper: count all items (including folder children) in a layout
+  const countItems = useCallback((pages: DesktopItem[][], dock: DesktopItem[]): number => {
+    let count = 0;
+    const countList = (items: DesktopItem[]) => {
+      for (const item of items) {
+        count++;
+        if (item.children) countList(item.children);
+      }
+    };
+    pages.forEach(p => countList(p));
+    countList(dock);
+    return count;
+  }, []);
+
+  // Handle sync strategy selected by user
+  const handleSyncStrategy = useCallback(async (strategy: SyncStrategy) => {
+    setSyncing(true);
+    try {
+      if (strategy === 'cloudOverwriteLocal') {
+        await pullLayoutFromCloud();
+      } else if (strategy === 'localOverwriteCloud') {
+        await uploadLayoutToCloud();
+      } else if (strategy === 'merge') {
+        await mergeLayoutWithCloud();
+      }
+    } catch (err) {
+      console.error('Sync strategy failed:', err);
+    } finally {
+      // 持久化"冲突已解决"时间戳，刷新后不再重复弹窗
+      setLastSyncResolvedAt(Date.now());
+      setSyncing(false);
+      setShowSyncConflict(false);
+    }
+  }, [pullLayoutFromCloud, uploadLayoutToCloud, mergeLayoutWithCloud, setLastSyncResolvedAt]);
+
+  // Token freshness check + smart sync on page load
   // Only attempt when both serverUrl and jwtToken are available AND stores are hydrated
   useEffect(() => {
     if (hydrated && jwtToken && serverUrl) {
+      // Skip if we've already handled sync for this token
+      if (syncedTokenRef.current === jwtToken) return;
+      syncedTokenRef.current = jwtToken;
+
       setSyncing(true);
       client.get('/api/v1/user/profile')
-        .then((res: any) => {
+        .then(async (res: any) => {
           setUserProfile(res.data);
-          // Token is valid — pull cloud data to overwrite local
-          return pullLayoutFromCloud();
+
+          // Fetch cloud layout to compare with local
+          const localLayout = useLayoutStore.getState().layout;
+          const localCount = countItems(localLayout.pages, localLayout.dock);
+
+          let cloudCount = 0;
+          let cloudData: any = null;
+          try {
+            const cloudRes = await client.get('/api/v1/layout');
+            cloudData = cloudRes.data.layout;
+            if (cloudData && cloudData.pages) {
+              const cloudDock = Array.isArray(cloudData.dock) ? cloudData.dock : [];
+              cloudCount = countItems(cloudData.pages, cloudDock);
+            }
+          } catch {
+            // Cloud layout fetch failed — treat as empty
+          }
+
+          // Decision logic:
+          // 1. Both empty or cloud empty → upload local to cloud (no prompt needed)
+          // 2. Local is default (untouched) and cloud has data → pull from cloud (no prompt needed)
+          // 3. Both have data → compare content; if identical skip, otherwise check if recently resolved
+          const localHasContent = localCount > 2; // More than just the default dock apps
+          const cloudHasContent = cloudCount > 0;
+
+          if (!cloudHasContent) {
+            // Cloud is empty — push local to cloud silently
+            await uploadLayoutToCloud();
+            setSyncing(false);
+          } else if (!localHasContent) {
+            // Local is basically empty/default, cloud has data — pull silently
+            await pullLayoutFromCloud();
+            setSyncing(false);
+          } else {
+            // 两端都有内容 — 先比较数据是否实质一致
+            const localIds = new Set<string>();
+            const collectLocalIds = (items: DesktopItem[]) => {
+              for (const item of items) {
+                localIds.add(item.id);
+                if (item.children) collectLocalIds(item.children);
+              }
+            };
+            localLayout.pages.forEach(p => collectLocalIds(p));
+            collectLocalIds(localLayout.dock);
+
+            const cloudIds = new Set<string>();
+            if (cloudData && cloudData.pages) {
+              const collectCloudIds = (items: DesktopItem[]) => {
+                for (const item of items) {
+                  cloudIds.add(item.id);
+                  if (item.children) collectCloudIds(item.children);
+                }
+              };
+              (cloudData.pages as DesktopItem[][]).forEach(p => collectCloudIds(p));
+              const cloudDock = Array.isArray(cloudData.dock) ? cloudData.dock : [];
+              collectCloudIds(cloudDock);
+            }
+
+            // 如果本地和云端包含完全相同的 item ID 集合，视为数据一致，静默跳过
+            const idsMatch = localIds.size === cloudIds.size && [...localIds].every(id => cloudIds.has(id));
+
+            if (idsMatch) {
+              // 数据一致，无需弹窗，静默同步最新本地数据到云端
+              await uploadLayoutToCloud();
+              setSyncing(false);
+            } else if (Date.now() - useConfigStore.getState().lastSyncResolvedAt < 30 * 1000) {
+              // 用户在 30 秒内刚解决过冲突（可能刚刷新），静默用本地数据同步到云端
+              await uploadLayoutToCloud();
+              setSyncing(false);
+            } else {
+              // 数据确实不一致且不在冷却期，弹出冲突对话框
+              setLocalItemCount(localCount);
+              setCloudItemCount(cloudCount);
+              setSyncing(false);
+              setShowSyncConflict(true);
+            }
+          }
         })
         .catch((err: any) => {
           // Only clear token on explicit 401 Unauthorized, NOT on network errors
@@ -113,16 +237,15 @@ function App() {
             // Network error, timeout, server down — keep the token intact
             console.warn('Profile fetch failed (network/server error), keeping token:', err.message);
           }
-        })
-        .finally(() => {
           setSyncing(false);
         });
     } else if (hydrated) {
       // Stores are hydrated but no token/serverUrl — user is genuinely not logged in
       setUserProfile(null);
       setSyncing(false);
+      syncedTokenRef.current = null;
     }
-  }, [hydrated, jwtToken, serverUrl, logout, setUserProfile, pullLayoutFromCloud]);
+  }, [hydrated, jwtToken, serverUrl, logout, setUserProfile, pullLayoutFromCloud, uploadLayoutToCloud, countItems]);
 
   if (!hydrated) return null; // Wait for chrome.storage async hydration
 
@@ -135,6 +258,15 @@ function App() {
     >
       {/* Lock Screen Overlay */}
       {isLocked && <LockScreen onUnlock={handleUnlock} backgroundUrl={resolvedBg} />}
+
+      {/* Sync Conflict Modal */}
+      {showSyncConflict && (
+        <SyncConflictModal
+          onSelect={handleSyncStrategy}
+          localItemCount={localItemCount}
+          cloudItemCount={cloudItemCount}
+        />
+      )}
 
       {/* Cloud Sync Indicator */}
       {syncing && (

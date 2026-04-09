@@ -41,8 +41,8 @@ Thumbs.db
 /frontend/.vite/
 /frontend/node_modules/
 
-# Docker
-pgdata/
+# Docker - 数据库持久化数据
+data/
 
 # Logs
 *.log

@@ -395,4 +395,30 @@ export const zh = {
   'settings.importMerge': '合并',
   'settings.importMergeDesc': '将导入文件中不存在的项目添加到当前布局中',
   'settings.importInvalidFile': '无效的布局文件，请选择有效的 CatHeadTab 布局 JSON。',
+
+  // Password Strength
+  'password.level_weak': '弱',
+  'password.level_fair': '一般',
+  'password.level_good': '良好',
+  'password.level_strong': '强',
+  'password.ruleMinLength': '至少 8 个字符',
+  'password.ruleMixedCase': '包含大写和小写字母',
+  'password.ruleNumber': '包含数字',
+  'password.ruleSpecialChar': '包含特殊字符（如 !@#$%）',
+  'password.ruleCommon': '不能使用常见弱密码',
+  'password.ruleRepeating': '不能全部为重复字符',
+  'password.tooWeak': '密码强度过低，请使用更复杂的密码。',
+
+  // Sync Conflict
+  'sync.conflictTitle': '数据同步',
+  'sync.conflictDesc': '检测到本地和云端都有数据，请选择同步方式：',
+  'sync.localData': '本地数据',
+  'sync.cloudData': '云端数据',
+  'sync.items': '项',
+  'sync.merge': '合并数据',
+  'sync.mergeDesc': '保留云端数据，同时追加本地独有的项目（推荐）',
+  'sync.cloudOverwriteLocal': '使用云端数据',
+  'sync.cloudOverwriteLocalDesc': '用云端数据完全覆盖本地，本地独有的数据将丢失',
+  'sync.localOverwriteCloud': '使用本地数据',
+  'sync.localOverwriteCloudDesc': '用本地数据完全覆盖云端，云端独有的数据将丢失',
 };

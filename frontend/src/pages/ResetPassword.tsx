@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
+import { isPasswordAcceptable } from '../utils/passwordStrength';
+import { PasswordStrengthIndicator } from '../components/PasswordStrengthIndicator';
 
 export function ResetPassword() {
   const [newPassword, setNewPassword] = useState('');
@@ -32,6 +34,11 @@ export function ResetPassword() {
 
     if (newPassword.length < 6) {
       setError(t('auth.passwordTooShort'));
+      return;
+    }
+
+    if (!isPasswordAcceptable(newPassword)) {
+      setError(t('password.tooWeak'));
       return;
     }
 
@@ -113,6 +120,9 @@ export function ResetPassword() {
                   minLength={6}
                   className="w-full bg-white/[0.06] border border-white/[0.08] hover:border-white/15 rounded-xl px-4 py-3 text-[15px] text-white/90 focus:outline-none focus:border-[#4a9eff]/50 transition-all placeholder-white/30"
                 />
+                {newPassword && (
+                  <PasswordStrengthIndicator password={newPassword} />
+                )}
                 <input 
                   type="password" 
                   placeholder={t('auth.confirmPassword')} 

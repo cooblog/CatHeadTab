@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CatHeadTab/backend/internal/config"
+	"github.com/CatHeadTab/backend/internal/middleware"
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/CatHeadTab/backend/internal/service"
@@ -117,12 +118,47 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// 获取频控相关 context 值
+	var limiter *middleware.LoginRateLimiter
+	if l, exists := c.Get("loginRateLimiter"); exists {
+		limiter, _ = l.(*middleware.LoginRateLimiter)
+	}
+	ipKey, _ := c.Get("loginIPKey")
+	identKey, _ := c.Get("loginIdentKey")
+
+	// recordFailure 在登录失败时记录失败次数
+	recordFailure := func() {
+		if limiter == nil {
+			return
+		}
+		if k, ok := ipKey.(string); ok {
+			limiter.RecordFailure(k)
+		}
+		if k, ok := identKey.(string); ok {
+			limiter.RecordFailure(k)
+		}
+	}
+
+	// recordSuccess 在登录成功时清除失败记录
+	recordSuccess := func() {
+		if limiter == nil {
+			return
+		}
+		if k, ok := ipKey.(string); ok {
+			limiter.RecordSuccess(k)
+		}
+		if k, ok := identKey.(string); ok {
+			limiter.RecordSuccess(k)
+		}
+	}
+
 	user, err := h.userRepo.GetByEmail(input.Identifier)
 	if user == nil {
 		user, err = h.userRepo.GetByUsername(input.Identifier)
 	}
 
 	if user == nil || err != nil {
+		recordFailure()
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email/username or password"})
 		return
 	}
@@ -133,6 +169,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+		recordFailure()
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email/username or password"})
 		return
 	}
@@ -152,6 +189,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
+
+	// 登录成功，清除失败记录
+	recordSuccess()
 
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,

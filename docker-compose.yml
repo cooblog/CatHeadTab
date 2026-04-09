@@ -1,80 +1,117 @@
 services:
   catheadtab-db:
     image: postgres:14-alpine
+    container_name: catheadtab-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-catheadtab}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secretpassword}
       POSTGRES_DB: ${POSTGRES_DB:-catheadtab}
+      # 设置时区，保持与宿主机一致
+      TZ: ${TZ:-Asia/Shanghai}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # 数据库文件映射到本机 ./data/postgres 目录，方便备份和查看
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-catheadtab}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - catheadtab-net
 
   catheadtab-backend:
     build: ./backend
+    container_name: catheadtab-backend
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     environment:
       # ---- Core ----
-      # Database connection string (auto-generated, points to the DB container inside Docker network)
+      # 数据库连接字符串（自动生成，指向 Docker 网络内的数据库容器）
       - DB_DSN=postgres://${POSTGRES_USER:-catheadtab}:${POSTGRES_PASSWORD:-secretpassword}@catheadtab-db:5432/${POSTGRES_DB:-catheadtab}?sslmode=disable
-      # JWT signing secret — CHANGE THIS in production!
+      # JWT 签名密钥 — 生产环境务必修改！
       - JWT_SECRET=${JWT_SECRET:-dev-secret-change-me}
-      # Server listen port
+      # 服务监听端口
       - PORT=${PORT:-8080}
-      # Gin framework mode: debug / release / test
+      # Gin 框架模式: debug / release / test
       - GIN_MODE=${GIN_MODE:-debug}
-      # Frontend URL (used in email links: verification, password reset)
+      # 前端 URL（用于邮件中的链接：邮箱验证、密码重置）
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-80}}
-      # Backend URL (externally accessible, used as OAuth redirect_uri)
+      # 后端 URL（外部可访问，用作 OAuth redirect_uri）
       - BACKEND_URL=${BACKEND_URL:-http://localhost:${PORT:-8080}}
 
-      # ---- SMTP Email (optional, for email verification & password reset) ----
+      # ---- SMTP Email (可选，用于邮箱验证和密码重置) ----
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-noreply@catheadtab.com}
 
-      # ---- GitHub OAuth (optional, for SSO login) ----
-      # Create at: https://github.com/settings/developers
+      # ---- GitHub OAuth (可选，用于 SSO 登录) ----
+      # 在此创建: https://github.com/settings/developers
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
 
-      # ---- Google OAuth (optional, for SSO login) ----
-      # Create at: https://console.cloud.google.com/apis/credentials
+      # ---- Google OAuth (可选，用于 SSO 登录) ----
+      # 在此创建: https://console.cloud.google.com/apis/credentials
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
 
-      # ---- Wallpaper Source: Wallhaven (optional) ----
-      # Get your API key at: https://wallhaven.cc/settings/account
-      # Without a key the provider still works (SFW only); with a key you also get Sketchy content.
+      # ---- Wallpaper Source: Wallhaven (可选) ----
+      # 在此获取 API Key: https://wallhaven.cc/settings/account
+      # 没有 Key 也可以使用（仅 SFW），有 Key 则可以获取 Sketchy 内容
       - WALLHAVEN_API_KEY=${WALLHAVEN_API_KEY:-}
-      # Allowed purity levels: sfw, sketchy, nsfw (comma-separated). Default: sfw.
-      # "sketchy" and "nsfw" require WALLHAVEN_API_KEY to be set.
+      # 允许的纯净度级别: sfw, sketchy, nsfw（逗号分隔），默认: sfw
+      # "sketchy" 和 "nsfw" 需要设置 WALLHAVEN_API_KEY
       - WALLHAVEN_PURITY=${WALLHAVEN_PURITY:-sfw}
+
+      # ---- Token 有效期配置 (可选) ----
+      # 邮箱验证 Token 有效期（小时），默认: 24
+      - EMAIL_VERIFY_TOKEN_TTL_HOURS=${EMAIL_VERIFY_TOKEN_TTL_HOURS:-24}
+      # 密码重置 Token 有效期（小时），默认: 1
+      - PASSWORD_RESET_TOKEN_TTL_HOURS=${PASSWORD_RESET_TOKEN_TTL_HOURS:-1}
+      # JWT 登录 Token 有效期（天），默认: 30
+      - JWT_TOKEN_TTL_DAYS=${JWT_TOKEN_TTL_DAYS:-30}
+      # 过期 Token 清理间隔（小时），默认: 6
+      - TOKEN_CLEANUP_INTERVAL_HOURS=${TOKEN_CLEANUP_INTERVAL_HOURS:-6}
+
+      # 时区
+      - TZ=${TZ:-Asia/Shanghai}
     depends_on:
       catheadtab-db:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - catheadtab-net
 
   catheadtab-frontend:
     build: ./frontend
+    container_name: catheadtab-frontend
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-80}:80"
     depends_on:
       - catheadtab-backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - catheadtab-net
 
-volumes:
-  pgdata:
+networks:
+  catheadtab-net:
+    driver: bridge

@@ -3,6 +3,8 @@ import { useConfigStore } from '../store/configStore';
 import { useLayoutStore } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { compressAvatarToWebP } from '../utils/imageStore';
+import { isPasswordAcceptable } from '../utils/passwordStrength';
+import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 import client from '../api/client';
 
 interface LinkedAccount {
@@ -85,6 +87,11 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
     if (newPassword !== confirmPassword) {
       setPasswordError(t('auth.passwordMismatch'));
+      return;
+    }
+
+    if (!isPasswordAcceptable(newPassword)) {
+      setPasswordError(t('password.tooWeak'));
       return;
     }
 
@@ -506,6 +513,9 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     minLength={6}
                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-[14px] text-white focus:outline-none focus:border-white/50 transition-all placeholder-white/40"
                   />
+                  {newPassword && (
+                    <PasswordStrengthIndicator password={newPassword} />
+                  )}
                   <input 
                     type="password" 
                     placeholder={t('auth.confirmPassword')} 

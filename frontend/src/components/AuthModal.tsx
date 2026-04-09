@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useConfigStore, isEnvConfigured } from '../store/configStore';
 import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
+import { isPasswordAcceptable } from '../utils/passwordStrength';
+import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 
 type AuthView = 'login' | 'register' | 'forgot' | 'verify-pending';
 type ModalStep = 'server' | 'auth';
@@ -111,6 +113,12 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
         onClose();
       } else if (view === 'register') {
+        // 注册时校验密码强度
+        if (!isPasswordAcceptable(password)) {
+          setError(t('password.tooWeak'));
+          setLoading(false);
+          return;
+        }
         await client.post('/api/v1/auth/register', { email, username, password });
         // Registration no longer returns a JWT — show verification pending view
         setPendingEmail(email);
@@ -452,6 +460,11 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   minLength={6}
                   className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
                 />
+              )}
+
+              {/* 注册时显示密码强度指示器 */}
+              {view === 'register' && password && (
+                <PasswordStrengthIndicator password={password} />
               )}
 
               {/* Forgot password link */}
