@@ -86,6 +86,58 @@ const WIDGET_OPTIONS: WidgetOption[] = [
   },
 ];
 
+/** Curated list of common world timezones for the clock widget picker. */
+const TIMEZONE_LIST: { id: string; label: string }[] = [
+  // UTC
+  { id: 'UTC', label: 'UTC (协调世界时 / Coordinated Universal Time)' },
+  // Asia
+  { id: 'Asia/Shanghai', label: 'UTC+8  中国 (北京/上海)' },
+  { id: 'Asia/Hong_Kong', label: 'UTC+8  中国香港' },
+  { id: 'Asia/Taipei', label: 'UTC+8  中国台北' },
+  { id: 'Asia/Tokyo', label: 'UTC+9  日本 (东京)' },
+  { id: 'Asia/Seoul', label: 'UTC+9  韩国 (首尔)' },
+  { id: 'Asia/Singapore', label: 'UTC+8  新加坡' },
+  { id: 'Asia/Kolkata', label: 'UTC+5:30  印度 (新德里)' },
+  { id: 'Asia/Dubai', label: 'UTC+4  阿联酋 (迪拜)' },
+  { id: 'Asia/Bangkok', label: 'UTC+7  泰国 (曼谷)' },
+  { id: 'Asia/Jakarta', label: 'UTC+7  印尼 (雅加达)' },
+  { id: 'Asia/Kuala_Lumpur', label: 'UTC+8  马来西亚 (吉隆坡)' },
+  { id: 'Asia/Manila', label: 'UTC+8  菲律宾 (马尼拉)' },
+  { id: 'Asia/Riyadh', label: 'UTC+3  沙特 (利雅得)' },
+  { id: 'Asia/Ho_Chi_Minh', label: 'UTC+7  越南 (胡志明市)' },
+  // Europe
+  { id: 'Europe/London', label: 'UTC+0/+1  英国 (伦敦)' },
+  { id: 'Europe/Paris', label: 'UTC+1/+2  法国 (巴黎)' },
+  { id: 'Europe/Berlin', label: 'UTC+1/+2  德国 (柏林)' },
+  { id: 'Europe/Moscow', label: 'UTC+3  俄罗斯 (莫斯科)' },
+  { id: 'Europe/Rome', label: 'UTC+1/+2  意大利 (罗马)' },
+  { id: 'Europe/Madrid', label: 'UTC+1/+2  西班牙 (马德里)' },
+  { id: 'Europe/Amsterdam', label: 'UTC+1/+2  荷兰 (阿姆斯特丹)' },
+  { id: 'Europe/Zurich', label: 'UTC+1/+2  瑞士 (苏黎世)' },
+  { id: 'Europe/Istanbul', label: 'UTC+3  土耳其 (伊斯坦布尔)' },
+  // Americas
+  { id: 'America/New_York', label: 'UTC-5/-4  美国东部 (纽约)' },
+  { id: 'America/Chicago', label: 'UTC-6/-5  美国中部 (芝加哥)' },
+  { id: 'America/Denver', label: 'UTC-7/-6  美国山区 (丹佛)' },
+  { id: 'America/Los_Angeles', label: 'UTC-8/-7  美国西部 (洛杉矶)' },
+  { id: 'America/Anchorage', label: 'UTC-9/-8  美国阿拉斯加' },
+  { id: 'Pacific/Honolulu', label: 'UTC-10  美国夏威夷' },
+  { id: 'America/Toronto', label: 'UTC-5/-4  加拿大 (多伦多)' },
+  { id: 'America/Vancouver', label: 'UTC-8/-7  加拿大 (温哥华)' },
+  { id: 'America/Mexico_City', label: 'UTC-6  墨西哥 (墨西哥城)' },
+  { id: 'America/Sao_Paulo', label: 'UTC-3  巴西 (圣保罗)' },
+  { id: 'America/Argentina/Buenos_Aires', label: 'UTC-3  阿根廷 (布宜诺斯艾利斯)' },
+  // Oceania
+  { id: 'Australia/Sydney', label: 'UTC+10/+11  澳大利亚 (悉尼)' },
+  { id: 'Australia/Melbourne', label: 'UTC+10/+11  澳大利亚 (墨尔本)' },
+  { id: 'Australia/Perth', label: 'UTC+8  澳大利亚 (珀斯)' },
+  { id: 'Pacific/Auckland', label: 'UTC+12/+13  新西兰 (奥克兰)' },
+  // Africa
+  { id: 'Africa/Cairo', label: 'UTC+2  埃及 (开罗)' },
+  { id: 'Africa/Johannesburg', label: 'UTC+2  南非 (约翰内斯堡)' },
+  { id: 'Africa/Lagos', label: 'UTC+1  尼日利亚 (拉各斯)' },
+];
+
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
   const { t, language } = useTranslation();
   const isZh = language === 'zh';
@@ -120,6 +172,11 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
   const editWeather = isEditMode && editItem.widgetConfig?.widgetType === 'weather' ? editItem.widgetConfig : null;
   const [weatherCity, setWeatherCity] = useState(editWeather?.city ?? '');
   const [weatherUnit, setWeatherUnit] = useState<'C' | 'F'>(editWeather?.unit ?? 'C');
+  // Clock config
+  const editClock = isEditMode && editItem.widgetConfig?.widgetType === 'clock' ? editItem.widgetConfig : null;
+  const [clockTimezone, setClockTimezone] = useState(editClock?.timezone ?? '');
+  const [tzSearch, setTzSearch] = useState('');
+  const [tzDropdownOpen, setTzDropdownOpen] = useState(false);
 
   const selectedOption = WIDGET_OPTIONS.find(w => w.type === selectedType);
 
@@ -150,7 +207,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         config = { widgetType: 'systemMonitor' };
         break;
       case 'clock':
-        config = { widgetType: 'clock' };
+        config = { widgetType: 'clock', timezone: clockTimezone || undefined };
         break;
       case 'itTools':
         config = { widgetType: 'itTools' };
@@ -313,6 +370,67 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
               </div>
 
               {/* Type-specific config */}
+              {selectedType === 'clock' && (
+                <div>
+                  <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('widget.timezone')}</label>
+                  <div>
+                    <div
+                      className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3.5 text-[14px] text-white cursor-pointer flex items-center justify-between transition-all"
+                      onClick={() => setTzDropdownOpen(!tzDropdownOpen)}
+                    >
+                      <span className={clockTimezone ? 'text-white' : 'text-white/40'}>
+                        {clockTimezone || (isZh ? '当前时区（默认）' : 'Local Timezone (default)')}
+                      </span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-white/40 transition-transform ${tzDropdownOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+
+                    {tzDropdownOpen && (
+                      <div className="mt-1 w-full bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                        {/* Search input */}
+                        <div className="p-2 border-b border-white/5">
+                          <input
+                            type="text"
+                            value={tzSearch}
+                            onChange={(e) => setTzSearch(e.target.value)}
+                            placeholder={isZh ? '搜索时区...' : 'Search timezone...'}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder-white/30 focus:outline-none focus:border-[#72d565]/50"
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        {/* Timezone list */}
+                        <div className="max-h-[200px] overflow-y-auto no-scrollbar">
+                          {/* Local timezone option */}
+                          <button
+                            className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 ${!clockTimezone ? 'bg-white/5 text-white' : 'text-white/60'}`}
+                            onClick={() => { setClockTimezone(''); setTzDropdownOpen(false); setTzSearch(''); }}
+                          >
+                            {isZh ? '当前时区（默认）' : 'Local Timezone (default)'}
+                            {!clockTimezone && <span className="text-[#72d565]">✓</span>}
+                          </button>
+                          {TIMEZONE_LIST
+                            .filter(tz => {
+                              if (!tzSearch) return true;
+                              const q = tzSearch.toLowerCase();
+                              return tz.id.toLowerCase().includes(q) || tz.label.toLowerCase().includes(q);
+                            })
+                            .map(tz => (
+                              <button
+                                key={tz.id}
+                                className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 border-t border-white/[0.03] ${clockTimezone === tz.id ? 'bg-white/5 text-white' : 'text-white/60'}`}
+                                onClick={() => { setClockTimezone(tz.id); setTzDropdownOpen(false); setTzSearch(''); }}
+                              >
+                                <span className="truncate mr-2">{tz.label}</span>
+                                {clockTimezone === tz.id && <span className="text-[#72d565] shrink-0">✓</span>}
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {selectedType === 'countdown' && (
                 <div className="space-y-4">
                   <div>
@@ -383,6 +501,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'systemMonitor' && (isZh
                     ? '🖥️ 系统监控小组件实时显示 CPU 和内存使用率。小尺寸显示双环形图概览，中尺寸额外显示处理器型号、核心数等详细信息。'
                     : '🖥️ The system monitor widget shows real-time CPU and memory usage. Small size displays dual ring gauges, medium size adds processor model, core count and more details.')}
+                  {selectedType === 'clock' && (isZh
+                    ? '🕐 时钟小组件实时显示当前时间，支持选择世界各地时区。小尺寸显示简洁数字时钟，中尺寸显示更丰富的时间信息和日期。'
+                    : '🕐 The clock widget displays the current time in real-time with world timezone support. Small size shows a clean digital clock, medium size shows richer time info and date.')}
                   {selectedType === 'itTools' && (isZh
                     ? '🛠️ IT 工具箱集合了开发者常用的在线工具（JSON 格式化、Base64 编解码、UUID 生成、哈希计算等）。点击小组件后会弹出工具窗口，所有工具均可在弹窗内直接使用。'
                     : '🛠️ IT Tools provides a collection of handy online tools for developers (JSON formatter, Base64 encoder/decoder, UUID generator, hash calculator, etc). Click the widget to open a tool window where you can use all tools directly.')}

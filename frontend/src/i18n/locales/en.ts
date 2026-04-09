@@ -354,6 +354,7 @@ export const en = {
   'widget.systemMonitorDesc': 'Real-time CPU & memory usage',
   'widget.clock': 'Clock',
   'widget.clockDesc': 'Analog clock with digital time',
+  'widget.timezone': 'Timezone',
   'widget.itTools': 'IT Tools',
   'widget.itToolsDesc': 'Handy online tools for developers',
   'widget.itToolsLoading': 'Loading tools...',

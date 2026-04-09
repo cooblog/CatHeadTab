@@ -1,30 +1,76 @@
-import React, { useEffect, useState } from 'react';
-import type { WidgetSize } from '../../store/layoutStore';
+import React, { useEffect, useState, useMemo } from 'react';
+import type { WidgetSize, ClockWidgetConfig } from '../../store/layoutStore';
 import { useTranslation } from '../../i18n/useTranslation';
 
 interface ClockWidgetProps {
   size: WidgetSize;
+  config?: ClockWidgetConfig;
+}
+
+/** Resolve time parts in a given IANA timezone (or local if empty). */
+function getTimeParts(date: Date, timezone?: string) {
+  const opts: Intl.DateTimeFormatOptions = {
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    weekday: 'short',
+    day: 'numeric',
+    hour12: false,
+    ...(timezone ? { timeZone: timezone } : {}),
+  };
+  const parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(p => p.type === type)?.value ?? '';
+
+  const hours = Number(get('hour'));
+  const minutes = Number(get('minute'));
+  const seconds = Number(get('second'));
+  const dayNum = Number(get('day'));
+  const weekday = get('weekday'); // e.g. "Mon"
+
+  return { hours, minutes, seconds, dayNum, weekday };
+}
+
+/** Map English short weekday to Chinese. */
+const weekdayZhMap: Record<string, string> = {
+  Sun: '周日', Mon: '周一', Tue: '周二', Wed: '周三',
+  Thu: '周四', Fri: '周五', Sat: '周六',
+};
+
+/** Get a short display label for a timezone, e.g. "Asia/Shanghai" → "Shanghai", "UTC" → "UTC". */
+function getTimezoneLabel(tz?: string): string {
+  if (!tz) return '';
+  if (tz === 'UTC') return 'UTC';
+  // Take the city part after the last "/"
+  const city = tz.includes('/') ? tz.split('/').pop()! : tz;
+  return city.replace(/_/g, ' ');
 }
 
 /** iOS/macOS-style clock widget with analog clock face. */
-export const ClockWidget: React.FC<ClockWidgetProps> = ({ size }) => {
+export const ClockWidget: React.FC<ClockWidgetProps> = ({ size, config }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
   const [now, setNow] = useState(new Date());
+
+  const timezone = config?.timezone || undefined;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
+  const { hours, minutes, seconds, dayNum, weekday } = useMemo(
+    () => getTimeParts(now, timezone),
+    [now, timezone],
+  );
 
   // Angles for clock hands
   const secondDeg = seconds * 6;
   const minuteDeg = minutes * 6 + seconds * 0.1;
   const hourDeg = (hours % 12) * 30 + minutes * 0.5;
+
+  const dayOfWeekShort = isZh ? (weekdayZhMap[weekday] ?? weekday) : weekday;
+  const timezoneLabel = getTimezoneLabel(timezone);
 
   // Small analog clock (for 1×2 bar layout) — dark/transparent style
   const SmallAnalogClock = ({ diameter }: { diameter: number }) => {
@@ -93,12 +139,6 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({ size }) => {
 
     // Digital time string (HH:MM)
     const digitalTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-
-    // Date + weekday inside dial
-    const dayNum = now.getDate();
-    const dayOfWeekShort = isZh
-      ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()]
-      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()];
 
     return (
       <div
@@ -172,35 +212,51 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({ size }) => {
           </span>
         </div>
 
-        {/* Date + weekday inside dial (lower center) */}
+        {/* Date + weekday + timezone inside dial (lower center) */}
         <div
-          className="absolute flex items-center gap-1"
+          className="absolute flex flex-col items-center"
           style={{
-            bottom: r - 24,
+            bottom: timezoneLabel ? r - 32 : r - 24,
             left: '50%',
             transform: 'translateX(-50%)',
           }}
         >
-          <span
-            style={{
-              fontSize: 9.5,
-              fontWeight: 600,
-              color: '#2563eb',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-            }}
-          >
-            {dayNum}
-          </span>
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 500,
-              color: '#777',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-            }}
-          >
-            {dayOfWeekShort}
-          </span>
+          <div className="flex items-center gap-1">
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 600,
+                color: '#2563eb',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+              }}
+            >
+              {dayNum}
+            </span>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 500,
+                color: '#777',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+              }}
+            >
+              {dayOfWeekShort}
+            </span>
+          </div>
+          {timezoneLabel && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 500,
+                color: '#999',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                marginTop: 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {timezoneLabel}
+            </span>
+          )}
         </div>
 
         {/* Hour hand — thick, black, tapered */}
@@ -280,16 +336,7 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({ size }) => {
 
   // Small (1×2): horizontal bar — analog clock + digital time
   if (size === 'small') {
-    const timeStr = now.toLocaleTimeString(isZh ? 'zh-CN' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-
-    const dayOfWeek = isZh
-      ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()]
-      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()];
-
+    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     const period = hours < 12 ? (isZh ? '上午' : 'AM') : (isZh ? '下午' : 'PM');
 
     return (
@@ -302,7 +349,7 @@ export const ClockWidget: React.FC<ClockWidgetProps> = ({ size }) => {
             {timeStr}
           </span>
           <span className="text-[11px] text-white/50 leading-none">
-            {period} · {dayOfWeek}
+            {period} · {dayOfWeekShort}{timezoneLabel ? ` · ${timezoneLabel}` : ''}
           </span>
         </div>
       </div>

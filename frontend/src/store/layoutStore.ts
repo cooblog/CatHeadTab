@@ -54,6 +54,8 @@ export interface SystemMonitorWidgetConfig {
 
 export interface ClockWidgetConfig {
   widgetType: 'clock';
+  /** IANA timezone identifier (e.g. "America/New_York"). Empty/undefined = local timezone. */
+  timezone?: string;
 }
 
 export interface ItToolsWidgetConfig {

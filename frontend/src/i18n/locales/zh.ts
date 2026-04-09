@@ -354,6 +354,7 @@ export const zh = {
   'widget.systemMonitorDesc': 'CPU 和内存实时监控',
   'widget.clock': '时钟',
   'widget.clockDesc': '模拟时钟和数字时间',
+  'widget.timezone': '时区',
   'widget.itTools': 'IT 工具箱',
   'widget.itToolsDesc': '开发者常用在线工具集合',
   'widget.itToolsLoading': '工具箱加载中...',

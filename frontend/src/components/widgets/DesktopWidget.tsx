@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DesktopItem, WidgetSize, WeatherWidgetConfig, CountdownWidgetConfig, StickyNoteWidgetConfig, StockWidgetConfig, ExchangeRateWidgetConfig } from '../../store/layoutStore';
+import type { DesktopItem, WidgetSize, WeatherWidgetConfig, CountdownWidgetConfig, ClockWidgetConfig, StickyNoteWidgetConfig, StockWidgetConfig, ExchangeRateWidgetConfig } from '../../store/layoutStore';
 import { WIDGET_SIZE_MAP } from '../../store/layoutStore';
 import { CalendarWidget } from './CalendarWidget';
 import { WeatherWidget } from './WeatherWidget';
@@ -38,7 +38,7 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
       case 'systemMonitor':
         return <SystemMonitorWidget size={size} />;
       case 'clock':
-        return <ClockWidget size={size} />;
+        return <ClockWidget size={size} config={item.widgetConfig as ClockWidgetConfig} />;
       case 'itTools':
         return (
           <div className="w-full h-full flex items-center justify-center select-none overflow-hidden cursor-pointer gap-3 px-4">
