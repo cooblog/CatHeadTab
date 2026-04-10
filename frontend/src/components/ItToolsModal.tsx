@@ -14,7 +14,7 @@ export const ItToolsModal: React.FC<ItToolsModalProps> = ({ onClose }) => {
   return (
     <div
       className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
     >
       {/* Dimmed Background Overlay */}
       <div

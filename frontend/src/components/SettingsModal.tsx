@@ -8,7 +8,7 @@ import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperC
 
 type Tab = 'wallpaper' | 'system';
 type WallpaperSubTab = 'current' | 'browse';
-type WallpaperSource = 'builtin' | 'local' | 'wallhaven';
+type WallpaperSource = 'builtin' | 'local' | 'wallhaven' | 'cos';
 
 /** Border color classes matching Wallhaven's purity indicators. */
 const purityBorderClass = (purity: string): string => {
@@ -57,6 +57,22 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const [wpSource, setWpSource] = useState<WallpaperSource>(isAdmin ? 'wallhaven' : 'builtin');
   const [wpSourceDropdownOpen, setWpSourceDropdownOpen] = useState(false);
   const wpSourceRef = useRef<HTMLDivElement>(null);
+
+  // --- Dynamic backend providers (fetched from API) ---
+  const [backendProviders, setBackendProviders] = useState<string[]>([]);
+  const backendProvidersLoaded = useRef(false);
+
+  // --- COS wallpaper browsing state ---
+  const [cosResult, setCosResult] = useState<WallpaperSearchResult | null>(null);
+  const [cosPage, setCosPage] = useState(1);
+  const [cosLoading, setCosLoading] = useState(false);
+  const [cosError, setCosError] = useState('');
+  const [cosPreviewItem, setCosPreviewItem] = useState<WallpaperItem | null>(null);
+  const [cosMobileItems, setCosMobileItems] = useState<WallpaperItem[]>([]);
+  const [cosLoadingMore, setCosLoadingMore] = useState(false);
+  const [cosHasMore, setCosHasMore] = useState(true);
+  const cosInitialLoadDone = useRef(false);
+  const cosSentinelRef = useRef<HTMLDivElement>(null);
 
 
   // --- Local folder browsing state ---
@@ -164,6 +180,26 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     })();
   }, [wpSource]);
 
+  // Fetch available providers from backend (once) to dynamically show/hide COS source
+  useEffect(() => {
+    if (backendProvidersLoaded.current) return;
+    const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
+    if (!srvUrl) return;
+    (async () => {
+      try {
+        const resp = await client.get<{ providers: string[] }>('/api/v1/wallpapers/providers');
+        setBackendProviders(resp.data.providers || []);
+        backendProvidersLoaded.current = true;
+        // If COS is available and user isn't admin, default to COS as the builtin source
+        if (resp.data.providers?.includes('cos') && !isAdmin) {
+          setWpSource('cos');
+        }
+      } catch {
+        // Provider fetch failed — use static options only
+      }
+    })();
+  }, [isAdmin]);
+
   const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false, existingIds?: string[]) => {
     const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
     if (!srvUrl) {
@@ -230,6 +266,96 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
       fetchWallpapers(1, wpQuery, wpSorting, wpCategories, wpPurity);
     }
   }, [activeTab, wpSubTab, wpSource, fetchWallpapers, wpQuery, wpSorting, wpCategories, wpPurity]);
+
+  // --- COS wallpaper fetching ---
+  const fetchCosWallpapers = useCallback(async (page: number, append = false) => {
+    const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
+    if (!srvUrl) {
+      setCosError(t('settings.wpNeedServer'));
+      return;
+    }
+    if (append) {
+      setCosLoadingMore(true);
+    } else {
+      setCosLoading(true);
+    }
+    setCosError('');
+
+    try {
+      const params = new URLSearchParams();
+      params.set('provider', 'cos');
+      params.set('page', String(page));
+      params.set('sorting', 'date_added');
+      const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
+      const data = resp.data;
+
+      setCosResult(data);
+      setCosPage(data.currentPage);
+      setCosHasMore(data.currentPage < data.lastPage);
+      if (append) {
+        setCosMobileItems(prev => [...prev, ...data.wallpapers]);
+      } else {
+        setCosMobileItems(data.wallpapers);
+        if (contentScrollRef.current) {
+          contentScrollRef.current.scrollTop = 0;
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setCosError(msg);
+    } finally {
+      setCosLoading(false);
+      setCosLoadingMore(false);
+    }
+  }, [t]);
+
+  // Auto-load COS wallpapers when switching to browse sub-tab with COS source
+  useEffect(() => {
+    if (activeTab === 'wallpaper' && wpSubTab === 'browse' && wpSource === 'cos' && !cosInitialLoadDone.current) {
+      cosInitialLoadDone.current = true;
+      fetchCosWallpapers(1);
+    }
+  }, [activeTab, wpSubTab, wpSource, fetchCosWallpapers]);
+
+  // COS load more handler
+  const handleCosLoadMore = useCallback(() => {
+    if (cosLoadingMore || cosLoading || !cosHasMore || !cosResult) return;
+    const nextPage = cosPage + 1;
+    fetchCosWallpapers(nextPage, true);
+  }, [cosLoadingMore, cosLoading, cosHasMore, cosResult, cosPage, fetchCosWallpapers]);
+
+  // COS infinite scroll observer
+  useEffect(() => {
+    const sentinel = cosSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleCosLoadMore();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleCosLoadMore]);
+
+  // Handle selecting a COS wallpaper
+  const handleSelectCosWallpaper = async (item: WallpaperItem) => {
+    // Save a stable identifier (cos://objectKey) instead of the expiring pre-signed URL.
+    // The App layer resolves cos:// URIs via the backend proxy on every load.
+    const cosUri = `cos://${item.id}`;
+    setBg(cosUri);
+    setBackgroundImage(cosUri);
+    setCosPreviewItem(null);
+
+    const { jwtToken: token } = useConfigStore.getState();
+    if (token) {
+      useLayoutStore.getState().syncPreferencesToCloud().catch(err => {
+        console.error('Failed to sync wallpaper to cloud', err);
+      });
+    }
+  };
 
   // Auto-refresh when sorting changes (only after initial load)
   const prevSorting = useRef(wpSorting);
@@ -649,18 +775,32 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
 
 
   // Resolve display URL for the current wallpaper preview image
-  const currentPreviewUrl = bg.startsWith('idb://') ? bgPreview : bg;
+  const currentPreviewUrl = (() => {
+    if (bg.startsWith('idb://')) return bgPreview;
+    if (bg.startsWith('cos://')) {
+      const cosKey = bg.slice('cos://'.length);
+      const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
+      if (srvUrl) {
+        const base = srvUrl.endsWith('/') ? srvUrl.slice(0, -1) : srvUrl;
+        return `${base}/api/v1/wallpapers/cos/image?key=${encodeURIComponent(cosKey)}`;
+      }
+      return '';
+    }
+    return bg;
+  })();
 
   // Wallpaper source options (builtin sources + dynamic ones from backend)
   // All users can see wallhaven; only the search bar is admin-only.
+  // COS is shown only when the backend reports it as an available provider.
   const wpSourceOptions: { value: WallpaperSource; label: string }[] = [
+    ...(backendProviders.includes('cos') ? [{ value: 'cos' as WallpaperSource, label: t('settings.wpSourceCOS') }] : []),
     { value: 'builtin', label: t('settings.wpSourceBuiltin') },
     { value: 'local', label: t('settings.wpSourceLocal') },
     { value: 'wallhaven', label: t('settings.wpSourceWallhaven') },
   ];
 
   return (
-    <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`} onContextMenu={(e) => e.preventDefault()}>
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       {/* Dimmed Background Overlay */}
       <div
         className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"
@@ -736,7 +876,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           {/* Content Area */}
           <div className="flex-1 flex flex-col p-3 sm:p-6 sm:pb-2 md:px-8 md:pt-8 md:pb-2 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
 
-            <div ref={contentScrollRef} className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'wallpaper' && wpSubTab === 'browse' && wpSource === 'wallhaven' ? 'wp-scrollbar' : 'no-scrollbar'}`}>
+            <div ref={contentScrollRef} className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'wallpaper' && wpSubTab === 'browse' && (wpSource === 'wallhaven' || wpSource === 'cos') ? 'wp-scrollbar' : 'no-scrollbar'}`}>
 
               {/* ============ WALLPAPER TAB ============ */}
               {activeTab === 'wallpaper' && (
@@ -892,6 +1032,81 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                           )}
                         </div>
                       </div>
+
+                      {/* === Source: COS (Tencent Cloud Object Storage) === */}
+                      {wpSource === 'cos' && (
+                        <>
+                          {/* Error */}
+                          {cosError && (
+                            <div className="text-red-400 text-[12px] bg-red-500/10 rounded-lg px-3 py-2">
+                              {cosError}
+                            </div>
+                          )}
+
+                          {/* Loading */}
+                          {cosLoading && (
+                            <div className="flex justify-center py-8">
+                              <svg className="animate-spin w-6 h-6 text-white/50" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            </div>
+                          )}
+
+                          {/* COS Wallpaper grid */}
+                          {!cosLoading && cosResult && cosResult.wallpapers.length > 0 && (
+                            <>
+                            <div className={`grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                              {cosMobileItems.map(item => (
+                                <div
+                                  key={item.id}
+                                  className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
+                                  onClick={() => setCosPreviewItem(item)}
+                                >
+                                  <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[72%] sm:pb-[66%]'} />
+                                  <img
+                                    src={item.thumbSmall}
+                                    alt={item.id.split('/').pop() || item.id}
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                  {/* Hover overlay */}
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                    <div className="p-2 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>
+                                    </div>
+                                  </div>
+                                  {/* File name badge */}
+                                  <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/60 to-transparent">
+                                    <p className="text-[9px] text-white/60 truncate">{item.id.split('/').pop()}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Infinite scroll sentinel & loading indicator */}
+                            <div ref={cosSentinelRef} className="flex flex-col items-center py-3 gap-2">
+                              {cosLoadingMore && (
+                                <svg className="animate-spin w-5 h-5 text-white/40" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                              )}
+                              {!cosHasMore && cosMobileItems.length > 0 && (
+                                <span className="text-[11px] text-white/30">{t('settings.wpNoMore')}</span>
+                              )}
+                            </div>
+                            </>
+                          )}
+
+                          {/* Empty state */}
+                          {!cosLoading && cosResult && cosResult.wallpapers.length === 0 && (
+                            <div className="text-center text-white/40 py-8 text-[13px]">
+                              {t('settings.wpCosEmpty')}
+                            </div>
+                          )}
+                        </>
+                      )}
 
                       {/* === Source: Built-in wallpapers === */}
                       {wpSource === 'builtin' && (
@@ -1385,7 +1600,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
             </div>
 
             {/* Scroll to top floating button */}
-            {showScrollTop && activeTab === 'wallpaper' && wpSubTab === 'browse' && wpSource === 'wallhaven' && (
+            {showScrollTop && activeTab === 'wallpaper' && wpSubTab === 'browse' && (wpSource === 'wallhaven' || wpSource === 'cos') && (
               <button
                 type="button"
                 onClick={scrollToTop}
@@ -1475,6 +1690,56 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
       )}
 
       {/* === Fullscreen current wallpaper preview overlay === */}
+
+      {/* === COS wallpaper preview overlay === */}
+      {cosPreviewItem && (
+        <div
+          className="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-md pointer-events-auto"
+          onClick={() => setCosPreviewItem(null)}
+        >
+          {/* Top bar with info & close */}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 shrink-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 text-[11px] sm:text-[13px] text-white/50 truncate mr-3">
+              <span>{cosPreviewItem.id.split('/').pop()} · {cosPreviewItem.fileType}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCosPreviewItem(null)}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors shrink-0"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          {/* Full image area */}
+          <div className="flex-1 flex items-center justify-center px-2 sm:px-4 min-h-0" onClick={e => e.stopPropagation()}>
+            <img
+              src={cosPreviewItem.fullUrl}
+              alt={cosPreviewItem.id.split('/').pop() || cosPreviewItem.id}
+              className="max-w-full max-h-full rounded-lg shadow-2xl object-contain opacity-0 transition-opacity duration-300"
+              onLoad={e => { (e.target as HTMLImageElement).classList.remove('opacity-0'); }}
+            />
+          </div>
+
+          {/* Bottom action bar */}
+          <div className="flex items-center justify-center gap-3 px-4 py-4 sm:py-5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => handleSelectCosWallpaper(cosPreviewItem)}
+              className="px-6 sm:px-8 py-2.5 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] text-black font-bold text-[13px] sm:text-[14px] transition-colors shadow-lg shadow-[#72d565]/20 active:scale-95"
+            >
+              {t('settings.wpUseThis')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCosPreviewItem(null)}
+              className="px-5 sm:px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium text-[13px] sm:text-[14px] transition-colors active:scale-95"
+            >
+              {t('settings.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
       {currentBgFullscreen && currentPreviewUrl && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md pointer-events-auto"

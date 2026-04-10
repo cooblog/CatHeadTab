@@ -48,6 +48,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// L1: in-memory (ristretto, short TTL) for all requests
 	// L2: PostgreSQL (long TTL) for slow-changing sorting types (toplist, views, favorites)
 	wallhavenProvider := service.NewWallhavenProvider(cfg.WallhavenAPIKey, cfg.WallhavenPurity)
+	cosProvider := service.NewCOSProvider(cfg.COSSecretID, cfg.COSSecretKey, cfg.COSBucket, cfg.COSRegion, cfg.COSOriginalPrefix, cfg.COSThumbPrefix)
 	wpCacheRepo := repository.NewWallpaperCacheRepository(repository.DB)
 	wpCache := cache.NewWallpaperCache(
 		cache.WithTTL(cache.DefaultTTL),
@@ -55,7 +56,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 		cache.WithDBStore(wpCacheRepo),
 		cache.WithDBTTL(cache.DefaultDBTTL),
 	)
-	wallpaperSvc := service.NewWallpaperService(wpCache, wallhavenProvider)
+	wallpaperSvc := service.NewWallpaperService(wpCache, wallhavenProvider, cosProvider)
 
 	// Start background goroutine to periodically clean up expired tokens
 	// (email verifications and used/expired password resets).
@@ -119,6 +120,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	r.GET("/api/v1/wallpapers/providers", wallpaperHandler.ListProviders)
 	r.GET("/api/v1/wallpapers/config", wallpaperHandler.GetConfig)
 	r.GET("/api/v1/wallpapers/cache/stats", wallpaperHandler.CacheStats)
+	// COS image proxy: generates a fresh pre-signed URL and redirects.
+	// Public because the redirect target (pre-signed URL) is itself authenticated.
+	r.GET("/api/v1/wallpapers/cos/image", wallpaperHandler.COSImage)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")

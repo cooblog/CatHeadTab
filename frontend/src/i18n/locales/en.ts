@@ -70,6 +70,8 @@ export const en = {
   'settings.wpSourceBuiltin': '📦 Built-in',
   'settings.wpSourceLocal': '📁 Local Folder',
   'settings.wpSourceWallhaven': '🌐 Wallhaven',
+  'settings.wpSourceCOS': '☁️ Cloud Storage',
+  'settings.wpCosEmpty': 'No wallpaper images found in cloud storage.',
   'settings.wpLocalSelectFolder': 'Select Folder',
   'settings.wpLocalImageCount': 'images',
   'settings.wpLocalEmptyHint': 'Select a local folder to browse images as wallpapers.',

@@ -235,4 +235,32 @@ func excludeWallpapers(src *model.WallpaperSearchResult, excludeCSV string) *mod
 	}
 }
 
+// COSImage generates a fresh pre-signed URL for a COS object and redirects
+// the client to it. This allows the frontend to save a stable identifier
+// (e.g. "cos://0000-c/sunset.jpg") instead of an expiring pre-signed URL.
+//
+//	GET /api/v1/wallpapers/cos/image?key=0000-c/sunset.jpg
+func (h *WallpaperHandler) COSImage(c *gin.Context) {
+	key := c.Query("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'key' parameter"})
+		return
+	}
+
+	cosProvider := h.svc.GetCOSProvider()
+	if cosProvider == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "COS provider is not configured"})
+		return
+	}
+
+	presignedURL, err := cosProvider.GeneratePresignedURL(key)
+	if err != nil {
+		log.Printf("[wallpaper] COS image proxy error: key=%s err=%v", key, err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to generate image URL"})
+		return
+	}
+
+	c.Redirect(http.StatusFound, presignedURL)
+}
+
 

@@ -146,7 +146,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-0 sm:p-6 md:p-12"
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
     >
       {/* Dimmed Background */}
       <div

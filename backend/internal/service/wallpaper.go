@@ -160,6 +160,21 @@ func (s *WallpaperService) ListProviders() []string {
 	return names
 }
 
+// GetCOSProvider returns the COS provider if it is registered and available.
+// Returns nil if COS is not configured. Used by the handler layer for
+// generating fresh pre-signed URLs on demand (image proxy endpoint).
+func (s *WallpaperService) GetCOSProvider() *COSProvider {
+	p, ok := s.providers[cosProvider]
+	if !ok {
+		return nil
+	}
+	cp, ok := p.(*COSProvider)
+	if !ok {
+		return nil
+	}
+	return cp
+}
+
 // ProviderConfig returns configuration details about a provider so the
 // frontend can adapt its UI (e.g. show/hide purity filter options).
 func (s *WallpaperService) ProviderConfig(providerName string) (hasKey bool, allowedPurity []string, found bool) {

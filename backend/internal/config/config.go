@@ -43,6 +43,18 @@ type Config struct {
 	// "sketchy" requires a valid API key to work on wallhaven.cc.
 	WallhavenPurity string
 
+	// Wallpaper source: Tencent Cloud COS (Cloud Object Storage)
+	// When all four fields are set, the COS wallpaper provider becomes available.
+	COSSecretID  string
+	COSSecretKey string
+	COSBucket    string
+	COSRegion    string
+	// COSOriginalPrefix is the key prefix for full-size wallpaper images (e.g. "0000-c/").
+	COSOriginalPrefix string
+	// COSThumbPrefix is the key prefix for thumbnail images (e.g. "0000-s/").
+	// Thumbnail filenames must match the originals exactly.
+	COSThumbPrefix string
+
 	// Token TTL settings
 	// EmailVerifyTokenTTL controls how long email verification tokens remain valid.
 	EmailVerifyTokenTTL time.Duration
@@ -79,6 +91,13 @@ func Load() *Config {
 
 		WallhavenAPIKey: getEnv("WALLHAVEN_API_KEY", ""),
 		WallhavenPurity: getEnv("WALLHAVEN_PURITY", "sfw"),
+
+		COSSecretID:       getEnv("COS_SECRET_ID", ""),
+		COSSecretKey:      getEnv("COS_SECRET_KEY", ""),
+		COSBucket:         getEnv("COS_BUCKET", ""),
+		COSRegion:         getEnv("COS_REGION", ""),
+		COSOriginalPrefix: getEnv("COS_ORIGINAL_PREFIX", ""),
+		COSThumbPrefix:    getEnv("COS_THUMB_PREFIX", ""),
 
 		EmailVerifyTokenTTL:   getDurationEnv("EMAIL_VERIFY_TOKEN_TTL_HOURS", 24) * time.Hour,
 		PasswordResetTokenTTL: getDurationEnv("PASSWORD_RESET_TOKEN_TTL_HOURS", 1) * time.Hour,

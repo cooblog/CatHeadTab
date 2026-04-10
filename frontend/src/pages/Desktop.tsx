@@ -498,7 +498,7 @@ const FolderDropOutZone: React.FC<{ children: React.ReactNode; onClick: () => vo
       ref={setNodeRef}
       className="fixed inset-0 z-50 flex select-none items-center justify-center bg-black/40 backdrop-blur-lg animate-fadeIn p-4 sm:p-12"
       onClick={onClick}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDragStart={(e) => e.preventDefault()}
       onSelectCapture={(e) => e.preventDefault()}
     >
@@ -1281,6 +1281,13 @@ export const Desktop: React.FC = () => {
 
   const handleContextMenu = (e: React.MouseEvent, item: DesktopItem, inDock?: boolean) => {
     e.preventDefault();
+    // Skip if any modal/popup is open
+    if (
+      isSettingsOpen || isAuthOpen || isProfileOpen ||
+      isBookmarkBrowserOpen || isHistoryBrowserOpen ||
+      isExploreOpen || isItToolsOpen || isAddWidgetOpen ||
+      isAddModalOpen || !!stickyNoteItem || !!editingWidget || !!openedFolder
+    ) return;
     setContextMenu({ x: e.clientX, y: e.clientY, item, inDock });
   };
 
@@ -1628,6 +1635,16 @@ export const Desktop: React.FC = () => {
       className="w-full h-full flex flex-col overflow-hidden relative"
       onContextMenu={(e) => {
         // Right-click on blank area — show desktop context menu
+        // Skip if any modal/popup is open — prevent context menu from appearing on top of modals
+        if (
+          isSettingsOpen || isAuthOpen || isProfileOpen ||
+          isBookmarkBrowserOpen || isHistoryBrowserOpen ||
+          isExploreOpen || isItToolsOpen || isAddWidgetOpen ||
+          isAddModalOpen || !!stickyNoteItem || !!editingWidget || !!openedFolder
+        ) {
+          e.preventDefault();
+          return;
+        }
         // Skip if the click landed on an icon, button, input, or interactive element
         const target = e.target as HTMLElement;
         if (

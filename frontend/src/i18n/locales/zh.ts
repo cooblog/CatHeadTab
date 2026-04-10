@@ -70,6 +70,8 @@ export const zh = {
   'settings.wpSourceBuiltin': '📦 内置壁纸',
   'settings.wpSourceLocal': '📁 本地文件夹',
   'settings.wpSourceWallhaven': '🌐 Wallhaven',
+  'settings.wpSourceCOS': '☁️ 云端壁纸库',
+  'settings.wpCosEmpty': '云端存储中未找到壁纸图片。',
   'settings.wpLocalSelectFolder': '选择文件夹',
   'settings.wpLocalImageCount': '张图片',
   'settings.wpLocalEmptyHint': '选择本地文件夹以浏览图片并设为壁纸。',

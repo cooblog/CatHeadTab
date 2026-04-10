@@ -93,12 +93,22 @@ function App() {
     };
   }, [isLocked]);
 
-  // Resolve background image (idb:// → Object URL, otherwise use as-is)
+  // Resolve background image (idb:// → Object URL, cos:// → backend proxy, otherwise use as-is)
   useEffect(() => {
     if (backgroundImage.startsWith('idb://')) {
       loadImageBlob('bg-custom').then(objUrl => {
         setResolvedBg(objUrl || '');
       });
+    } else if (backgroundImage.startsWith('cos://')) {
+      // cos://objectKey → resolve via backend proxy that generates a fresh pre-signed URL
+      const cosKey = backgroundImage.slice('cos://'.length);
+      const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
+      if (srvUrl) {
+        const base = srvUrl.endsWith('/') ? srvUrl.slice(0, -1) : srvUrl;
+        setResolvedBg(`${base}/api/v1/wallpapers/cos/image?key=${encodeURIComponent(cosKey)}`);
+      } else {
+        setResolvedBg('');
+      }
     } else {
       setResolvedBg(backgroundImage);
     }

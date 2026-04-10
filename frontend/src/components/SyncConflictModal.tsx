@@ -72,7 +72,7 @@ export const SyncConflictModal: React.FC<SyncConflictModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => e.preventDefault()}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       {/* Dimmed Background Overlay */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto transition-opacity animate-fadeIn" />
 
