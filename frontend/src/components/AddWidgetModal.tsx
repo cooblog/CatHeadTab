@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from '../i18n/useTranslation';
 import type { TranslationKeys } from '../i18n/useTranslation';
 import type { WidgetType, WidgetSize, WidgetConfig } from '../store/layoutStore';
@@ -137,6 +138,130 @@ const TIMEZONE_LIST: { id: string; label: string }[] = [
   { id: 'Africa/Johannesburg', label: 'UTC+2  南非 (约翰内斯堡)' },
   { id: 'Africa/Lagos', label: 'UTC+1  尼日利亚 (拉各斯)' },
 ];
+
+/** Timezone dropdown that renders via portal so it's not clipped by the modal's overflow. */
+const TimezoneDropdown: React.FC<{
+  clockTimezone: string;
+  setClockTimezone: (tz: string) => void;
+  tzSearch: string;
+  setTzSearch: (s: string) => void;
+  tzDropdownOpen: boolean;
+  setTzDropdownOpen: (open: boolean) => void;
+  isZh: boolean;
+  label: string;
+}> = ({ clockTimezone, setClockTimezone, tzSearch, setTzSearch, tzDropdownOpen, setTzDropdownOpen, isZh, label }) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Calculate position when dropdown opens
+  useEffect(() => {
+    if (tzDropdownOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [tzDropdownOpen]);
+
+  // Close on outside click
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (
+      dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+      triggerRef.current && !triggerRef.current.contains(e.target as Node)
+    ) {
+      setTzDropdownOpen(false);
+    }
+  }, [setTzDropdownOpen]);
+
+  useEffect(() => {
+    if (tzDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [tzDropdownOpen, handleClickOutside]);
+
+  const selectTimezone = (tz: string) => {
+    setClockTimezone(tz);
+    setTzDropdownOpen(false);
+    setTzSearch('');
+  };
+
+  const selectedLabel = clockTimezone
+    ? TIMEZONE_LIST.find(tz => tz.id === clockTimezone)?.label ?? clockTimezone
+    : (isZh ? '当前时区（默认）' : 'Local Timezone (default)');
+
+  return (
+    <div>
+      <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{label}</label>
+      <div>
+        <div
+          ref={triggerRef}
+          className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3.5 text-[14px] text-white cursor-pointer flex items-center justify-between transition-all"
+          onClick={() => setTzDropdownOpen(!tzDropdownOpen)}
+        >
+          <span className={clockTimezone ? 'text-white' : 'text-white/40'}>
+            {selectedLabel}
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-white/40 transition-transform ${tzDropdownOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+
+        {tzDropdownOpen && pos && createPortal(
+          <div
+            ref={dropdownRef}
+            className="bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              width: Math.max(pos.width, 380),
+              zIndex: 10000,
+            }}
+          >
+            {/* Search input */}
+            <div className="p-2 border-b border-white/5">
+              <input
+                type="text"
+                value={tzSearch}
+                onChange={(e) => setTzSearch(e.target.value)}
+                placeholder={isZh ? '搜索时区...' : 'Search timezone...'}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder-white/30 focus:outline-none focus:border-[#72d565]/50"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            {/* Timezone list */}
+            <div className="max-h-[min(360px,50vh)] overflow-y-auto no-scrollbar">
+              {/* Local timezone option */}
+              <button
+                className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 ${!clockTimezone ? 'bg-white/5 text-white' : 'text-white/60'}`}
+                onClick={() => selectTimezone('')}
+              >
+                {isZh ? '当前时区（默认）' : 'Local Timezone (default)'}
+                {!clockTimezone && <span className="text-[#72d565]">✓</span>}
+              </button>
+              {TIMEZONE_LIST
+                .filter(tz => {
+                  if (!tzSearch) return true;
+                  const q = tzSearch.toLowerCase();
+                  return tz.id.toLowerCase().includes(q) || tz.label.toLowerCase().includes(q);
+                })
+                .map(tz => (
+                  <button
+                    key={tz.id}
+                    className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 border-t border-white/[0.03] ${clockTimezone === tz.id ? 'bg-white/5 text-white' : 'text-white/60'}`}
+                    onClick={() => selectTimezone(tz.id)}
+                  >
+                    <span className="truncate mr-2">{tz.label}</span>
+                    {clockTimezone === tz.id && <span className="text-[#72d565] shrink-0">✓</span>}
+                  </button>
+                ))}
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
   const { t, language } = useTranslation();
@@ -371,64 +496,16 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
               {/* Type-specific config */}
               {selectedType === 'clock' && (
-                <div>
-                  <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('widget.timezone')}</label>
-                  <div>
-                    <div
-                      className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3.5 text-[14px] text-white cursor-pointer flex items-center justify-between transition-all"
-                      onClick={() => setTzDropdownOpen(!tzDropdownOpen)}
-                    >
-                      <span className={clockTimezone ? 'text-white' : 'text-white/40'}>
-                        {clockTimezone || (isZh ? '当前时区（默认）' : 'Local Timezone (default)')}
-                      </span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-white/40 transition-transform ${tzDropdownOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
-                    </div>
-
-                    {tzDropdownOpen && (
-                      <div className="mt-1 w-full bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden">
-                        {/* Search input */}
-                        <div className="p-2 border-b border-white/5">
-                          <input
-                            type="text"
-                            value={tzSearch}
-                            onChange={(e) => setTzSearch(e.target.value)}
-                            placeholder={isZh ? '搜索时区...' : 'Search timezone...'}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder-white/30 focus:outline-none focus:border-[#72d565]/50"
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        {/* Timezone list */}
-                        <div className="max-h-[200px] overflow-y-auto no-scrollbar">
-                          {/* Local timezone option */}
-                          <button
-                            className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 ${!clockTimezone ? 'bg-white/5 text-white' : 'text-white/60'}`}
-                            onClick={() => { setClockTimezone(''); setTzDropdownOpen(false); setTzSearch(''); }}
-                          >
-                            {isZh ? '当前时区（默认）' : 'Local Timezone (default)'}
-                            {!clockTimezone && <span className="text-[#72d565]">✓</span>}
-                          </button>
-                          {TIMEZONE_LIST
-                            .filter(tz => {
-                              if (!tzSearch) return true;
-                              const q = tzSearch.toLowerCase();
-                              return tz.id.toLowerCase().includes(q) || tz.label.toLowerCase().includes(q);
-                            })
-                            .map(tz => (
-                              <button
-                                key={tz.id}
-                                className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 border-t border-white/[0.03] ${clockTimezone === tz.id ? 'bg-white/5 text-white' : 'text-white/60'}`}
-                                onClick={() => { setClockTimezone(tz.id); setTzDropdownOpen(false); setTzSearch(''); }}
-                              >
-                                <span className="truncate mr-2">{tz.label}</span>
-                                {clockTimezone === tz.id && <span className="text-[#72d565] shrink-0">✓</span>}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <TimezoneDropdown
+                  clockTimezone={clockTimezone}
+                  setClockTimezone={setClockTimezone}
+                  tzSearch={tzSearch}
+                  setTzSearch={setTzSearch}
+                  tzDropdownOpen={tzDropdownOpen}
+                  setTzDropdownOpen={setTzDropdownOpen}
+                  isZh={isZh}
+                  label={t('widget.timezone')}
+                />
               )}
 
               {selectedType === 'countdown' && (
