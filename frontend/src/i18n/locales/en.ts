@@ -29,6 +29,8 @@ export const en = {
   'desktop.duplicateHint': '"{title}" already exists on your desktop',
   'desktop.duplicateInFolderHint': '"{title}" already exists in this folder',
   'desktop.addAnyway': 'Add Anyway',
+  'desktop.unsupportedPage': 'This page cannot be added',
+  'desktop.unsupportedPageDesc': 'Browser internal pages (like settings, extensions, new tab) are not supported. Please navigate to a regular website first.',
   'desktop.openBookmarks': 'Bookmark Browser',
   'desktop.wallpaperSettings': 'Wallpaper',
   // Search Modes

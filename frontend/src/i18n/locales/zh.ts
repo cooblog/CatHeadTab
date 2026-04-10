@@ -29,6 +29,8 @@ export const zh = {
   'desktop.duplicateHint': '「{title}」已存在于桌面上',
   'desktop.duplicateInFolderHint': '「{title}」已存在于该文件夹中',
   'desktop.addAnyway': '仍然添加',
+  'desktop.unsupportedPage': '此页面无法添加',
+  'desktop.unsupportedPageDesc': '浏览器内部页面（如设置、扩展、新标签页等）不支持添加。请先打开一个正常的网页。',
   'desktop.openBookmarks': '书签浏览器',
   'desktop.wallpaperSettings': '壁纸设置',
   // Search Modes

@@ -12,6 +12,7 @@
     "bookmarks",
     "history",
     "favicon",
+    "activeTab",
     "system.cpu",
     "system.memory",
     "declarativeNetRequest"
@@ -38,7 +39,8 @@
     "128": "icon-128.png"
   },
   "action": {
-    "default_title": "CatHeadTab Settings",
+    "default_title": "CatHeadTab – Add to Desktop",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon-16.png",
       "32": "icon-32.png",
