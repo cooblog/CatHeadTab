@@ -69,14 +69,12 @@ func handleUserCommand(args []string) {
 		os.Exit(1)
 	}
 
-	// Load config and connect to database for user operations
+	// 加载配置并连接数据库（CLI 命令只需要数据库连接，不执行 migration）
 	cfg := config.Load()
 	if err := repository.Connect(cfg.DBDSN); err != nil {
 		log.Fatalf("❌ Failed to connect to database: %v", err)
 	}
 	defer repository.Close()
-
-	runMigrations()
 
 	switch args[0] {
 	case "create":
