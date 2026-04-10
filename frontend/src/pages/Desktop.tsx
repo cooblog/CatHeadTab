@@ -1722,25 +1722,92 @@ export const Desktop: React.FC = () => {
       >
         {isLocalSearchActive ? (
           <div className="h-full overflow-y-auto no-scrollbar pt-4 flex justify-center">
-            <div
-              className="desktop-icon-grid grid content-start w-full md:px-4"
-              style={{ justifyContent: 'center', justifyItems: 'center' }}
-            >
-              {searchResults.length > 0 ? (
-                searchResults.map(item => (
-                  <div key={item.id} className="cursor-pointer group" onClick={() => handleItemClick(item)}>
-                    <div className="group-hover:scale-110 group-active:scale-95 transition-transform duration-200">
-                      <DesktopIconContent item={item} />
-                    </div>
+            {(searchMode === 'bookmarks' || searchMode === 'history') ? (
+              /* 书签/历史记录搜索结果 - 列表展示 */
+              <div className="w-full max-w-2xl px-4 md:px-6">
+                {searchResults.length > 0 ? (
+                  <div className="flex flex-col gap-1 w-full backdrop-blur-xl bg-black/20 rounded-2xl p-2 border border-white/10 shadow-lg">
+                    {searchResults.map(item => (
+                      <div
+                        key={item.id}
+                        className="bookmark-row flex items-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl hover:bg-white/[0.08] transition-all cursor-pointer border border-transparent hover:border-white/5 active:scale-[0.99]"
+                        onClick={() => handleItemClick(item)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+                            {item.url ? (
+                              <img
+                                src={getSmartFaviconUrl(item.url, 64, true)}
+                                alt=""
+                                className="w-4.5 h-4.5 object-contain"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';
+                                }}
+                              />
+                            ) : (
+                              <span className="text-[10px]">🌐</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[13px] font-semibold text-white/90 truncate bookmark-title transition-colors">
+                              {item.title || (item.url ? new URL(item.url).hostname : t(searchMode === 'bookmarks' ? 'bookmark.untitled' : 'history.untitled'))}
+                            </span>
+                            {item.url && (
+                              <span className="text-[11px] text-white/30 truncate mt-0.5">
+                                {item.url}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 复制链接按钮 */}
+                        <div className="bookmark-actions flex items-center gap-1.5 shrink-0 ml-2">
+                          {item.url && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(item.url!);
+                              }}
+                              className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/20 text-white/50 hover:text-white flex items-center justify-center transition-colors"
+                              title={t(searchMode === 'bookmarks' ? 'bookmark.copyUrl' : 'history.copyUrl')}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))
-              ) : (
-                <div className="col-span-full opacity-60 text-center mt-20 fade-in">
-                  <p className="text-4xl mb-4">📭</p>
-                  <p>{t('desktop.noResults')} "{searchQuery}"</p>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="opacity-60 text-center mt-20 fade-in">
+                    <p className="text-4xl mb-4">📭</p>
+                    <p>{t('desktop.noResults')} "{searchQuery}"</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* 桌面搜索结果 - 图标网格展示 */
+              <div
+                className="desktop-icon-grid grid content-start w-full md:px-4"
+                style={{ justifyContent: 'center', justifyItems: 'center' }}
+              >
+                {searchResults.length > 0 ? (
+                  searchResults.map(item => (
+                    <div key={item.id} className="cursor-pointer group" onClick={() => handleItemClick(item)}>
+                      <div className="group-hover:scale-110 group-active:scale-95 transition-transform duration-200">
+                        <DesktopIconContent item={item} />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full opacity-60 text-center mt-20 fade-in">
+                    <p className="text-4xl mb-4">📭</p>
+                    <p>{t('desktop.noResults')} "{searchQuery}"</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div 

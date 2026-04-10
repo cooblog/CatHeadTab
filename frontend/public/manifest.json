@@ -11,6 +11,7 @@
     "unlimitedStorage",
     "bookmarks",
     "history",
+    "favicon",
     "system.cpu",
     "system.memory",
     "declarativeNetRequest"

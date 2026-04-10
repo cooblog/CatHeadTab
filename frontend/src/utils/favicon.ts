@@ -291,16 +291,58 @@ export function getGoogleFaviconUrl(urlOrDomain: string, sz: number = 64): strin
 }
 
 /**
- * Smart favicon URL: uses backend proxy if server is configured, falls back to Google S2.
+ * Get the Chrome built-in _favicon URL.
+ * This uses the browser's local favicon cache — the same source that
+ * chrome://bookmarks and chrome://history use. It requires the "favicon"
+ * permission in manifest.json.
+ *
+ * Returns empty string if chrome.runtime is not available (e.g. web dev mode).
  */
-export function getSmartFaviconUrl(urlOrDomain: string, sz: number = 64): string {
-  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
+export function getChromeFaviconUrl(urlOrDomain: string, sz: number = 32): string {
+  if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.getURL) {
+    return '';
+  }
 
-  // If server is configured, use the proxy (with local caching)
+  // _favicon API expects a full page URL, not just a domain
+  const pageUrl = urlOrDomain.includes('://') ? urlOrDomain : `https://${urlOrDomain}`;
+
+  try {
+    const faviconUrl = new URL(chrome.runtime.getURL('/_favicon/'));
+    faviconUrl.searchParams.set('pageUrl', pageUrl);
+    faviconUrl.searchParams.set('size', String(sz));
+    return faviconUrl.toString();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Smart favicon URL with multi-level fallback:
+ *  1. Chrome built-in _favicon API (optional, from browser's local cache)
+ *  2. Backend proxy with IndexedDB caching (if server is configured)
+ *  3. Google S2 (external fallback)
+ *
+ * @param urlOrDomain - URL or domain to get favicon for
+ * @param sz - icon size in pixels
+ * @param preferChromeFavicon - if true, prefer Chrome's _favicon API (low-res but instant).
+ *   Suitable for small list items (bookmarks/history search results).
+ *   Default false —桌面大图标等场景需要高清图，不走 Chrome 缓存。
+ */
+export function getSmartFaviconUrl(urlOrDomain: string, sz: number = 64, preferChromeFavicon: boolean = false): string {
+  // Priority 1 (optional): Chrome built-in _favicon API — low-res, suitable for list items
+  if (preferChromeFavicon) {
+    const chromeFavicon = getChromeFaviconUrl(urlOrDomain, sz);
+    if (chromeFavicon) {
+      return chromeFavicon;
+    }
+  }
+
+  // Priority 2: Backend proxy with local caching (high quality)
+  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
   if (serverUrl) {
     return getFaviconUrl(urlOrDomain, sz);
   }
 
-  // Fallback to Google S2 when no server is configured
+  // Priority 3: Google S2 fallback
   return getGoogleFaviconUrl(urlOrDomain, sz);
 }
