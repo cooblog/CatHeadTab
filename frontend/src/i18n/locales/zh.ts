@@ -344,6 +344,9 @@ export const zh = {
   // Widgets
   'widget.addWidget': '添加小组件',
   'widget.chooseType': '选择要添加到桌面的小组件类型。',
+  'widget.categoryTimeDate': '时间日期',
+  'widget.categoryLifeTools': '生活助手',
+  'widget.categoryProductivity': '效率工具',
   'widget.calendar': '日历',
   'widget.calendarDesc': '显示当月日历',
   'widget.weather': '天气',

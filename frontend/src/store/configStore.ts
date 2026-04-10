@@ -37,7 +37,7 @@ interface ConfigState {
   userProfile: UserProfile | null
   /** Whether the lock screen is currently shown. */
   isLocked: boolean
-  /** Idle timeout before auto-lock (milliseconds). Default 5 minutes. */
+  /** Idle timeout before auto-lock (milliseconds). 0 means never. */
   lockIdleTimeout: number
   /** Timestamp (ms) when the user last resolved a sync conflict. Used to suppress re-prompting after refresh. */
   lastSyncResolvedAt: number
@@ -94,7 +94,7 @@ export const useConfigStore = create<ConfigState>()(
       backgroundImage: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop',
       userProfile: null,
       isLocked: false,
-      lockIdleTimeout: 5 * 60 * 1000,
+      lockIdleTimeout: 0,
       lastSyncResolvedAt: 0,
       lastLocalModifiedAt: 0,
       setServerUrl: (url) => set({ serverUrl: url }),

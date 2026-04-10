@@ -344,6 +344,9 @@ export const en = {
   // Widgets
   'widget.addWidget': 'Add Widget',
   'widget.chooseType': 'Choose a widget type to add to your desktop.',
+  'widget.categoryTimeDate': 'Time & Date',
+  'widget.categoryLifeTools': 'Life Tools',
+  'widget.categoryProductivity': 'Productivity',
   'widget.calendar': 'Calendar',
   'widget.calendarDesc': 'Shows the current month calendar',
   'widget.weather': 'Weather',

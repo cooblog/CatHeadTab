@@ -21,71 +21,98 @@ interface WidgetOption {
   sizes: WidgetSize[];
 }
 
-const WIDGET_OPTIONS: WidgetOption[] = [
+interface WidgetCategory {
+  labelKey: TranslationKeys;
+  icon: string;
+  widgets: WidgetOption[];
+}
+
+const WIDGET_CATEGORIES: WidgetCategory[] = [
   {
-    type: 'calendar',
-    icon: '📅',
-    labelKey: 'widget.calendar',
-    descKey: 'widget.calendarDesc',
-    sizes: ['small', 'medium'],
-  },
-  {
-    type: 'weather',
-    icon: '🌤️',
-    labelKey: 'widget.weather',
-    descKey: 'widget.weatherDesc',
-    sizes: ['small', 'medium'],
-  },
-  {
-    type: 'countdown',
-    icon: '⏱️',
-    labelKey: 'widget.countdown',
-    descKey: 'widget.countdownDesc',
-    sizes: ['small', 'medium'],
-  },
-  {
-    type: 'systemMonitor',
-    icon: '🖥️',
-    labelKey: 'widget.systemMonitor',
-    descKey: 'widget.systemMonitorDesc',
-    sizes: ['small', 'medium'],
-  },
-  {
-    type: 'clock',
+    labelKey: 'widget.categoryTimeDate',
     icon: '🕐',
-    labelKey: 'widget.clock',
-    descKey: 'widget.clockDesc',
-    sizes: ['small', 'medium'],
+    widgets: [
+      {
+        type: 'calendar',
+        icon: '📅',
+        labelKey: 'widget.calendar',
+        descKey: 'widget.calendarDesc',
+        sizes: ['small', 'medium'],
+      },
+      {
+        type: 'clock',
+        icon: '🕐',
+        labelKey: 'widget.clock',
+        descKey: 'widget.clockDesc',
+        sizes: ['small', 'medium'],
+      },
+      {
+        type: 'countdown',
+        icon: '⏱️',
+        labelKey: 'widget.countdown',
+        descKey: 'widget.countdownDesc',
+        sizes: ['small', 'medium'],
+      },
+    ],
   },
   {
-    type: 'itTools',
+    labelKey: 'widget.categoryLifeTools',
+    icon: '🌤️',
+    widgets: [
+      {
+        type: 'weather',
+        icon: '🌤️',
+        labelKey: 'widget.weather',
+        descKey: 'widget.weatherDesc',
+        sizes: ['small', 'medium'],
+      },
+      {
+        type: 'stock',
+        icon: '📈',
+        labelKey: 'widget.stock',
+        descKey: 'widget.stockDesc',
+        sizes: ['small', 'medium'],
+      },
+      {
+        type: 'exchangeRate',
+        icon: '💱',
+        labelKey: 'widget.exchangeRate',
+        descKey: 'widget.exchangeRateDesc',
+        sizes: ['small', 'medium'],
+      },
+    ],
+  },
+  {
+    labelKey: 'widget.categoryProductivity',
     icon: '🛠️',
-    labelKey: 'widget.itTools',
-    descKey: 'widget.itToolsDesc',
-    sizes: ['small'],
-  },
-  {
-    type: 'stickyNote',
-    icon: '📝',
-    labelKey: 'widget.stickyNote',
-    descKey: 'widget.stickyNoteDesc',
-    sizes: ['small', 'medium'],
-  },
-  {
-    type: 'stock',
-    icon: '📈',
-    labelKey: 'widget.stock',
-    descKey: 'widget.stockDesc',
-    sizes: ['small', 'medium'],
-  },
-  {
-    type: 'exchangeRate',
-    icon: '💱',
-    labelKey: 'widget.exchangeRate',
-    descKey: 'widget.exchangeRateDesc',
-    sizes: ['small', 'medium'],
+    widgets: [
+      {
+        type: 'systemMonitor',
+        icon: '🖥️',
+        labelKey: 'widget.systemMonitor',
+        descKey: 'widget.systemMonitorDesc',
+        sizes: ['small', 'medium'],
+      },
+      {
+        type: 'itTools',
+        icon: '🛠️',
+        labelKey: 'widget.itTools',
+        descKey: 'widget.itToolsDesc',
+        sizes: ['small'],
+      },
+      {
+        type: 'stickyNote',
+        icon: '📝',
+        labelKey: 'widget.stickyNote',
+        descKey: 'widget.stickyNoteDesc',
+        sizes: ['small', 'medium'],
+      },
+    ],
   },
 ];
+
+/** Flattened list of all widget options (used for lookups). */
+const WIDGET_OPTIONS: WidgetOption[] = WIDGET_CATEGORIES.flatMap(c => c.widgets);
 
 /** Curated list of common world timezones for the clock widget picker. */
 const TIMEZONE_LIST: { id: string; label: string }[] = [
@@ -272,6 +299,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
   const isEditMode = !!editItem && editItem.type === 'widget';
 
+  // Active category tab index
+  const [activeTab, setActiveTab] = useState(0);
+
   // Pre-populate from editItem when in edit mode
   const [selectedType, setSelectedType] = useState<WidgetType | null>(
     isEditMode ? (editItem.widgetType ?? null) : null
@@ -435,19 +465,38 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 bg-gradient-to-br from-white/[0.02] to-transparent no-scrollbar">
           {!selectedType ? (
-            /* Step 1: Choose widget type — grouped list style */
-            <div className="space-y-5 fade-in">
+            /* Step 1: Choose widget type — Tab-based category selection */
+            <div className="space-y-4 fade-in">
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">{t('widget.addWidget')}</h3>
                 <p className="text-[13px] text-white/50">{t('widget.chooseType')}</p>
               </div>
 
+              {/* Category Tab bar */}
+              <div className="flex gap-1 bg-black/40 border border-white/10 rounded-xl p-1">
+                {WIDGET_CATEGORIES.map((cat, idx) => (
+                  <button
+                    key={cat.labelKey}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                      activeTab === idx
+                        ? 'bg-white/10 text-white shadow-sm'
+                        : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                    }`}
+                    onClick={() => setActiveTab(idx)}
+                  >
+                    <span className="text-[14px]">{cat.icon}</span>
+                    <span className="truncate">{t(cat.labelKey)}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Active category widget list */}
               <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
-                {WIDGET_OPTIONS.map((opt, idx) => (
+                {WIDGET_CATEGORIES[activeTab].widgets.map((opt, idx) => (
                   <button
                     key={opt.type}
                     className={`w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/5 group ${
-                      idx < WIDGET_OPTIONS.length - 1 ? 'border-b border-white/5' : ''
+                      idx < WIDGET_CATEGORIES[activeTab].widgets.length - 1 ? 'border-b border-white/5' : ''
                     }`}
                     onClick={() => setSelectedType(opt.type)}
                   >
