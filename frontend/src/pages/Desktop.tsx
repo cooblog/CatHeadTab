@@ -890,6 +890,9 @@ export const Desktop: React.FC = () => {
       } else if (item.widgetType === 'stock') {
         // Stock widget manages its own detail modal internally — do nothing here
         return;
+      } else if (item.widgetType === 'exchangeRate') {
+        // ExchangeRate widget manages its own detail modal internally — do nothing here
+        return;
       } else {
         setEditingWidget(item);
       }
