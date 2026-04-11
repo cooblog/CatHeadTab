@@ -12,6 +12,7 @@ import { ExploreWorld } from '../components/ExploreWorld';
 import { AddWidgetModal } from '../components/AddWidgetModal';
 import { ItToolsModal } from '../components/ItToolsModal';
 import { StickyNoteModal } from '../components/StickyNoteModal';
+import { AiAgentModal } from '../components/AiAgentModal';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
 import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
@@ -712,6 +713,8 @@ export const Desktop: React.FC = () => {
   const [isItToolsOpen, setIsItToolsOpen] = useState(false);
   // Sticky Note state
   const [stickyNoteItem, setStickyNoteItem] = useState<DesktopItem | null>(null);
+  // AI Agent chat modal state
+  const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -895,6 +898,9 @@ export const Desktop: React.FC = () => {
         return;
       } else if (item.widgetType === 'calculator') {
         // Calculator widget manages its own modal internally — do nothing here
+        return;
+      } else if (item.widgetType === 'aiAgent') {
+        setIsAiAgentOpen(true);
         return;
       } else {
         setEditingWidget(item);
@@ -2145,6 +2151,7 @@ export const Desktop: React.FC = () => {
       {isExploreOpen && <ExploreWorld onClose={() => setIsExploreOpen(false)} />}
       {isItToolsOpen && <ItToolsModal onClose={() => setIsItToolsOpen(false)} />}
       {stickyNoteItem && <StickyNoteModal onClose={() => setStickyNoteItem(null)} item={stickyNoteItem} />}
+      {isAiAgentOpen && <AiAgentModal onClose={() => setIsAiAgentOpen(false)} />}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 

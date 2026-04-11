@@ -114,6 +114,13 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
         descKey: 'widget.calculatorDesc',
         sizes: ['small'],
       },
+      {
+        type: 'aiAgent',
+        icon: '🤖',
+        labelKey: 'widget.aiAgent',
+        descKey: 'widget.aiAgentDesc',
+        sizes: ['small'],
+      },
     ],
   },
 ];
@@ -408,6 +415,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
       }
       case 'calculator':
         config = { widgetType: 'calculator' };
+        break;
+      case 'aiAgent':
+        config = { widgetType: 'aiAgent' };
         break;
       default:
         return;

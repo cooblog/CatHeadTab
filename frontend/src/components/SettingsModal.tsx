@@ -7,7 +7,7 @@ import client from '../api/client';
 import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 import builtinBgWebp from '../assets/bg.webp';
 
-type Tab = 'wallpaper' | 'system';
+type Tab = 'wallpaper' | 'system' | 'ai';
 type WallpaperSubTab = 'current' | 'browse';
 type WallpaperSource = 'builtin' | 'local' | 'wallhaven' | 'cos';
 
@@ -38,6 +38,189 @@ const purityBadge = (purity: string): { label: string; color: string } | null =>
 const IDB_BG_KEY = 'bg-custom';
 // Max original file size allowed before compression (20 MB)
 const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
+
+/** AI Assistant configuration section — independent tab. */
+const AISettingsSection: React.FC = () => {
+  const { aiActiveProvider, aiProviderConfigs, setAIProvider, updateAIProviderConfig } = useConfigStore();
+  const { t } = useTranslation();
+
+  // Presets: each provider has a key, display name, default URL and model
+  const presets = [
+    { key: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+    { key: 'anthropic', name: 'Anthropic', url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-20250514' },
+    { key: 'google', name: 'Google', url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.0-flash' },
+    { key: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+    { key: 'glm', name: 'GLM (智谱)', url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+    { key: 'kimi', name: 'Kimi (月之暗面)', url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+    { key: 'minimax', name: 'MiniMax', url: 'https://api.minimax.chat/v1', model: 'MiniMax-Text-01' },
+    { key: 'qwen', name: '通义千问', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-turbo' },
+  ];
+
+  // Active preset key — find from presets or use raw aiActiveProvider
+  const [activeKey, setActiveKey] = useState(aiActiveProvider || presets[0].key);
+
+  // Load the config for the currently selected provider
+  const currentConfig = aiProviderConfigs[activeKey] || { apiKey: '', baseUrl: '', model: '' };
+  const currentPreset = presets.find(p => p.key === activeKey);
+
+  const [apiKey, setApiKey] = useState(currentConfig.apiKey);
+  const [baseUrl, setBaseUrl] = useState(currentConfig.baseUrl || currentPreset?.url || '');
+  const [model, setModel] = useState(currentConfig.model || currentPreset?.model || '');
+  const [showKey, setShowKey] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // When switching provider, load that provider's saved config
+  const handleSelectProvider = (key: string) => {
+    // Save current edits first
+    updateAIProviderConfig(activeKey, { apiKey, baseUrl, model });
+
+    setActiveKey(key);
+    const cfg = aiProviderConfigs[key] || { apiKey: '', baseUrl: '', model: '' };
+    const preset = presets.find(p => p.key === key);
+    setApiKey(cfg.apiKey);
+    setBaseUrl(cfg.baseUrl || preset?.url || '');
+    setModel(cfg.model || preset?.model || '');
+    setShowKey(false);
+    setTestResult(null);
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    setAIProvider(activeKey, { apiKey, baseUrl, model });
+    setSaved(true);
+    setTestResult(null);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleTest = async () => {
+    if (!apiKey || !baseUrl) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const testUrl = baseUrl.replace(/\/+$/, '') + '/models';
+      const resp = await fetch(testUrl, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (resp.ok) {
+        setTestResult({ ok: true, msg: t('settings.aiTestSuccess') });
+      } else {
+        setTestResult({ ok: false, msg: `${t('settings.aiTestFailed')} HTTP ${resp.status}` });
+      }
+    } catch (err: any) {
+      setTestResult({ ok: false, msg: `${t('settings.aiTestFailed')} ${err.message}` });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // Check which providers have API keys configured
+  const hasKey = (key: string) => !!(aiProviderConfigs[key]?.apiKey);
+
+  return (
+    <div>
+      <h3 className="text-xl font-bold text-white mb-2">{t('settings.aiTitle')}</h3>
+      <p className="text-[13px] text-white/50 mb-4">{t('settings.aiDesc')}</p>
+
+      {/* Provider selector — pill buttons */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        {presets.map(p => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => handleSelectProvider(p.key)}
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all flex items-center gap-1.5 ${
+              activeKey === p.key
+                ? 'bg-[#72d565]/20 text-[#72d565] border border-[#72d565]/30 shadow-sm shadow-[#72d565]/10'
+                : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70 border border-white/5'
+            }`}
+          >
+            {p.name}
+            {hasKey(p.key) && <span className="w-1.5 h-1.5 rounded-full bg-[#72d565]" title="API Key configured" />}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {/* Base URL */}
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-1.5 ml-1">{t('settings.aiBaseUrl')}</label>
+          <input
+            value={baseUrl}
+            onChange={e => setBaseUrl(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all"
+            placeholder={t('settings.aiBaseUrlPlaceholder')}
+          />
+        </div>
+
+        {/* API Key */}
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-1.5 ml-1">{t('settings.aiApiKey')}</label>
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 pr-12 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all font-mono"
+              placeholder={t('settings.aiApiKeyPlaceholder')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+            >
+              {showKey ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-white/25 mt-1 ml-1">🔒 API Key 仅保存在本地，不会上传到云端。每个服务商的 Key 独立存储。</p>
+        </div>
+
+        {/* Model */}
+        <div>
+          <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-1.5 ml-1">{t('settings.aiModel')}</label>
+          <input
+            value={model}
+            onChange={e => setModel(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all"
+            placeholder={t('settings.aiModelPlaceholder')}
+          />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 mt-4">
+        <button
+          type="button"
+          onClick={handleSave}
+          className="flex-1 py-3 rounded-xl bg-[#72d565] hover:bg-[#5bb84f] text-black font-semibold text-[13px] transition-colors active:scale-95"
+        >
+          {saved ? '✓ ' + t('settings.aiSaved') : t('settings.aiSave')}
+        </button>
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={!apiKey || !baseUrl || testing}
+          className="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white/70 font-medium text-[13px] transition-colors active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          {testing ? t('settings.aiTesting') : t('settings.aiTest')}
+        </button>
+      </div>
+
+      {/* Test result */}
+      {testResult && (
+        <p className={`text-[12px] mt-2 ml-1 ${testResult.ok ? 'text-[#72d565]' : 'text-red-400'}`}>
+          {testResult.msg}
+        </p>
+      )}
+    </div>
+  );
+};
 
 
 export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> = ({ onClose, initialTab = 'wallpaper' }) => {
@@ -878,6 +1061,13 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
               >
                  {t('settings.system')}
               </button>
+              <button
+                type="button"
+                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${activeTab === 'ai' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                onClick={() => setActiveTab('ai')}
+              >
+                 {t('settings.ai')}
+              </button>
             </div>
           </div>
 
@@ -1604,6 +1794,13 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                       />
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* ============ AI TAB ============ */}
+              {activeTab === 'ai' && (
+                <div className="space-y-6 fade-in">
+                  <AISettingsSection />
                 </div>
               )}
             </div>

@@ -10,6 +10,7 @@ import { StickyNoteWidget } from './StickyNoteWidget';
 import { StockWidget } from './StockWidget';
 import { ExchangeRateWidget } from './ExchangeRateWidget';
 import { CalculatorWidget } from './CalculatorWidget';
+import { AiAgentWidget } from './AiAgentWidget';
 
 interface DesktopWidgetProps {
   item: DesktopItem;
@@ -76,6 +77,8 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         return <ExchangeRateWidget size={size} config={item.widgetConfig as ExchangeRateWidgetConfig} itemId={item.id} />;
       case 'calculator':
         return <CalculatorWidget size={size} />;
+      case 'aiAgent':
+        return <AiAgentWidget size={size} />;
       default:
         return (
           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">

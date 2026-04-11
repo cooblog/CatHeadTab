@@ -29,6 +29,13 @@ export interface UserProfile {
   role: UserRole;
 }
 
+/** Per-provider AI configuration. API keys are stored separately per provider. */
+export interface AIProviderConfig {
+  apiKey: string
+  baseUrl: string
+  model: string
+}
+
 interface ConfigState {
   serverUrl: string
   jwtToken: string | null
@@ -43,6 +50,10 @@ interface ConfigState {
   lastSyncResolvedAt: number
   /** Timestamp (ms) when local data (layout/preferences) was last modified by the user. */
   lastLocalModifiedAt: number
+  /** Currently active AI provider key (e.g. "openai", "deepseek"). */
+  aiActiveProvider: string
+  /** Per-provider configs. Each provider has its own apiKey, baseUrl, model. */
+  aiProviderConfigs: Record<string, AIProviderConfig>
   setServerUrl: (url: string) => void
   setLanguage: (lang: 'zh' | 'en') => void
   setJwtToken: (token: string | null) => void
@@ -52,6 +63,12 @@ interface ConfigState {
   setLockIdleTimeout: (ms: number) => void
   setLastSyncResolvedAt: (ts: number) => void
   setLastLocalModifiedAt: (ts: number) => void
+  /** Set the active provider and optionally update its config. */
+  setAIProvider: (providerKey: string, config?: Partial<AIProviderConfig>) => void
+  /** Update config for a specific provider without switching active. */
+  updateAIProviderConfig: (providerKey: string, config: Partial<AIProviderConfig>) => void
+  /** Get the currently active provider's config. */
+  getActiveAIConfig: () => { provider: string } & AIProviderConfig
   /** Convenience: set lastLocalModifiedAt to Date.now(). Call when user changes layout/preferences. */
   markLocalModified: () => void
   logout: () => void
@@ -97,6 +114,8 @@ export const useConfigStore = create<ConfigState>()(
       lockIdleTimeout: 0,
       lastSyncResolvedAt: 0,
       lastLocalModifiedAt: 0,
+      aiActiveProvider: '',
+      aiProviderConfigs: {},
       setServerUrl: (url) => set({ serverUrl: url }),
       setLanguage: (lang) => set({ language: lang }),
       setJwtToken: (token) => set({ jwtToken: token }),
@@ -106,6 +125,30 @@ export const useConfigStore = create<ConfigState>()(
       setLockIdleTimeout: (ms) => set({ lockIdleTimeout: ms }),
       setLastSyncResolvedAt: (ts) => set({ lastSyncResolvedAt: ts }),
       setLastLocalModifiedAt: (ts) => set({ lastLocalModifiedAt: ts }),
+      setAIProvider: (providerKey, config) => set((state) => {
+        const existing = state.aiProviderConfigs[providerKey] || { apiKey: '', baseUrl: '', model: '' };
+        return {
+          aiActiveProvider: providerKey,
+          aiProviderConfigs: {
+            ...state.aiProviderConfigs,
+            [providerKey]: { ...existing, ...config },
+          },
+        };
+      }),
+      updateAIProviderConfig: (providerKey, config) => set((state) => {
+        const existing = state.aiProviderConfigs[providerKey] || { apiKey: '', baseUrl: '', model: '' };
+        return {
+          aiProviderConfigs: {
+            ...state.aiProviderConfigs,
+            [providerKey]: { ...existing, ...config },
+          },
+        };
+      }),
+      getActiveAIConfig: () => {
+        const state = get();
+        const cfg = state.aiProviderConfigs[state.aiActiveProvider] || { apiKey: '', baseUrl: '', model: '' };
+        return { provider: state.aiActiveProvider, ...cfg };
+      },
       markLocalModified: () => set({ lastLocalModifiedAt: Date.now() }),
       logout: () => set({ jwtToken: null, userProfile: null }),
       isConfigured: () => !!(ENV_API_URL || get().serverUrl),
@@ -114,6 +157,8 @@ export const useConfigStore = create<ConfigState>()(
     {
       name: 'catheadtab-config',
       storage: createJSONStorage(() => customStorage),
+      // AI config is persisted locally but NEVER included in cloud sync
+      // (syncPreferencesToCloud only sends backgroundImage & lockIdleTimeout)
     }
   )
 )

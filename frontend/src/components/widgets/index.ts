@@ -7,4 +7,5 @@ export { StickyNoteWidget } from './StickyNoteWidget';
 export { StockWidget } from './StockWidget';
 export { ExchangeRateWidget } from './ExchangeRateWidget';
 export { CalculatorWidget } from './CalculatorWidget';
+export { AiAgentWidget } from './AiAgentWidget';
 export { DesktopWidget, getWidgetGridStyle } from './DesktopWidget';

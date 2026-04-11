@@ -17,7 +17,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator' | 'aiAgent';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium';
@@ -107,7 +107,11 @@ export interface CalculatorWidgetConfig {
   widgetType: 'calculator';
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig | CalculatorWidgetConfig;
+export interface AiAgentWidgetConfig {
+  widgetType: 'aiAgent';
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig | CalculatorWidgetConfig | AiAgentWidgetConfig;
 
 export interface DesktopItem {
   id: string;
