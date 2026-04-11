@@ -148,12 +148,12 @@ const DesktopIconContent: React.FC<{
                 ? 'shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
                 : ''
             }`
-          : `${isFolder ? 'bg-white/[0.06]' : 'bg-white/[0.08]'} border shadow-lg flex items-center justify-center ${
+          : `${isFolder ? 'bg-white/[0.08] backdrop-blur-2xl' : 'bg-white/[0.08]'} border shadow-lg flex items-center justify-center ${
               isDraggedOver
                 ? 'scale-125 bg-white/30 border-white/50 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
                 : isOverlay
                   ? 'border-white/30 shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
-                  : 'border-white/15'
+                  : isFolder ? 'border-white/[0.15]' : 'border-white/15'
             }`
       }`}>
         {isFolder ? (
