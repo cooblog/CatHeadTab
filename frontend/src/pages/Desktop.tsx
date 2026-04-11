@@ -893,6 +893,9 @@ export const Desktop: React.FC = () => {
       } else if (item.widgetType === 'exchangeRate') {
         // ExchangeRate widget manages its own detail modal internally — do nothing here
         return;
+      } else if (item.widgetType === 'calculator') {
+        // Calculator widget manages its own modal internally — do nothing here
+        return;
       } else {
         setEditingWidget(item);
       }
@@ -1736,7 +1739,7 @@ export const Desktop: React.FC = () => {
         onDoubleClick={(e) => {
           // Only trigger on blank area (the container itself or the page wrapper)
           const target = e.target as HTMLElement;
-          if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]')) return;
+          if (target.closest('[data-desktop-icon]') || target.closest('[data-add-button]') || target.closest('.widget-container')) return;
           setIsExploreOpen(true);
         }}
       >

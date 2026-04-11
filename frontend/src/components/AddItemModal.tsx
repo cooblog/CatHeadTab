@@ -36,6 +36,13 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const { t } = useTranslation();
   const isEditing = !!editItem;
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   const [mode, setMode] = useState<'link' | 'folder'>(editItem?.type === 'folder' ? 'folder' : 'link');
   const [title, setTitle] = useState(editItem?.title || '');
   const [url, setUrl] = useState(editItem?.url || '');

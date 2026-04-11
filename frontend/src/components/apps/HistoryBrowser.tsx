@@ -74,6 +74,13 @@ export const HistoryBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) =
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRange, setActiveRange] = useState<TimeRange>('all');
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
   const [loading, setLoading] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);

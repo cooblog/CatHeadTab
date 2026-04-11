@@ -6,4 +6,5 @@ export { ClockWidget } from './ClockWidget';
 export { StickyNoteWidget } from './StickyNoteWidget';
 export { StockWidget } from './StockWidget';
 export { ExchangeRateWidget } from './ExchangeRateWidget';
+export { CalculatorWidget } from './CalculatorWidget';
 export { DesktopWidget, getWidgetGridStyle } from './DesktopWidget';

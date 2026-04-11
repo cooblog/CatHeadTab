@@ -107,6 +107,13 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
         descKey: 'widget.stickyNoteDesc',
         sizes: ['small', 'medium'],
       },
+      {
+        type: 'calculator',
+        icon: '🧮',
+        labelKey: 'widget.calculator',
+        descKey: 'widget.calculatorDesc',
+        sizes: ['small'],
+      },
     ],
   },
 ];
@@ -297,6 +304,13 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
   const updateWidgetConfig = useLayoutStore(s => s.updateWidgetConfig);
   const updateDesktopItem = useLayoutStore(s => s.updateDesktopItem);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   const isEditMode = !!editItem && editItem.type === 'widget';
 
   // Active category tab index
@@ -392,6 +406,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         };
         break;
       }
+      case 'calculator':
+        config = { widgetType: 'calculator' };
+        break;
       default:
         return;
     }
@@ -642,6 +659,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'exchangeRate' && (isZh
                     ? '💱 汇率助手实时显示主要货币汇率。支持美元、欧元、人民币、日元、英镑、港币等多种货币。小尺寸显示精简汇率列表，中尺寸显示更多详情。点击可打开管理面板添加或移除货币对。数据来源：Frankfurter API（欧洲央行）。'
                     : '💱 Exchange Rate widget shows live currency exchange rates. Supports USD, EUR, CNY, JPY, GBP, HKD and more. Small size shows a compact list, medium shows more details. Click to open the management panel to add or remove currency pairs. Data from Frankfurter API (ECB).')}
+                  {selectedType === 'calculator' && (isZh
+                    ? '🧮 科学计算器支持基本四则运算、三角函数、对数、幂运算、百分比等。小尺寸显示精简计算器，中尺寸显示完整键盘并可展开科学计算功能。使用 math.js 引擎，支持复杂数学表达式。'
+                    : '🧮 Scientific calculator supports basic arithmetic, trigonometric functions, logarithms, power, percentage and more. Small size shows a compact calculator, medium shows a full keypad with expandable scientific functions. Powered by math.js engine.')}
                 </p>
               </div>
 

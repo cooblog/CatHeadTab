@@ -9,6 +9,13 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
   const [activeFolderId, setActiveFolderId] = useState<string>('1'); // Default to Bookmarks Bar
   const [activeFolderPaths, setActiveFolderPaths] = useState<ChromeBookmarkTreeNode[]>([]);
   const [currentChildren, setCurrentChildren] = useState<ChromeBookmarkTreeNode[]>([]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);

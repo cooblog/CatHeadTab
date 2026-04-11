@@ -46,6 +46,13 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
   const [wpSubTab, setWpSubTab] = useState<WallpaperSubTab>('current');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [url, setUrl] = useState(serverUrl);

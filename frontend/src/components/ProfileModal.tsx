@@ -21,6 +21,13 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const { t } = useTranslation();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Change password

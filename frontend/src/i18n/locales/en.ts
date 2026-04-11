@@ -372,6 +372,8 @@ export const en = {
   'widget.stockDesc': 'Real-time stock quotes for US, HK & A-shares',
   'widget.exchangeRate': 'Exchange Rate',
   'widget.exchangeRateDesc': 'Live currency exchange rates',
+  'widget.calculator': 'Calculator',
+  'widget.calculatorDesc': 'Scientific calculator & unit conversion',
   'widget.stickyNoteColor': 'Note Color',
   'widget.stickyNotePlaceholder': 'Write your thoughts here...',
   'widget.stickyNoteChars': 'chars',

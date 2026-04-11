@@ -12,6 +12,13 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { serverUrl, setServerUrl, setJwtToken, setUserProfile } = useConfigStore();
   const { t } = useTranslation();
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   // Skip server step if env variable is set OR serverUrl is already configured
   const [step, setStep] = useState<ModalStep>((isEnvConfigured || serverUrl) ? 'auth' : 'server');
   const [serverInput, setServerInput] = useState(serverUrl);

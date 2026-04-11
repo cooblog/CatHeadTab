@@ -372,6 +372,8 @@ export const zh = {
   'widget.stockDesc': '实时跟踪美股、港股、A股行情',
   'widget.exchangeRate': '汇率助手',
   'widget.exchangeRateDesc': '实时查看主要货币汇率',
+  'widget.calculator': '科学计算器',
+  'widget.calculatorDesc': '支持科学计算和单位换算',
   'widget.stickyNoteColor': '便签颜色',
   'widget.stickyNotePlaceholder': '在这里记录你的想法...',
   'widget.stickyNoteChars': '字',

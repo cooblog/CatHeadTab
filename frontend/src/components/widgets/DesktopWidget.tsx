@@ -9,6 +9,7 @@ import { ClockWidget } from './ClockWidget';
 import { StickyNoteWidget } from './StickyNoteWidget';
 import { StockWidget } from './StockWidget';
 import { ExchangeRateWidget } from './ExchangeRateWidget';
+import { CalculatorWidget } from './CalculatorWidget';
 
 interface DesktopWidgetProps {
   item: DesktopItem;
@@ -73,6 +74,8 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         return <StockWidget size={size} config={item.widgetConfig as StockWidgetConfig} itemId={item.id} />;
       case 'exchangeRate':
         return <ExchangeRateWidget size={size} config={item.widgetConfig as ExchangeRateWidgetConfig} itemId={item.id} />;
+      case 'calculator':
+        return <CalculatorWidget size={size} />;
       default:
         return (
           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">
