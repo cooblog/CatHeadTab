@@ -81,8 +81,13 @@ export async function* runAgent(
 ): AsyncGenerator<string> {
   const model = getAIModel();
 
+  // Keep only the last 20 messages as context to avoid exceeding token limits.
+  // Older messages are still saved locally but not sent to the LLM.
+  const contextWindow = 20;
+  const recentHistory = history.slice(-contextWindow);
+
   const messages: ModelMessage[] = [
-    ...history.map(m => ({
+    ...recentHistory.map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     })),

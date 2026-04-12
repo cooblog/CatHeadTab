@@ -1,14 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../i18n/useTranslation';
 import { isAIConfigured } from '../ai/provider';
 import { runAgent } from '../ai/agent';
 import type { AgentMessage } from '../ai/agent';
-import { customStorage } from '../store/configStore';
-import { useConfigStore } from '../store/configStore';
+import { customStorage, useConfigStore } from '../store/configStore';
 
 const CHAT_STORAGE_KEY = 'catheadtab-ai-chat';
 
-/** Load chat history from local storage. */
 async function loadChatHistory(): Promise<AgentMessage[]> {
   try {
     const raw = await customStorage.getItem(CHAT_STORAGE_KEY);
@@ -17,12 +17,185 @@ async function loadChatHistory(): Promise<AgentMessage[]> {
   return [];
 }
 
-/** Save chat history to local storage. */
 async function saveChatHistory(messages: AgentMessage[]) {
-  // Keep last 50 messages to avoid storage bloat
   const trimmed = messages.slice(-50);
   await customStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(trimmed));
 }
+
+// ─── Markdown-lite renderer ───────────────────────────────────────────
+// Handles: **bold**, *italic*, `code`, ```codeblock```, - list, [link](url)
+
+interface ParsedBlock {
+  type: 'think' | 'text';
+  content: string;
+}
+
+function parseThinkBlocks(raw: string): ParsedBlock[] {
+  const blocks: ParsedBlock[] = [];
+  let remaining = raw;
+  const openTag = '<think>';
+  const closeTag = '</think>';
+
+  while (remaining.length > 0) {
+    const openIdx = remaining.indexOf(openTag);
+    if (openIdx === -1) {
+      if (remaining.trim()) blocks.push({ type: 'text', content: remaining });
+      break;
+    }
+    // Text before <think>
+    if (openIdx > 0) {
+      const before = remaining.substring(0, openIdx);
+      if (before.trim()) blocks.push({ type: 'text', content: before });
+    }
+    const closeIdx = remaining.indexOf(closeTag, openIdx);
+    if (closeIdx === -1) {
+      // Unclosed think block (still streaming)
+      blocks.push({ type: 'think', content: remaining.substring(openIdx + openTag.length) });
+      break;
+    }
+    blocks.push({ type: 'think', content: remaining.substring(openIdx + openTag.length, closeIdx) });
+    remaining = remaining.substring(closeIdx + closeTag.length);
+  }
+  return blocks;
+}
+
+// ─── Markdown custom components for styling ──────────────────────────
+const mdComponents = {
+  p: ({ children }: any) => <p className="mb-1 last:mb-0">{children}</p>,
+  strong: ({ children }: any) => <strong className="font-semibold text-white/90">{children}</strong>,
+  em: ({ children }: any) => <em className="italic text-white/75">{children}</em>,
+  code: ({ className, children, ...props }: any) => {
+    // Inline code vs code block
+    const isBlock = className?.includes('language-');
+    if (isBlock) {
+      return <code className="text-[12px] font-mono text-white/70" {...props}>{children}</code>;
+    }
+    return <code className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[12px] font-mono text-[#72d565]/80">{children}</code>;
+  },
+  pre: ({ children }: any) => (
+    <pre className="my-2 px-3 py-2 rounded-lg bg-black/30 border border-white/[0.08] overflow-x-auto text-[12px] leading-relaxed whitespace-pre-wrap">{children}</pre>
+  ),
+  ul: ({ children }: any) => <ul className="space-y-0.5 ml-1 my-1">{children}</ul>,
+  ol: ({ children }: any) => <ol className="space-y-0.5 ml-1 my-1 list-decimal list-inside marker:text-white/30">{children}</ol>,
+  li: ({ children, ordered }: any) => ordered
+    ? <li className="text-white/70">{children}</li>
+    : <li className="flex gap-1.5"><span className="text-white/30 mt-0.5 shrink-0">•</span><span className="flex-1">{children}</span></li>,
+  del: ({ children }: any) => <del className="text-white/40 line-through">{children}</del>,
+  h1: ({ children }: any) => <h1 className="text-[15px] font-bold text-white/85 mt-2 mb-1">{children}</h1>,
+  h2: ({ children }: any) => <h2 className="text-[14px] font-semibold text-white/85 mt-2 mb-1">{children}</h2>,
+  h3: ({ children }: any) => <h3 className="text-[13px] font-semibold text-white/85 mt-1 mb-0.5">{children}</h3>,
+  a: ({ href, children }: any) => <a href={href} target="_blank" rel="noreferrer" className="text-[#72d565]/80 hover:text-[#72d565] underline underline-offset-2">{children}</a>,
+  blockquote: ({ children }: any) => <blockquote className="border-l-2 border-white/10 pl-3 text-white/50 italic my-1">{children}</blockquote>,
+  hr: () => <hr className="border-white/[0.08] my-2" />,
+  table: ({ children }: any) => <div className="overflow-x-auto my-2"><table className="text-[12px] border-collapse w-full">{children}</table></div>,
+  th: ({ children }: any) => <th className="border border-white/10 px-2 py-1 bg-white/[0.04] text-left font-semibold text-white/60">{children}</th>,
+  td: ({ children }: any) => <td className="border border-white/10 px-2 py-1 text-white/50">{children}</td>,
+};
+
+// ─── Think Block Component ────────────────────────────────────────────
+
+const ThinkBlock: React.FC<{ content: string; isStreaming: boolean; isZh: boolean }> = ({ content, isStreaming, isZh }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  // Auto-collapse when streaming finishes
+  useEffect(() => {
+    if (!isStreaming) setExpanded(false);
+  }, [isStreaming]);
+
+  // Auto-expand while streaming
+  const isOpen = isStreaming || expanded;
+
+  return (
+    <div className="my-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-[11px] text-white/30 hover:text-white/50 transition-colors"
+      >
+        {isStreaming ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin shrink-0">
+            <path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/>
+          </svg>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}>
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        )}
+        <span className="font-medium">{isStreaming ? (isZh ? '思考中...' : 'Thinking...') : (isZh ? '思考过程' : 'Thinking')}</span>
+        {!isStreaming && <span className="text-white/15 ml-auto">{isOpen ? '▲' : '▼'}</span>}
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-2.5 text-[12px] leading-relaxed text-white/30 border-t border-white/[0.04] pt-2 max-h-40 overflow-y-auto no-scrollbar whitespace-pre-wrap">
+          {content.trim() || (isZh ? '...' : '...')}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Message Bubble ───────────────────────────────────────────────────
+
+const MessageBubble: React.FC<{ msg: AgentMessage; isStreaming: boolean; isZh: boolean }> = React.memo(({ msg, isStreaming, isZh }) => {
+  if (msg.role === 'user') {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] sm:max-w-[80%] rounded-2xl rounded-br-lg px-4 py-2.5 text-[13px] leading-relaxed break-words bg-white/[0.08] text-white/85">
+          {msg.content}
+        </div>
+      </div>
+    );
+  }
+
+  // Assistant message
+  const isError = msg.content.startsWith('❌');
+  const isEmpty = !msg.content;
+
+  if (isError) {
+    return (
+      <div className="flex justify-start">
+        <div className="max-w-[85%] sm:max-w-[80%] rounded-2xl rounded-bl-lg px-4 py-2.5 text-[13px] leading-relaxed break-words bg-red-500/10 border border-red-400/20 text-red-300/80">
+          {msg.content}
+        </div>
+      </div>
+    );
+  }
+
+  if (isEmpty) {
+    return (
+      <div className="flex justify-start">
+        <div className="rounded-2xl rounded-bl-lg px-4 py-3 bg-white/[0.04] border border-white/[0.06]">
+          <span className="inline-flex items-center gap-1.5 text-white/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" style={{ animationDelay: '0.15s' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" style={{ animationDelay: '0.3s' }} />
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Parse think blocks
+  const blocks = parseThinkBlocks(msg.content);
+
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[85%] sm:max-w-[80%] rounded-2xl rounded-bl-lg px-4 py-2.5 text-[13px] leading-relaxed break-words bg-white/[0.04] border border-white/[0.06] text-white/70 space-y-1">
+        {blocks.map((block, i) => {
+          if (block.type === 'think') {
+            return <ThinkBlock key={i} content={block.content} isStreaming={isStreaming && i === blocks.length - 1} isZh={isZh} />;
+          }
+          return <Markdown key={i} remarkPlugins={[remarkGfm]} components={mdComponents}>{block.content}</Markdown>;
+        })}
+        {/* Streaming cursor */}
+        {isStreaming && msg.content && !msg.content.endsWith('\n') && (
+          <span className="inline-block w-[2px] h-[14px] bg-[#72d565]/60 animate-pulse ml-0.5 align-middle" />
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ─── Main Component ───────────────────────────────────────────────────
 
 interface AiAgentModalProps {
   onClose: () => void;
@@ -41,7 +214,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
   const [streaming, setStreaming] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const configured = isAIConfigured();
 
   // Load saved chat history on mount
@@ -52,23 +225,39 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
     });
   }, []);
 
-  // Auto-save whenever messages change (skip initial load)
+  // Auto-save whenever messages change
   useEffect(() => {
     if (loaded && messages.length > 0) saveChatHistory(messages);
   }, [messages, loaded]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+
+  // Smooth scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: streaming ? 'instant' : 'smooth' });
+    }
+  }, [messages, streaming]);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
+  // Auto-resize textarea
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
+    if (inputRef.current) { inputRef.current.style.height = 'auto'; }
     const userMsg: AgentMessage = { role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
@@ -82,13 +271,11 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
       if (!out) setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: isZh ? '✅ 操作已完成。' : '✅ Done.' }]);
     } catch (err: any) {
       const errMsg = err?.message || 'Unknown error';
-      // Parse common API errors for user-friendly display
       let displayMsg = errMsg;
       try {
         const parsed = JSON.parse(errMsg);
         if (parsed?.error?.message) displayMsg = parsed.error.message;
-      } catch { /* not JSON, use raw message */ }
-      // Replace the empty assistant bubble with an error message
+      } catch { /* not JSON */ }
       setMessages(prev => {
         const filtered = prev.filter(m => m.content !== '');
         return [...filtered, { role: 'assistant', content: `❌ ${isZh ? '出错了' : 'Error'}: ${displayMsg}` }];
@@ -96,9 +283,15 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
     } finally { setStreaming(false); }
   }, [input, streaming, messages, isZh]);
 
-  const hints = isZh
+  const hints = useMemo(() => isZh
     ? ['整理我的桌面', '搜索书签 React', '添加 GitHub 到桌面', '最近浏览了什么']
-    : ['Organize my desktop', 'Search bookmarks React', 'Add GitHub to desktop', 'Recent history'];
+    : ['Organize my desktop', 'Search bookmarks React', 'Add GitHub to desktop', 'Recent history'],
+  [isZh]);
+
+  const handleClear = useCallback(() => {
+    setMessages([]);
+    customStorage.removeItem(CHAT_STORAGE_KEY);
+  }, []);
 
   return (
     <div
@@ -106,10 +299,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
       onContextMenu={e => { e.preventDefault(); e.stopPropagation(); }}
     >
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto animate-fadeIn"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto animate-fadeIn" onClick={onClose} />
 
       {/* Window */}
       <div
@@ -120,24 +310,18 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
         }`}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header — macOS traffic lights on desktop, X button on mobile */}
+        {/* ── Header ── */}
         <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
-          {/* Left: Mac traffic lights (desktop only) */}
+          {/* Mac traffic lights (desktop) */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
-              <button
-                onClick={onClose}
-                className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default"
-              >
+              <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-red-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
               <button className="w-3.5 h-3.5 rounded-full bg-[#ffbd2e] hover:bg-[#ffbd2e]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 <svg className="w-2 h-2 text-yellow-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14"/></svg>
               </button>
-              <button
-                onClick={() => setIsFullscreen(f => !f)}
-                className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default"
-              >
+              <button onClick={() => setIsFullscreen(f => !f)} className="w-3.5 h-3.5 rounded-full bg-[#27c93f] hover:bg-[#27c93f]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
                 {isFullscreen ? (
                   <svg className="w-2 h-2 text-green-900 opacity-0 group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>
                 ) : (
@@ -149,10 +333,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
 
           {/* Center title */}
           <div className="flex-1 flex items-center justify-center gap-2">
-            <div
-              className="w-6 h-6 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #06b6d4, #8b5cf6, #ec4899)' }}
-            >
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #06b6d4, #8b5cf6, #ec4899)' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h-1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
               </svg>
@@ -161,26 +342,20 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
             {activeModel && <span className="text-[11px] text-white/25 font-mono">{activeModel}</span>}
           </div>
 
-          {/* Right: clear (desktop) + close (mobile) */}
+          {/* Right: clear + close */}
           <div className="flex items-center w-auto md:w-20 justify-end gap-1">
             {messages.length > 0 && (
-              <button
-                onClick={() => { setMessages([]); customStorage.removeItem(CHAT_STORAGE_KEY); }}
-                className="hidden md:block px-2.5 py-1 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
-              >
+              <button onClick={handleClear} className="hidden md:block px-2.5 py-1 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors">
                 {isZh ? '清空' : 'Clear'}
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors"
-            >
+            <button onClick={onClose} className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
         </div>
 
-        {/* Body */}
+        {/* ── Body ── */}
         {!configured ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center">
             <span className="text-4xl">🔑</span>
@@ -214,61 +389,60 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
                 </div>
               )}
               {messages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap ${
-                      msg.role === 'user'
-                        ? 'bg-white/[0.08] text-white/85 rounded-br-lg'
-                        : msg.content.startsWith('❌')
-                          ? 'bg-red-500/10 border border-red-400/20 text-red-300/80 rounded-bl-lg'
-                          : 'bg-white/[0.04] border border-white/[0.06] text-white/70 rounded-bl-lg'
-                    }`}
-                  >
-                    {msg.content || (
-                      <span className="inline-flex items-center gap-1.5 text-white/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" style={{ animationDelay: '0.15s' }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-white/30 animate-pulse" style={{ animationDelay: '0.3s' }} />
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <MessageBubble
+                  key={i}
+                  msg={msg}
+                  isStreaming={streaming && i === messages.length - 1 && msg.role === 'assistant'}
+                  isZh={isZh}
+                />
               ))}
-              {streaming && messages.length > 0 && messages[messages.length - 1].content === '' && null}
             </div>
 
-            {/* Mobile clear button */}
+            {/* Mobile clear */}
             {messages.length > 0 && (
               <div className="md:hidden flex justify-center pb-1">
-                <button
-                  onClick={() => { setMessages([]); customStorage.removeItem(CHAT_STORAGE_KEY); }}
-                  className="px-3 py-1 rounded-lg text-[11px] text-white/25 hover:text-white/50 hover:bg-white/5 transition-colors"
-                >
+                <button onClick={handleClear} className="px-3 py-1 rounded-lg text-[11px] text-white/25 hover:text-white/50 hover:bg-white/5 transition-colors">
                   {isZh ? '清空对话' : 'Clear chat'}
                 </button>
               </div>
             )}
 
-            {/* Input */}
+            {/* ── Input Area ── */}
             <div className="shrink-0 px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
-              <div className="flex items-center gap-2 bg-white/[0.05] hover:bg-white/[0.07] border border-white/[0.08] rounded-2xl px-4 py-3 transition-all focus-within:border-white/[0.15]">
-                <input
+              {/* Streaming indicator */}
+              {streaming && (
+                <div className="flex items-center gap-2 px-1 pb-2">
+                  <div className="flex gap-1">
+                    <span className="w-1 h-1 rounded-full bg-[#72d565]/50 animate-pulse" />
+                    <span className="w-1 h-1 rounded-full bg-[#72d565]/50 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                    <span className="w-1 h-1 rounded-full bg-[#72d565]/50 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                  </div>
+                  <span className="text-[11px] text-white/25">{isZh ? 'AI 正在回复...' : 'AI is responding...'}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 bg-white/[0.05] hover:bg-white/[0.07] border border-white/[0.08] rounded-2xl px-4 py-2.5 transition-all focus-within:border-white/[0.15]">
+                <textarea
                   ref={inputRef}
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                  placeholder={isZh ? '告诉 AI 你想做什么...' : 'Tell AI what you want...'}
+                  placeholder={isZh ? '告诉 AI 你想做什么...（Shift+Enter 换行）' : 'Tell AI what you want... (Shift+Enter for newline)'}
                   disabled={streaming}
-                  className="flex-1 bg-transparent text-[14px] text-white/85 placeholder:text-white/20 outline-none min-w-0"
+                  rows={1}
+                  className="flex-1 bg-transparent text-[14px] text-white/85 placeholder:text-white/20 outline-none min-w-0 resize-none no-scrollbar leading-[1.4] max-h-[120px] py-0.5"
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || streaming}
-                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-[#72d565]/70 hover:bg-[#72d565] disabled:opacity-20 transition-all"
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-[#72d565]/70 hover:bg-[#72d565] disabled:opacity-20 transition-all mb-0.5"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
+                  {streaming ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="black" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20V4M5 11l7-7 7 7"/>
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>

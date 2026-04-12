@@ -1439,7 +1439,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                       {wpSource === 'builtin' && (
                         <div className="space-y-3 fade-in">
                           <p className="text-[12px] text-white/50">{t('settings.wpBuiltinDesc')}</p>
-                          <div className="flex flex-wrap gap-3">
+                          <div className="flex flex-wrap gap-3 p-1 -m-1">
                             {[
                               { url: builtinBgWebp, title: 'CatHeadTab Default' },
                               { url: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop', title: 'Green Grass Dew' },
