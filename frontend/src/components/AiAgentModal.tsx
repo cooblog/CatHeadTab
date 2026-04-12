@@ -103,7 +103,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
         className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden transition-all duration-300 select-none ${
           isFullscreen
             ? 'w-full h-full !rounded-none !border-0'
-            : 'w-full h-full sm:w-auto sm:h-auto sm:max-w-lg md:max-w-xl sm:h-[75vh] md:h-[70vh]'
+            : 'w-full h-full sm:w-[480px] sm:h-[75vh] md:w-[540px] md:h-[70vh]'
         }`}
         onClick={e => e.stopPropagation()}
       >
