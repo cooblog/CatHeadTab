@@ -672,6 +672,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'calculator' && (isZh
                     ? '🧮 科学计算器支持基本四则运算、三角函数、对数、幂运算、百分比等。小尺寸显示精简计算器，中尺寸显示完整键盘并可展开科学计算功能。使用 math.js 引擎，支持复杂数学表达式。'
                     : '🧮 Scientific calculator supports basic arithmetic, trigonometric functions, logarithms, power, percentage and more. Small size shows a compact calculator, medium shows a full keypad with expandable scientific functions. Powered by math.js engine.')}
+                  {selectedType === 'aiAgent' && (isZh
+                    ? '🤖 AI 助手是你的智能桌面管家。它可以帮你整理桌面图标、搜索浏览器书签和历史记录、添加新图标、创建文件夹并自动分类、更换壁纸等。点击小组件后打开聊天窗口，用自然语言告诉它你想做什么。需要先在设置 → AI 助手中配置 API Key。'
+                    : '🤖 AI Agent is your smart desktop assistant. It can organize desktop icons, search bookmarks and history, add new shortcuts, create categorized folders, change wallpaper, and more. Click to open the chat window and tell it what you want in natural language. Requires API Key setup in Settings → AI Agent.')}
                 </p>
               </div>
 

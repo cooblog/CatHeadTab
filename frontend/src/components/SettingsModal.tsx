@@ -70,6 +70,63 @@ const AISettingsSection: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [modelList, setModelList] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [modelFilter, setModelFilter] = useState('');
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close model dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch model list when API Key and Base URL are available
+  const fetchModels = useCallback(async (url?: string, key?: string) => {
+    const reqUrl = (url || baseUrl).replace(/\/+$/, '') + '/models';
+    const reqKey = key || apiKey;
+    if (!reqUrl || !reqKey) return;
+    setLoadingModels(true);
+    try {
+      // Use proxyFetch to avoid CORS issues
+      const { proxyFetch } = await import('../ai/proxyFetch');
+      const resp = await proxyFetch(reqUrl, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${reqKey}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        // OpenAI-compatible /models response: { data: [{ id: "model-name" }, ...] }
+        const models: string[] = (data?.data || [])
+          .map((m: any) => m.id || m.name || '')
+          .filter(Boolean)
+          .sort((a: string, b: string) => a.localeCompare(b));
+        setModelList(models);
+      }
+    } catch {
+      // Silently fail — model list is optional, user can still type manually
+    } finally {
+      setLoadingModels(false);
+    }
+  }, [baseUrl, apiKey]);
+
+  // Auto-fetch models when baseUrl or apiKey changes (debounced)
+  useEffect(() => {
+    if (!baseUrl || !apiKey) { setModelList([]); return; }
+    const timer = setTimeout(() => fetchModels(), 800);
+    return () => clearTimeout(timer);
+  }, [baseUrl, apiKey, fetchModels]);
+
+  // Filtered model list based on search input
+  const filteredModels = modelFilter
+    ? modelList.filter(m => m.toLowerCase().includes(modelFilter.toLowerCase()))
+    : modelList;
 
   // When switching provider, load that provider's saved config
   const handleSelectProvider = (key: string) => {
@@ -85,6 +142,14 @@ const AISettingsSection: React.FC = () => {
     setShowKey(false);
     setTestResult(null);
     setSaved(false);
+    setModelList([]);
+    setModelFilter('');
+    // Auto-fetch models for the new provider if credentials exist
+    const newUrl = cfg.baseUrl || preset?.url || '';
+    const newKey = cfg.apiKey;
+    if (newUrl && newKey) {
+      setTimeout(() => fetchModels(newUrl, newKey), 100);
+    }
   };
 
   const handleSave = () => {
@@ -181,15 +246,79 @@ const AISettingsSection: React.FC = () => {
           <p className="text-[11px] text-white/25 mt-1 ml-1">🔒 API Key 仅保存在本地，不会上传到云端。每个服务商的 Key 独立存储。</p>
         </div>
 
-        {/* Model */}
-        <div>
+        {/* Model — combobox with auto-fetched model list */}
+        <div ref={modelDropdownRef} className="relative">
           <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-1.5 ml-1">{t('settings.aiModel')}</label>
-          <input
-            value={model}
-            onChange={e => setModel(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all"
-            placeholder={t('settings.aiModelPlaceholder')}
-          />
+          <div className="relative">
+            <input
+              value={modelDropdownOpen ? modelFilter : model}
+              onChange={e => {
+                const val = e.target.value;
+                setModelFilter(val);
+                if (!modelDropdownOpen) {
+                  setModel(val);
+                }
+              }}
+              onFocus={() => {
+                setModelDropdownOpen(true);
+                setModelFilter('');
+              }}
+              className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 pr-10 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all"
+              placeholder={t('settings.aiModelPlaceholder')}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!modelDropdownOpen && modelList.length === 0 && apiKey && baseUrl) fetchModels();
+                setModelDropdownOpen(o => !o);
+                setModelFilter('');
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+            >
+              {loadingModels ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`}><path d="M6 9l6 6 6-6"/></svg>
+              )}
+            </button>
+          </div>
+
+          {/* Dropdown list */}
+          {modelDropdownOpen && (
+            <div className="absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl no-scrollbar">
+              {filteredModels.length > 0 ? (
+                filteredModels.map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => { setModel(m); setModelDropdownOpen(false); setModelFilter(''); }}
+                    className={`w-full text-left px-4 py-2.5 text-[13px] transition-colors hover:bg-white/10 ${
+                      m === model ? 'text-[#72d565] bg-white/5' : 'text-white/70'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))
+              ) : loadingModels ? (
+                <div className="px-4 py-3 text-[12px] text-white/30 flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg>
+                  {t('settings.aiTesting')}
+                </div>
+              ) : modelList.length === 0 && apiKey && baseUrl ? (
+                <button
+                  type="button"
+                  onClick={() => fetchModels()}
+                  className="w-full text-left px-4 py-3 text-[12px] text-white/40 hover:text-white/60 hover:bg-white/5 transition-colors"
+                >
+                  {t('settings.aiFetchModels')}
+                </button>
+              ) : modelFilter && modelList.length > 0 ? (
+                <div className="px-4 py-3 text-[12px] text-white/30">{t('settings.aiNoMatchingModels')}</div>
+              ) : (
+                <div className="px-4 py-3 text-[12px] text-white/30">{t('settings.aiConfigureFirst')}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

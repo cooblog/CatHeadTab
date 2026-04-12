@@ -38,6 +38,12 @@ export default defineConfig({
           if (id.includes('node_modules/framer-motion')) {
             return 'vendor-motion';
           }
+          if (id.includes('node_modules/ai') || id.includes('node_modules/@ai-sdk')) {
+            return 'vendor-ai';
+          }
+          if (id.includes('node_modules/zod')) {
+            return 'vendor-zod';
+          }
         },
       },
     },

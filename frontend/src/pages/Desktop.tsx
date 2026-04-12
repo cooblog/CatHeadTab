@@ -1,21 +1,23 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect, lazy, Suspense } from 'react';
 import { useBookmarkStore } from '../store/bookmarkStore';
 import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS, WIDGET_SIZE_MAP } from '../store/layoutStore';
 import { useConfigStore } from '../store/configStore';
-import { SettingsModal } from '../components/SettingsModal';
-import { AuthModal } from '../components/AuthModal';
-import { ProfileModal } from '../components/ProfileModal';
-import { BookmarkBrowser } from '../components/apps/BookmarkBrowser';
-import { HistoryBrowser } from '../components/apps/HistoryBrowser';
-import { AddItemModal } from '../components/AddItemModal';
-import { ExploreWorld } from '../components/ExploreWorld';
-import { AddWidgetModal } from '../components/AddWidgetModal';
-import { ItToolsModal } from '../components/ItToolsModal';
-import { StickyNoteModal } from '../components/StickyNoteModal';
-import { AiAgentModal } from '../components/AiAgentModal';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
 import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
+
+// Lazy-loaded modals — only loaded when opened (saves ~300KB from initial bundle)
+const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const AuthModal = lazy(() => import('../components/AuthModal').then(m => ({ default: m.AuthModal })));
+const ProfileModal = lazy(() => import('../components/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const BookmarkBrowser = lazy(() => import('../components/apps/BookmarkBrowser').then(m => ({ default: m.BookmarkBrowser })));
+const HistoryBrowser = lazy(() => import('../components/apps/HistoryBrowser').then(m => ({ default: m.HistoryBrowser })));
+const AddItemModal = lazy(() => import('../components/AddItemModal').then(m => ({ default: m.AddItemModal })));
+const ExploreWorld = lazy(() => import('../components/ExploreWorld').then(m => ({ default: m.ExploreWorld })));
+const AddWidgetModal = lazy(() => import('../components/AddWidgetModal').then(m => ({ default: m.AddWidgetModal })));
+const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => ({ default: m.ItToolsModal })));
+const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
+const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
 import {
   DndContext,
   DragOverlay,
@@ -2142,7 +2144,8 @@ export const Desktop: React.FC = () => {
         ) : null}
       </DragOverlay>
 
-      {/* Modals */}
+      {/* Modals (lazy-loaded) */}
+      <Suspense fallback={null}>
       {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} initialTab={settingsInitialTab} />}
       {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
       {isProfileOpen && <ProfileModal onClose={() => setIsProfileOpen(false)} />}
@@ -2167,6 +2170,7 @@ export const Desktop: React.FC = () => {
           setIsAddWidgetOpen(true);
         }}
       />}
+      </Suspense>
 
       {/* Context Menu */}
       {contextMenu && (

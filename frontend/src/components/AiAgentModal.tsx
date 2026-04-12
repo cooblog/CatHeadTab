@@ -4,6 +4,7 @@ import { isAIConfigured } from '../ai/provider';
 import { runAgent } from '../ai/agent';
 import type { AgentMessage } from '../ai/agent';
 import { customStorage } from '../store/configStore';
+import { useConfigStore } from '../store/configStore';
 
 const CHAT_STORAGE_KEY = 'catheadtab-ai-chat';
 
@@ -30,11 +31,14 @@ interface AiAgentModalProps {
 export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
+  const activeModel = useConfigStore(s => {
+    const cfg = s.aiProviderConfigs[s.aiActiveProvider];
+    return cfg?.model || '';
+  });
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,7 +69,6 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
     const text = input.trim();
     if (!text || streaming) return;
     setInput('');
-    setError('');
     const userMsg: AgentMessage = { role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
@@ -78,8 +81,18 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
       }
       if (!out) setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: isZh ? '✅ 操作已完成。' : '✅ Done.' }]);
     } catch (err: any) {
-      setError(err?.message || 'Unknown error');
-      setMessages(prev => prev.filter(m => m.content !== ''));
+      const errMsg = err?.message || 'Unknown error';
+      // Parse common API errors for user-friendly display
+      let displayMsg = errMsg;
+      try {
+        const parsed = JSON.parse(errMsg);
+        if (parsed?.error?.message) displayMsg = parsed.error.message;
+      } catch { /* not JSON, use raw message */ }
+      // Replace the empty assistant bubble with an error message
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.content !== '');
+        return [...filtered, { role: 'assistant', content: `❌ ${isZh ? '出错了' : 'Error'}: ${displayMsg}` }];
+      });
     } finally { setStreaming(false); }
   }, [input, streaming, messages, isZh]);
 
@@ -100,7 +113,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
 
       {/* Window */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden transition-all duration-300 select-none ${
+        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden transition-all duration-300 ${
           isFullscreen
             ? 'w-full h-full !rounded-none !border-0'
             : 'w-full h-full sm:w-[480px] sm:h-[75vh] md:w-[540px] md:h-[70vh]'
@@ -145,13 +158,14 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
               </svg>
             </div>
             <span className="text-[13px] font-semibold text-white/70">AI {isZh ? '助手' : 'Agent'}</span>
+            {activeModel && <span className="text-[11px] text-white/25 font-mono">{activeModel}</span>}
           </div>
 
           {/* Right: clear (desktop) + close (mobile) */}
           <div className="flex items-center w-auto md:w-20 justify-end gap-1">
             {messages.length > 0 && (
               <button
-                onClick={() => { setMessages([]); setError(''); customStorage.removeItem(CHAT_STORAGE_KEY); }}
+                onClick={() => { setMessages([]); customStorage.removeItem(CHAT_STORAGE_KEY); }}
                 className="hidden md:block px-2.5 py-1 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
               >
                 {isZh ? '清空' : 'Clear'}
@@ -177,7 +191,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
         ) : (
           <>
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 no-scrollbar">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 no-scrollbar select-text">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
                   <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/[0.04]">
@@ -205,7 +219,9 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
                     className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap ${
                       msg.role === 'user'
                         ? 'bg-white/[0.08] text-white/85 rounded-br-lg'
-                        : 'bg-white/[0.04] border border-white/[0.06] text-white/70 rounded-bl-lg'
+                        : msg.content.startsWith('❌')
+                          ? 'bg-red-500/10 border border-red-400/20 text-red-300/80 rounded-bl-lg'
+                          : 'bg-white/[0.04] border border-white/[0.06] text-white/70 rounded-bl-lg'
                     }`}
                   >
                     {msg.content || (
@@ -218,14 +234,14 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
                   </div>
                 </div>
               ))}
-              {error && <div className="text-[12px] text-red-400/70 px-1">⚠ {error}</div>}
+              {streaming && messages.length > 0 && messages[messages.length - 1].content === '' && null}
             </div>
 
             {/* Mobile clear button */}
             {messages.length > 0 && (
               <div className="md:hidden flex justify-center pb-1">
                 <button
-                  onClick={() => { setMessages([]); setError(''); customStorage.removeItem(CHAT_STORAGE_KEY); }}
+                  onClick={() => { setMessages([]); customStorage.removeItem(CHAT_STORAGE_KEY); }}
                   className="px-3 py-1 rounded-lg text-[11px] text-white/25 hover:text-white/50 hover:bg-white/5 transition-colors"
                 >
                   {isZh ? '清空对话' : 'Clear chat'}
