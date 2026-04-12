@@ -1292,7 +1292,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                             <button
                               type="button"
                               onClick={() => { const u = `idb://${IDB_BG_KEY}?t=${Date.now()}`; setBg(u); applyBackground(u); }}
-                              className={`w-24 h-16 rounded-xl bg-cover bg-center border transition-all shadow-md focus:outline-none ${bg.startsWith(`idb://${IDB_BG_KEY}`) ? 'border-[#72d565] ring-2 ring-[#72d565] scale-105' : 'border-[#72d565]/50 hover:scale-105 hover:border-[#72d565]'}`}
+                              className={`w-24 h-16 rounded-xl bg-cover bg-center border-2 transition-all shadow-md focus:outline-none ${bg.startsWith(`idb://${IDB_BG_KEY}`) ? 'border-[#72d565] ring-2 ring-[#72d565]/30 shadow-[#72d565]/20' : 'border-[#72d565]/50 hover:border-[#72d565] hover:shadow-lg'}`}
                               style={{ backgroundImage: `url("${bgPreview}")` }}
                               title="Local Custom Image"
                             />
@@ -1439,7 +1439,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                       {wpSource === 'builtin' && (
                         <div className="space-y-3 fade-in">
                           <p className="text-[12px] text-white/50">{t('settings.wpBuiltinDesc')}</p>
-                          <div className="flex flex-wrap gap-3 p-1 -m-1">
+                          <div className="flex flex-wrap gap-3">
                             {[
                               { url: builtinBgWebp, title: 'CatHeadTab Default' },
                               { url: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop', title: 'Green Grass Dew' },
@@ -1450,7 +1450,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                                 key={item.url}
                                 type="button"
                                 onClick={() => { setBg(item.url); applyBackground(item.url); }}
-                                className={`w-28 h-20 sm:w-32 sm:h-[5.5rem] rounded-xl bg-cover bg-center border transition-all shadow-md focus:outline-none ${bg === item.url ? 'border-[#72d565] ring-2 ring-[#72d565] scale-105' : 'border-white/20 hover:scale-105 hover:border-white/50'}`}
+                                className={`w-28 h-20 sm:w-32 sm:h-[5.5rem] rounded-xl bg-cover bg-center border-2 transition-all shadow-md focus:outline-none ${bg === item.url ? 'border-[#72d565] ring-2 ring-[#72d565]/30 shadow-[#72d565]/20' : 'border-white/20 hover:border-white/50 hover:shadow-lg'}`}
                                 style={{ backgroundImage: `url("${item.url}")` }}
                                 title={item.title}
                               />
