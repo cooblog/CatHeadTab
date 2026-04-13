@@ -34,7 +34,9 @@
     "https://open.bigmodel.cn/*",
     "https://api.moonshot.cn/*",
     "https://api.minimax.chat/*",
-    "https://dashscope.aliyuncs.com/*"
+    "https://dashscope.aliyuncs.com/*",
+    "https://github.com/*",
+    "https://api.bilibili.com/*"
   ],
   "optional_host_permissions": [
     "https://*/*"

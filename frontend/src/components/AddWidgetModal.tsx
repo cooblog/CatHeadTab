@@ -123,6 +123,26 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
       },
     ],
   },
+  {
+    labelKey: 'widget.categoryInfo',
+    icon: '📰',
+    widgets: [
+      {
+        type: 'githubTrending',
+        icon: '🐙',
+        labelKey: 'widget.githubTrending',
+        descKey: 'widget.githubTrendingDesc',
+        sizes: ['medium'],
+      },
+      {
+        type: 'bilibiliHot',
+        icon: '📺',
+        labelKey: 'widget.bilibiliHot',
+        descKey: 'widget.bilibiliHotDesc',
+        sizes: ['medium'],
+      },
+    ],
+  },
 ];
 
 /** Flattened list of all widget options (used for lookups). */
@@ -419,6 +439,12 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
       case 'aiAgent':
         config = { widgetType: 'aiAgent' };
         break;
+      case 'githubTrending':
+        config = { widgetType: 'githubTrending' };
+        break;
+      case 'bilibiliHot':
+        config = { widgetType: 'bilibiliHot' };
+        break;
       default:
         return;
     }
@@ -675,6 +701,12 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'aiAgent' && (isZh
                     ? '🤖 AI 助手是你的智能桌面管家。它可以帮你整理桌面图标、搜索浏览器书签和历史记录、添加新图标、创建文件夹并自动分类、更换壁纸等。点击小组件后打开聊天窗口，用自然语言告诉它你想做什么。需要先在设置 → AI 助手中配置 API Key。'
                     : '🤖 AI Agent is your smart desktop assistant. It can organize desktop icons, search bookmarks and history, add new shortcuts, create categorized folders, change wallpaper, and more. Click to open the chat window and tell it what you want in natural language. Requires API Key setup in Settings → AI Agent.')}
+                  {selectedType === 'githubTrending' && (isZh
+                    ? '🐙 GitHub Trending 实时展示当日最热门的开源项目。自动每 30 分钟刷新一次，显示项目名称、描述、编程语言、星标数和当日增量。点击任意项目可直接在新标签页打开 GitHub 仓库。'
+                    : '🐙 GitHub Trending shows today\'s hottest open-source projects in real-time. Auto-refreshes every 30 minutes, displaying repo name, description, language, stars, and daily growth. Click any repo to open it in a new tab.')}
+                  {selectedType === 'bilibiliHot' && (isZh
+                    ? '📺 哔哩哔哩热门榜展示当前 B 站最热门的视频。自动每 30 分钟刷新一次，显示视频标题、UP主、播放量和时长。点击任意视频可直接在新标签页打开 B 站观看。前 3 名带有高亮排名标识。'
+                    : '📺 Bilibili Hot shows the most popular videos on Bilibili right now. Auto-refreshes every 30 minutes, displaying title, uploader, views, and duration. Click any video to watch in a new tab. Top 3 are highlighted.')}
                 </p>
               </div>
 

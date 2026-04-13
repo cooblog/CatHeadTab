@@ -17,7 +17,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator' | 'aiAgent';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator' | 'aiAgent' | 'githubTrending' | 'bilibiliHot';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium';
@@ -111,7 +111,15 @@ export interface AiAgentWidgetConfig {
   widgetType: 'aiAgent';
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig | CalculatorWidgetConfig | AiAgentWidgetConfig;
+export interface GithubTrendingWidgetConfig {
+  widgetType: 'githubTrending';
+}
+
+export interface BilibiliHotWidgetConfig {
+  widgetType: 'bilibiliHot';
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig | CalculatorWidgetConfig | AiAgentWidgetConfig | GithubTrendingWidgetConfig | BilibiliHotWidgetConfig;
 
 export interface DesktopItem {
   id: string;

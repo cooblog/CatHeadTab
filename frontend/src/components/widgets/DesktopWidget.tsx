@@ -11,6 +11,8 @@ import { StockWidget } from './StockWidget';
 import { ExchangeRateWidget } from './ExchangeRateWidget';
 import { CalculatorWidget } from './CalculatorWidget';
 import { AiAgentWidget } from './AiAgentWidget';
+import { GithubTrendingWidget } from './GithubTrendingWidget';
+import { BilibiliHotWidget } from './BilibiliHotWidget';
 
 interface DesktopWidgetProps {
   item: DesktopItem;
@@ -79,6 +81,10 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         return <CalculatorWidget size={size} />;
       case 'aiAgent':
         return <AiAgentWidget size={size} />;
+      case 'githubTrending':
+        return <GithubTrendingWidget size={size} />;
+      case 'bilibiliHot':
+        return <BilibiliHotWidget size={size} />;
       default:
         return (
           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">

@@ -8,4 +8,6 @@ export { StockWidget } from './StockWidget';
 export { ExchangeRateWidget } from './ExchangeRateWidget';
 export { CalculatorWidget } from './CalculatorWidget';
 export { AiAgentWidget } from './AiAgentWidget';
+export { GithubTrendingWidget } from './GithubTrendingWidget';
+export { BilibiliHotWidget } from './BilibiliHotWidget';
 export { DesktopWidget, getWidgetGridStyle } from './DesktopWidget';

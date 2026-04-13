@@ -100,6 +100,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	presetHandler := handler.NewPresetHandler(presetRepo)
 	faviconHandler := handler.NewFaviconHandler(presetRepo)
 	wallpaperHandler := handler.NewWallpaperHandler(wallpaperSvc)
+	trendingHandler := handler.NewTrendingHandler()
 
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
 	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
@@ -123,6 +124,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// COS image proxy: generates a fresh pre-signed URL and redirects.
 	// Public because the redirect target (pre-signed URL) is itself authenticated.
 	r.GET("/api/v1/wallpapers/cos/image", wallpaperHandler.COSImage)
+
+	// Public routes (no auth) — Trending/Hot content (cached server-side)
+	r.GET("/api/v1/trending/github", trendingHandler.GithubTrending)
+	r.GET("/api/v1/trending/bilibili", trendingHandler.BilibiliHot)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")

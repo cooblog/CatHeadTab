@@ -18,6 +18,7 @@ const AddWidgetModal = lazy(() => import('../components/AddWidgetModal').then(m 
 const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => ({ default: m.ItToolsModal })));
 const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
 const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
+const TrendingModal = lazy(() => import('../components/TrendingModal').then(m => ({ default: m.TrendingModal })));
 import {
   DndContext,
   DragOverlay,
@@ -717,6 +718,8 @@ export const Desktop: React.FC = () => {
   const [stickyNoteItem, setStickyNoteItem] = useState<DesktopItem | null>(null);
   // AI Agent chat modal state
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
+  // Trending modal state
+  const [trendingModalType, setTrendingModalType] = useState<'github' | 'bilibili' | null>(null);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -903,6 +906,12 @@ export const Desktop: React.FC = () => {
         return;
       } else if (item.widgetType === 'aiAgent') {
         setIsAiAgentOpen(true);
+        return;
+      } else if (item.widgetType === 'githubTrending') {
+        setTrendingModalType('github');
+        return;
+      } else if (item.widgetType === 'bilibiliHot') {
+        setTrendingModalType('bilibili');
         return;
       } else {
         setEditingWidget(item);
@@ -2155,6 +2164,7 @@ export const Desktop: React.FC = () => {
       {isItToolsOpen && <ItToolsModal onClose={() => setIsItToolsOpen(false)} />}
       {stickyNoteItem && <StickyNoteModal onClose={() => setStickyNoteItem(null)} item={stickyNoteItem} />}
       {isAiAgentOpen && <AiAgentModal onClose={() => setIsAiAgentOpen(false)} />}
+      {trendingModalType && <TrendingModal type={trendingModalType} onClose={() => setTrendingModalType(null)} />}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 
