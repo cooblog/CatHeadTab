@@ -17,7 +17,7 @@ const triggerAutoSync = () => {
 export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 
 /** Widget types supported by the system. */
-export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator' | 'aiAgent' | 'githubTrending' | 'bilibiliHot';
+export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator' | 'aiAgent' | 'githubTrending' | 'bilibiliHot' | 'xiaohongshuHot' | 'weiboHot' | 'bbcNews';
 
 /** Widget size presets (columns × rows in the desktop grid). */
 export type WidgetSize = 'small' | 'medium' | 'large' | 'tall' | 'xlarge';
@@ -122,7 +122,19 @@ export interface BilibiliHotWidgetConfig {
   widgetType: 'bilibiliHot';
 }
 
-export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig | CalculatorWidgetConfig | AiAgentWidgetConfig | GithubTrendingWidgetConfig | BilibiliHotWidgetConfig;
+export interface XiaohongshuHotWidgetConfig {
+  widgetType: 'xiaohongshuHot';
+}
+
+export interface WeiboHotWidgetConfig {
+  widgetType: 'weiboHot';
+}
+
+export interface BBCNewsWidgetConfig {
+  widgetType: 'bbcNews';
+}
+
+export type WidgetConfig = CalendarWidgetConfig | WeatherWidgetConfig | CountdownWidgetConfig | SystemMonitorWidgetConfig | ClockWidgetConfig | ItToolsWidgetConfig | StickyNoteWidgetConfig | StockWidgetConfig | ExchangeRateWidgetConfig | CalculatorWidgetConfig | AiAgentWidgetConfig | GithubTrendingWidgetConfig | BilibiliHotWidgetConfig | XiaohongshuHotWidgetConfig | WeiboHotWidgetConfig | BBCNewsWidgetConfig;
 
 export interface DesktopItem {
   id: string;

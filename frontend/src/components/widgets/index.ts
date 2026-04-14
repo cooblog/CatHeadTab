@@ -10,4 +10,7 @@ export { CalculatorWidget } from './CalculatorWidget';
 export { AiAgentWidget } from './AiAgentWidget';
 export { GithubTrendingWidget } from './GithubTrendingWidget';
 export { BilibiliHotWidget } from './BilibiliHotWidget';
+export { XiaohongshuHotWidget } from './XiaohongshuHotWidget';
+export { WeiboHotWidget } from './WeiboHotWidget';
+export { BBCNewsWidget } from './BBCNewsWidget';
 export { DesktopWidget, getWidgetGridStyle } from './DesktopWidget';

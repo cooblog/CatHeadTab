@@ -141,6 +141,27 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
         descKey: 'widget.bilibiliHotDesc',
         sizes: ['medium', 'large', 'tall', 'xlarge'],
       },
+      {
+        type: 'xiaohongshuHot',
+        icon: '📕',
+        labelKey: 'widget.xiaohongshuHot',
+        descKey: 'widget.xiaohongshuHotDesc',
+        sizes: ['medium', 'large', 'tall', 'xlarge'],
+      },
+      {
+        type: 'weiboHot',
+        icon: '🔥',
+        labelKey: 'widget.weiboHot',
+        descKey: 'widget.weiboHotDesc',
+        sizes: ['medium', 'large', 'tall', 'xlarge'],
+      },
+      {
+        type: 'bbcNews',
+        icon: '📰',
+        labelKey: 'widget.bbcNews',
+        descKey: 'widget.bbcNewsDesc',
+        sizes: ['medium', 'large', 'tall', 'xlarge'],
+      },
     ],
   },
 ];
@@ -445,6 +466,15 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
       case 'bilibiliHot':
         config = { widgetType: 'bilibiliHot' };
         break;
+      case 'xiaohongshuHot':
+        config = { widgetType: 'xiaohongshuHot' };
+        break;
+      case 'weiboHot':
+        config = { widgetType: 'weiboHot' };
+        break;
+      case 'bbcNews':
+        config = { widgetType: 'bbcNews' };
+        break;
       default:
         return;
     }
@@ -710,6 +740,15 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   {selectedType === 'bilibiliHot' && (isZh
                     ? '📺 哔哩哔哩热门榜展示当前 B 站最热门的视频。自动每 30 分钟刷新一次，显示视频标题、UP主、播放量和时长。点击任意视频可直接在新标签页打开 B 站观看。前 3 名带有高亮排名标识。'
                     : '📺 Bilibili Hot shows the most popular videos on Bilibili right now. Auto-refreshes every 30 minutes, displaying title, uploader, views, and duration. Click any video to watch in a new tab. Top 3 are highlighted.')}
+                  {selectedType === 'xiaohongshuHot' && (isZh
+                    ? '📕 小红书热搜展示当前小红书平台最热门的搜索话题。自动每 30 分钟刷新一次，显示话题标题和热度值。点击任意话题可直接在新标签页打开小红书搜索结果。前 3 名带有红色高亮排名。'
+                    : '📕 Xiaohongshu Hot shows the most trending search topics on Xiaohongshu (RED). Auto-refreshes every 30 minutes, displaying topic title and heat score. Click any topic to search on Xiaohongshu in a new tab. Top 3 are highlighted in red.')}
+                  {selectedType === 'weiboHot' && (isZh
+                    ? '🔥 微博热搜展示当前新浪微博实时热搜榜。自动每 30 分钟刷新一次，显示话题标题、热度值和标签（热/沸/爆/新等）。点击任意话题可直接在新标签页打开微博搜索结果。'
+                    : '🔥 Weibo Hot shows real-time trending topics on Sina Weibo. Auto-refreshes every 30 minutes, displaying topic title, heat number, and tags (Hot/Boiling/Explosive/New). Click any topic to search on Weibo in a new tab.')}
+                  {selectedType === 'bbcNews' && (isZh
+                    ? '📰 BBC News 展示 BBC 最新的新闻头条。自动每 30 分钟刷新一次，显示新闻标题和摘要。点击任意新闻可直接在新标签页打开 BBC 原文阅读。适合关注国际时事的用户。'
+                    : '📰 BBC News shows the latest headlines from BBC. Auto-refreshes every 30 minutes, displaying news title and summary. Click any article to read the full story on BBC in a new tab. Great for staying updated on world events.')}
                 </p>
               </div>
 

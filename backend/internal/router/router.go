@@ -128,6 +128,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Public routes (no auth) — Trending/Hot content (cached server-side)
 	r.GET("/api/v1/trending/github", trendingHandler.GithubTrending)
 	r.GET("/api/v1/trending/bilibili", trendingHandler.BilibiliHot)
+	r.GET("/api/v1/trending/xiaohongshu", trendingHandler.XiaohongshuHot)
+	r.GET("/api/v1/trending/weibo", trendingHandler.WeiboHot)
+	r.GET("/api/v1/trending/bbc", trendingHandler.BBCNews)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")

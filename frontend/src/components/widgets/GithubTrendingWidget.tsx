@@ -93,7 +93,7 @@ export const GithubTrendingWidget: React.FC<GithubTrendingWidgetProps> = ({ size
             <button onClick={load} className="text-[11px] text-[#72d565]/70 hover:text-[#72d565]">{isZh ? '重试' : 'Retry'}</button>
           </div>
         )}
-        {repos.map((repo, i) => (
+        {repos.map((repo) => (
           <a
             key={repo.fullName}
             href={repo.url}

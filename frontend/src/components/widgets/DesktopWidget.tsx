@@ -13,6 +13,9 @@ import { CalculatorWidget } from './CalculatorWidget';
 import { AiAgentWidget } from './AiAgentWidget';
 import { GithubTrendingWidget } from './GithubTrendingWidget';
 import { BilibiliHotWidget } from './BilibiliHotWidget';
+import { XiaohongshuHotWidget } from './XiaohongshuHotWidget';
+import { WeiboHotWidget } from './WeiboHotWidget';
+import { BBCNewsWidget } from './BBCNewsWidget';
 
 interface DesktopWidgetProps {
   item: DesktopItem;
@@ -85,6 +88,12 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
         return <GithubTrendingWidget size={size} />;
       case 'bilibiliHot':
         return <BilibiliHotWidget size={size} />;
+      case 'xiaohongshuHot':
+        return <XiaohongshuHotWidget size={size} />;
+      case 'weiboHot':
+        return <WeiboHotWidget size={size} />;
+      case 'bbcNews':
+        return <BBCNewsWidget size={size} />;
       default:
         return (
           <div className="w-full h-full flex items-center justify-center text-white/40 text-xs">

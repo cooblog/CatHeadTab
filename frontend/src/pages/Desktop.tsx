@@ -709,6 +709,32 @@ export const Desktop: React.FC = () => {
   const [addToPageIndex, setAddToPageIndex] = useState<number | undefined>(undefined);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: DesktopItem; inDock?: boolean } | null>(null);
   const [blankContextMenu, setBlankContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const blankContextMenuRef = useRef<HTMLDivElement>(null);
+
+  // 动态调整右键菜单位置，防止超出屏幕边缘
+  const adjustMenuPosition = useCallback((menuRef: React.RefObject<HTMLDivElement | null>, x: number, y: number) => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+    const newLeft = Math.min(x, window.innerWidth - rect.width - pad);
+    const newTop = Math.min(y, window.innerHeight - rect.height - pad);
+    el.style.left = `${Math.max(pad, newLeft)}px`;
+    el.style.top = `${Math.max(pad, newTop)}px`;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (contextMenu) {
+      adjustMenuPosition(contextMenuRef, contextMenu.x, contextMenu.y);
+    }
+  }, [contextMenu, adjustMenuPosition]);
+
+  useLayoutEffect(() => {
+    if (blankContextMenu) {
+      adjustMenuPosition(blankContextMenuRef, blankContextMenu.x, blankContextMenu.y);
+    }
+  }, [blankContextMenu, adjustMenuPosition]);
 
   // Explore World state
   const [isExploreOpen, setIsExploreOpen] = useState(false);
@@ -719,7 +745,7 @@ export const Desktop: React.FC = () => {
   // AI Agent chat modal state
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
   // Trending modal state
-  const [trendingModalType, setTrendingModalType] = useState<'github' | 'bilibili' | null>(null);
+  const [trendingModalType, setTrendingModalType] = useState<'github' | 'bilibili' | 'weibo' | 'xiaohongshu' | 'bbc' | null>(null);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -912,6 +938,15 @@ export const Desktop: React.FC = () => {
         return;
       } else if (item.widgetType === 'bilibiliHot') {
         setTrendingModalType('bilibili');
+        return;
+      } else if (item.widgetType === 'weiboHot') {
+        setTrendingModalType('weibo');
+        return;
+      } else if (item.widgetType === 'xiaohongshuHot') {
+        setTrendingModalType('xiaohongshu');
+        return;
+      } else if (item.widgetType === 'bbcNews') {
+        setTrendingModalType('bbc');
         return;
       } else {
         setEditingWidget(item);
@@ -2187,8 +2222,9 @@ export const Desktop: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[200]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div 
+            ref={contextMenuRef}
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[180px] animate-scaleIn"
-            style={{ left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
+            style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             {/* Edit button — not for app types */}
             {contextMenu.item.type !== 'app' && (
@@ -2260,8 +2296,9 @@ export const Desktop: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[200]" onClick={() => setBlankContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setBlankContextMenu(null); }} />
           <div 
+            ref={blankContextMenuRef}
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[200px] animate-scaleIn"
-            style={{ left: Math.min(blankContextMenu.x, window.innerWidth - 220), top: Math.min(blankContextMenu.y, window.innerHeight - 200) }}
+            style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
           >
             <button 
               className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"

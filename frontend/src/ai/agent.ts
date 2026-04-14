@@ -8,6 +8,7 @@ import * as desktopTools from './tools/desktopTools';
 import * as bookmarkTools from './tools/bookmarkTools';
 import * as historyTools from './tools/historyTools';
 import * as settingsTools from './tools/settingsTools';
+import * as trendingTools from './tools/trendingTools';
 
 /** All locally registered tools (Skills). */
 const allTools = {
@@ -30,6 +31,12 @@ const allTools = {
   changeWallpaper: settingsTools.changeWallpaper,
   changeLanguage: settingsTools.changeLanguage,
   getSystemInfo: settingsTools.getSystemInfo,
+  // Trending / hot content
+  getGithubTrending: trendingTools.getGithubTrending,
+  getBilibiliHot: trendingTools.getBilibiliHot,
+  getWeiboHot: trendingTools.getWeiboHot,
+  getXiaohongshuHot: trendingTools.getXiaohongshuHot,
+  getBBCNews: trendingTools.getBBCNews,
 };
 
 function getSystemPrompt(): string {
@@ -42,13 +49,15 @@ function getSystemPrompt(): string {
 - 创建文件夹并将图标分类整理
 - 搜索用户的浏览器书签和历史记录
 - 更换壁纸、切换语言等设置操作
+- 获取热门资讯：GitHub Trending、Bilibili 热门、微博热搜、小红书热搜、BBC 新闻
 
 操作规范：
 1. 整理桌面前，先调用 listDesktopItems 了解当前布局
 2. 分析图标的 URL 和标题来判断类别
 3. 使用 organizeDesktop 批量创建文件夹并移动图标
 4. 操作完成后简洁地告知用户结果
-5. 回复使用简洁友好的中文`;
+5. 查询热搜/热榜/新闻时，调用对应的 trending 工具获取实时数据
+6. 回复使用简洁友好的中文`;
   }
   return `You are CatHeadTab's AI assistant, helping users manage their browser new tab desktop.
 
@@ -57,13 +66,15 @@ Your capabilities:
 - Create folders and organize icons into categories
 - Search user's browser bookmarks and history
 - Change wallpaper, switch language, and other settings
+- Fetch trending content: GitHub Trending, Bilibili Hot, Weibo Hot Search, Xiaohongshu Hot, BBC News
 
 Guidelines:
 1. Before organizing, call listDesktopItems to understand the current layout
 2. Analyze icon URLs and titles to determine categories
 3. Use organizeDesktop to batch-create folders and move items
 4. Report results concisely after operations
-5. Reply in clear, friendly English`;
+5. When asked about trending/hot topics/news, call the corresponding trending tool to get real-time data
+6. Reply in clear, friendly English`;
 }
 
 export interface AgentMessage {
