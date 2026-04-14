@@ -132,6 +132,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 	r.GET("/api/v1/trending/weibo", trendingHandler.WeiboHot)
 	r.GET("/api/v1/trending/bbc", trendingHandler.BBCNews)
 
+	// Public routes (no auth) — Finance data (exchange rates & stock quotes, cached server-side)
+	r.POST("/api/v1/finance/exchange-rate", trendingHandler.ExchangeRate)
+	r.POST("/api/v1/finance/stock-quotes", trendingHandler.StockQuotes)
+
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")
 	{

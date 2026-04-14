@@ -4,6 +4,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -753,6 +756,802 @@ func fetchBBCNewsFromRSS() ([]BBCNewsItem, error) {
 	}
 
 	return items, nil
+}
+
+// ── Exchange Rate ─────────────────────────────────────────────────────
+
+// ExchangeRateRequest 汇率请求参数。
+type ExchangeRateRequest struct {
+	Pairs []struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"pairs"`
+}
+
+// ExchangeRateItem 汇率数据项。
+type ExchangeRateItem struct {
+	From   string  `json:"from"`
+	To     string  `json:"to"`
+	Rate   float64 `json:"rate"`
+	Change float64 `json:"change"`
+}
+
+// ExchangeRate 返回指定货币对的汇率数据（使用 Frankfurter API）。
+// POST /api/v1/finance/exchange-rate
+func (h *TrendingHandler) ExchangeRate(c *gin.Context) {
+	var req ExchangeRateRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Pairs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request, pairs required"})
+		return
+	}
+
+	// 按照 pairs 生成缓存 key
+	cacheKey := "exchange_rate_"
+	for _, p := range req.Pairs {
+		cacheKey += p.From + "_" + p.To + ","
+	}
+
+	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+		return fetchExchangeRates(req)
+	})
+	if err != nil {
+		log.Printf("[finance] exchange rate fetch error: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch exchange rates"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data, "cached": cached})
+}
+
+// fetchExchangeRates 从 Frankfurter API 获取汇率数据。
+func fetchExchangeRates(req ExchangeRateRequest) ([]ExchangeRateItem, error) {
+	if len(req.Pairs) == 0 {
+		return nil, fmt.Errorf("no currency pairs provided")
+	}
+
+	// 按基准货币分组以减少 API 调用
+	byBase := make(map[string][]string)
+	for _, p := range req.Pairs {
+		if p.From == "" || p.To == "" {
+			continue
+		}
+		targets := byBase[p.From]
+		found := false
+		for _, t := range targets {
+			if t == p.To {
+				found = true
+				break
+			}
+		}
+		if !found {
+			byBase[p.From] = append(targets, p.To)
+		}
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	type rateResult struct {
+		key  string
+		rate float64
+	}
+	type prevResult struct {
+		key  string
+		rate float64
+	}
+
+	var mu sync.Mutex
+	latestRates := make(map[string]float64)
+	prevRates := make(map[string]float64)
+
+	// 获取昨日日期（跳过周末）
+	yesterday := time.Now().AddDate(0, 0, -1)
+	if yesterday.Weekday() == time.Sunday {
+		yesterday = yesterday.AddDate(0, 0, -2)
+	} else if yesterday.Weekday() == time.Saturday {
+		yesterday = yesterday.AddDate(0, 0, -1)
+	}
+	dateStr := yesterday.Format("2006-01-02")
+
+	var wg sync.WaitGroup
+
+	for base, targets := range byBase {
+		to := strings.Join(targets, ",")
+
+		// 获取最新汇率
+		wg.Add(1)
+		go func(base, to string) {
+			defer wg.Done()
+			url := fmt.Sprintf("https://api.frankfurter.app/latest?from=%s&to=%s", base, to)
+			reqHTTP, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				log.Printf("[finance] frankfurter latest request build failed: %v", err)
+				return
+			}
+			reqHTTP.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
+
+			resp, err := client.Do(reqHTTP)
+			if err != nil {
+				log.Printf("[finance] frankfurter latest request failed: %v", err)
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				log.Printf("[finance] frankfurter latest returned status %d", resp.StatusCode)
+				return
+			}
+
+			var result struct {
+				Rates map[string]float64 `json:"rates"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				log.Printf("[finance] frankfurter latest decode failed: %v", err)
+				return
+			}
+
+			mu.Lock()
+			for code, rate := range result.Rates {
+				latestRates[base+"_"+code] = rate
+			}
+			mu.Unlock()
+		}(base, to)
+
+		// 获取昨日汇率
+		wg.Add(1)
+		go func(base, to, date string) {
+			defer wg.Done()
+			url := fmt.Sprintf("https://api.frankfurter.dev/v1/%s?from=%s&to=%s", date, base, to)
+			reqHTTP, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return
+			}
+			reqHTTP.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
+
+			resp, err := client.Do(reqHTTP)
+			if err != nil {
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != 200 {
+				return
+			}
+
+			var result struct {
+				Rates map[string]float64 `json:"rates"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return
+			}
+
+			mu.Lock()
+			for code, rate := range result.Rates {
+				prevRates[base+"_"+code] = rate
+			}
+			mu.Unlock()
+		}(base, to, dateStr)
+	}
+
+	wg.Wait()
+
+	items := make([]ExchangeRateItem, 0, len(req.Pairs))
+	for _, p := range req.Pairs {
+		key := p.From + "_" + p.To
+		rate := latestRates[key]
+		prev := prevRates[key]
+		change := 0.0
+		if prev > 0 {
+			change = ((rate - prev) / prev) * 100
+		}
+		items = append(items, ExchangeRateItem{
+			From:   p.From,
+			To:     p.To,
+			Rate:   rate,
+			Change: change,
+		})
+	}
+
+	return items, nil
+}
+
+// ── Stock Quotes ─────────────────────────────────────────────────────
+
+// StockQuoteRequest 股票行情请求参数。
+type StockQuoteRequest struct {
+	Items    []StockRequestItem `json:"items"`
+	Language string             `json:"language"`
+}
+
+// StockRequestItem 请求的单个股票。
+type StockRequestItem struct {
+	Symbol string `json:"symbol"`
+	Name   string `json:"name"`
+	Market string `json:"market"` // US, HK, CN
+}
+
+// StockQuoteItem 股票行情响应数据。
+type StockQuoteItem struct {
+	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
+	Market        string  `json:"market"`
+	Price         float64 `json:"price"`
+	Change        float64 `json:"change"`
+	ChangePercent float64 `json:"changePercent"`
+	Open          float64 `json:"open"`
+	High          float64 `json:"high"`
+	Low           float64 `json:"low"`
+	PrevClose     float64 `json:"prevClose"`
+	Volume        float64 `json:"volume"`
+	MarketCap     float64 `json:"marketCap"`
+	Currency      string  `json:"currency"`
+	Error         bool    `json:"error,omitempty"`
+}
+
+// StockQuotes 返回指定股票的行情数据。
+// POST /api/v1/finance/stock-quotes
+func (h *TrendingHandler) StockQuotes(c *gin.Context) {
+	var req StockQuoteRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Items) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request, items required"})
+		return
+	}
+
+	// 生成缓存 key，包含语言和所有股票代码
+	cacheKey := "stock_quotes_" + req.Language + "_"
+	for _, item := range req.Items {
+		cacheKey += item.Symbol + ","
+	}
+
+	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+		return fetchStockQuotes(req)
+	})
+	if err != nil {
+		log.Printf("[finance] stock quotes fetch error: %v", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch stock quotes"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data, "cached": cached})
+}
+
+// sinaIndexMap Yahoo → Sina 指数符号映射。
+var sinaIndexMap = map[string]string{
+	"^GSPC":    "int_sp500",
+	"^DJI":     "int_dji",
+	"^IXIC":    "int_nasdaq",
+	"^HSI":     "int_hangseng",
+	"^HSCE":    "int_hscei",
+	"^HSTECH":  "int_hstech",
+}
+
+// toSinaSymbol 将 Yahoo 格式股票代码转换为新浪财经格式。
+func toSinaSymbol(symbol, market string) string {
+	if mapped, ok := sinaIndexMap[symbol]; ok {
+		return mapped
+	}
+	switch market {
+	case "US":
+		return "gb_" + strings.ToLower(symbol)
+	case "HK":
+		code := strings.TrimSuffix(symbol, ".HK")
+		for len(code) < 5 {
+			code = "0" + code
+		}
+		return "hk" + code
+	case "CN":
+		if strings.HasSuffix(symbol, ".SS") {
+			return "sh" + strings.TrimSuffix(symbol, ".SS")
+		}
+		if strings.HasSuffix(symbol, ".SZ") {
+			return "sz" + strings.TrimSuffix(symbol, ".SZ")
+		}
+		return symbol
+	default:
+		return symbol
+	}
+}
+
+// defaultCurrencyForMarket 获取市场对应的默认货币。
+func defaultCurrencyForMarket(market string) string {
+	switch market {
+	case "US":
+		return "USD"
+	case "HK":
+		return "HKD"
+	case "CN":
+		return "CNY"
+	default:
+		return "USD"
+	}
+}
+
+// fetchStockQuotes 获取股票行情，中文优先使用新浪财经，英文优先使用 Yahoo Finance。
+func fetchStockQuotes(req StockQuoteRequest) ([]StockQuoteItem, error) {
+	if len(req.Items) == 0 {
+		return nil, fmt.Errorf("no stock items provided")
+	}
+
+	isZh := req.Language == "zh"
+
+	var primary func([]StockRequestItem) ([]StockQuoteItem, error)
+	var fallback func([]StockRequestItem) ([]StockQuoteItem, error)
+
+	if isZh {
+		primary = fetchStockQuotesSina
+		fallback = fetchStockQuotesYahoo
+	} else {
+		primary = fetchStockQuotesYahoo
+		fallback = fetchStockQuotesSina
+	}
+
+	result, err := primary(req.Items)
+	if err == nil {
+		return result, nil
+	}
+	log.Printf("[finance] stock primary source failed: %v, trying fallback", err)
+
+	return fallback(req.Items)
+}
+
+// fetchStockQuotesSina 通过新浪财经 API 批量获取股票行情。
+func fetchStockQuotesSina(items []StockRequestItem) ([]StockQuoteItem, error) {
+	sinaSymbols := make([]string, len(items))
+	for i, item := range items {
+		sinaSymbols[i] = toSinaSymbol(item.Symbol, item.Market)
+	}
+
+	url := "https://hq.sinajs.cn/list=" + strings.Join(sinaSymbols, ",")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("sina request build failed: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Referer", "https://finance.sina.com.cn/")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("sina request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("sina returned status %d", resp.StatusCode)
+	}
+
+	// 新浪 API 返回 GBK 编码，需要使用 golang.org/x/text 转换为 UTF-8
+	gbkReader := transform.NewReader(resp.Body, simplifiedchinese.GBK.NewDecoder())
+	bodyBytes, err := io.ReadAll(gbkReader)
+	if err != nil {
+		return nil, fmt.Errorf("sina response read failed: %w", err)
+	}
+	text := string(bodyBytes)
+
+	lines := strings.Split(text, "\n")
+	var validLines []string
+	for _, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			validLines = append(validLines, l)
+		}
+	}
+
+	quotes := make([]StockQuoteItem, len(items))
+	for i, item := range items {
+		quotes[i] = makeErrorQuote(item)
+		if i >= len(validLines) {
+			continue
+		}
+		line := validLines[i]
+		sinaSymbol := toSinaSymbol(item.Symbol, item.Market)
+
+		var parsed *StockQuoteItem
+		if strings.HasPrefix(sinaSymbol, "int_") {
+			parsed = parseSinaIndex(line, item)
+		} else {
+			switch item.Market {
+			case "CN":
+				parsed = parseSinaCN(line, item)
+			case "HK":
+				parsed = parseSinaHK(line, item)
+			case "US":
+				parsed = parseSinaUS(line, item)
+			}
+		}
+
+		if parsed != nil {
+			quotes[i] = *parsed
+		}
+	}
+
+	// 如果全部失败则返回错误
+	allError := true
+	for _, q := range quotes {
+		if !q.Error {
+			allError = false
+			break
+		}
+	}
+	if allError {
+		return nil, fmt.Errorf("all sina requests failed")
+	}
+
+	return quotes, nil
+}
+
+// makeErrorQuote 创建错误占位报价。
+func makeErrorQuote(item StockRequestItem) StockQuoteItem {
+	return StockQuoteItem{
+		Symbol:   item.Symbol,
+		Name:     item.Name,
+		Market:   item.Market,
+		Currency: defaultCurrencyForMarket(item.Market),
+		Error:    true,
+	}
+}
+
+// parseSinaFields 从新浪 API 响应行中提取字段。
+func parseSinaFields(line string) []string {
+	idx := strings.Index(line, `="`)
+	if idx == -1 {
+		return nil
+	}
+	data := line[idx+2:]
+	data = strings.TrimSuffix(data, `";`)
+	data = strings.TrimSuffix(data, `"`)
+	if data == "" {
+		return nil
+	}
+	return strings.Split(data, ",")
+}
+
+// parseSinaIndex 解析新浪国际指数数据。
+func parseSinaIndex(line string, item StockRequestItem) *StockQuoteItem {
+	parts := parseSinaFields(line)
+	if len(parts) < 2 {
+		return nil
+	}
+
+	price := parseFloat(parts[1])
+	if price == 0 {
+		return nil
+	}
+
+	change := 0.0
+	changePercent := 0.0
+	open := 0.0
+	high := 0.0
+	low := 0.0
+	prevClose := 0.0
+
+	if len(parts) >= 9 {
+		change = parseFloat(parts[3])
+		changePercent = parseFloat(parts[4])
+		open = parseFloat(parts[5])
+		high = parseFloat(parts[6])
+		low = parseFloat(parts[7])
+		prevClose = parseFloat(parts[8])
+	} else if len(parts) >= 5 {
+		change = parseFloat(parts[3])
+		changePercent = parseFloat(parts[4])
+		prevClose = price - change
+	}
+
+	return &StockQuoteItem{
+		Symbol:        item.Symbol,
+		Name:          item.Name,
+		Market:        item.Market,
+		Price:         price,
+		Change:        change,
+		ChangePercent: changePercent,
+		Open:          open,
+		High:          high,
+		Low:           low,
+		PrevClose:     prevClose,
+		Currency:      defaultCurrencyForMarket(item.Market),
+	}
+}
+
+// parseSinaCN 解析新浪 A 股数据。
+func parseSinaCN(line string, item StockRequestItem) *StockQuoteItem {
+	parts := parseSinaFields(line)
+	if len(parts) < 32 {
+		return nil
+	}
+
+	name := parts[0]
+	if name == "" {
+		name = item.Name
+	}
+	price := parseFloat(parts[3])
+	prevClose := parseFloat(parts[2])
+	if price == 0 {
+		return nil
+	}
+	change := price - prevClose
+	changePercent := 0.0
+	if prevClose > 0 {
+		changePercent = (change / prevClose) * 100
+	}
+
+	return &StockQuoteItem{
+		Symbol:        item.Symbol,
+		Name:          name,
+		Market:        "CN",
+		Price:         price,
+		Change:        change,
+		ChangePercent: changePercent,
+		Open:          parseFloat(parts[1]),
+		High:          parseFloat(parts[4]),
+		Low:           parseFloat(parts[5]),
+		PrevClose:     prevClose,
+		Volume:        parseFloat(parts[8]),
+		Currency:      "CNY",
+	}
+}
+
+// parseSinaHK 解析新浪港股数据。
+func parseSinaHK(line string, item StockRequestItem) *StockQuoteItem {
+	parts := parseSinaFields(line)
+	if len(parts) < 13 {
+		return nil
+	}
+
+	name := parts[1]
+	if name == "" {
+		name = item.Name
+	}
+	price := parseFloat(parts[6])
+	if price == 0 {
+		return nil
+	}
+	prevClose := parseFloat(parts[3])
+	change := parseFloat(parts[7])
+	if change == 0 {
+		change = price - prevClose
+	}
+	changePercent := parseFloat(parts[8])
+	if changePercent == 0 && prevClose > 0 {
+		changePercent = (change / prevClose) * 100
+	}
+
+	return &StockQuoteItem{
+		Symbol:        item.Symbol,
+		Name:          name,
+		Market:        "HK",
+		Price:         price,
+		Change:        change,
+		ChangePercent: changePercent,
+		Open:          parseFloat(parts[2]),
+		High:          parseFloat(parts[4]),
+		Low:           parseFloat(parts[5]),
+		PrevClose:     prevClose,
+		Volume:        parseFloat(parts[12]),
+		Currency:      "HKD",
+	}
+}
+
+// parseSinaUS 解析新浪美股数据。
+func parseSinaUS(line string, item StockRequestItem) *StockQuoteItem {
+	parts := parseSinaFields(line)
+	if len(parts) < 18 {
+		return nil
+	}
+
+	name := parts[0]
+	if name == "" {
+		name = item.Name
+	}
+	price := parseFloat(parts[1])
+	if price == 0 {
+		return nil
+	}
+
+	return &StockQuoteItem{
+		Symbol:        item.Symbol,
+		Name:          name,
+		Market:        "US",
+		Price:         price,
+		Change:        parseFloat(parts[2]),
+		ChangePercent: parseFloat(parts[4]),
+		Open:          parseFloat(parts[5]),
+		High:          parseFloat(parts[6]),
+		Low:           parseFloat(parts[7]),
+		PrevClose:     parseFloat(parts[17]),
+		Volume:        parseFloat(parts[10]),
+		MarketCap:     parseFloat(parts[12]),
+		Currency:      "USD",
+	}
+}
+
+// fetchStockQuotesYahoo 通过 Yahoo Finance v8 chart API 获取股票行情。
+func fetchStockQuotesYahoo(items []StockRequestItem) ([]StockQuoteItem, error) {
+	if len(items) == 0 {
+		return nil, fmt.Errorf("no items")
+	}
+
+	type indexedQuote struct {
+		index int
+		quote StockQuoteItem
+	}
+
+	results := make([]StockQuoteItem, len(items))
+	for i := range items {
+		results[i] = makeErrorQuote(items[i])
+	}
+
+	var wg sync.WaitGroup
+	var mu2 sync.Mutex
+
+	for i, item := range items {
+		wg.Add(1)
+		go func(idx int, it StockRequestItem) {
+			defer wg.Done()
+			quote := fetchSingleYahooChart(it)
+			mu2.Lock()
+			results[idx] = quote
+			mu2.Unlock()
+		}(i, item)
+	}
+	wg.Wait()
+
+	allError := true
+	for _, q := range results {
+		if !q.Error {
+			allError = false
+			break
+		}
+	}
+	if allError {
+		return nil, fmt.Errorf("all yahoo requests failed")
+	}
+
+	return results, nil
+}
+
+// fetchSingleYahooChart 通过 Yahoo Finance v8 chart 端点获取单只股票行情。
+func fetchSingleYahooChart(item StockRequestItem) StockQuoteItem {
+	hosts := []string{"query1.finance.yahoo.com", "query2.finance.yahoo.com"}
+	client := &http.Client{Timeout: 8 * time.Second}
+
+	for _, host := range hosts {
+		url := fmt.Sprintf("https://%s/v8/finance/chart/%s?interval=1d&range=1d", host, item.Symbol)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			continue
+		}
+
+		var chartResp struct {
+			Chart struct {
+				Result []struct {
+					Meta struct {
+						RegularMarketPrice float64 `json:"regularMarketPrice"`
+						ChartPreviousClose float64 `json:"chartPreviousClose"`
+						PreviousClose      float64 `json:"previousClose"`
+						Currency           string  `json:"currency"`
+					} `json:"meta"`
+					Indicators struct {
+						Quote []struct {
+							Open   []interface{} `json:"open"`
+							High   []interface{} `json:"high"`
+							Low    []interface{} `json:"low"`
+							Volume []interface{} `json:"volume"`
+						} `json:"quote"`
+					} `json:"indicators"`
+				} `json:"result"`
+			} `json:"chart"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&chartResp); err != nil {
+			continue
+		}
+
+		if len(chartResp.Chart.Result) == 0 {
+			continue
+		}
+
+		meta := chartResp.Chart.Result[0].Meta
+		price := meta.RegularMarketPrice
+		prevClose := meta.ChartPreviousClose
+		if prevClose == 0 {
+			prevClose = meta.PreviousClose
+		}
+		change := price - prevClose
+		changePercent := 0.0
+		if prevClose > 0 {
+			changePercent = (change / prevClose) * 100
+		}
+
+		currency := meta.Currency
+		if currency == "" {
+			currency = defaultCurrencyForMarket(item.Market)
+		}
+
+		// 提取 OHLCV
+		open := 0.0
+		high := 0.0
+		low := 0.0
+		volume := 0.0
+
+		if len(chartResp.Chart.Result[0].Indicators.Quote) > 0 {
+			q := chartResp.Chart.Result[0].Indicators.Quote[0]
+			if len(q.Open) > 0 {
+				open = toFloat64(q.Open[len(q.Open)-1])
+			}
+			for _, v := range q.High {
+				f := toFloat64(v)
+				if f > high {
+					high = f
+				}
+			}
+			for _, v := range q.Low {
+				f := toFloat64(v)
+				if f > 0 && (low == 0 || f < low) {
+					low = f
+				}
+			}
+			for _, v := range q.Volume {
+				volume += toFloat64(v)
+			}
+		}
+
+		return StockQuoteItem{
+			Symbol:        item.Symbol,
+			Name:          item.Name,
+			Market:        item.Market,
+			Price:         price,
+			Change:        change,
+			ChangePercent: changePercent,
+			Open:          open,
+			High:          high,
+			Low:           low,
+			PrevClose:     prevClose,
+			Volume:        volume,
+			Currency:      currency,
+		}
+	}
+
+	return makeErrorQuote(item)
+}
+
+// parseFloat 安全地将字符串转换为 float64。
+func parseFloat(s string) float64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	var result float64
+	fmt.Sscanf(s, "%f", &result)
+	return result
+}
+
+// toFloat64 将 interface{} 转换为 float64。
+func toFloat64(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case nil:
+		return 0
+	default:
+		return 0
+	}
 }
 
 func fetchBilibiliHot() ([]BilibiliHotVideo, error) {

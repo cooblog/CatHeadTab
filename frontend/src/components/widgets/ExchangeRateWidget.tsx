@@ -17,6 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { WidgetSize, ExchangeRateWidgetConfig, ExchangeRatePair } from '../../store/layoutStore';
 import { useLayoutStore } from '../../store/layoutStore';
+import { useConfigStore } from '../../store/configStore';
 import { useTranslation } from '../../i18n/useTranslation';
 
 interface ExchangeRateWidgetProps {
@@ -116,11 +117,71 @@ function writeRateCache(key: string, data: RateData[]): void {
 }
 
 // --- API fetch ---
+
 /**
- * Fetch exchange rates from Frankfurter API (European Central Bank data).
- * Uses latest + previous day to compute daily change.
+ * Fetch exchange rates from backend API (with cache + singleflight).
+ * Falls back to direct Frankfurter API call on failure.
  */
 async function fetchExchangeRates(pairs: ExchangeRatePair[]): Promise<RateData[]> {
+  if (pairs.length === 0) return [];
+
+  // 优先通过后端 API 获取（有缓存 + singleflight）
+  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
+  console.log('[ExchangeRateWidget] serverUrl:', serverUrl || '(empty)');
+  if (serverUrl) {
+    try {
+      const result = await fetchExchangeRatesFromBackend(serverUrl, pairs);
+      // 确保至少有一条有效数据
+      if (result.some(r => !r.error && r.rate > 0)) {
+        console.log('[ExchangeRateWidget] Backend API succeeded');
+        return result;
+      }
+      console.warn('[ExchangeRateWidget] Backend returned all-zero rates, falling back');
+    } catch (err) {
+      console.warn('[ExchangeRateWidget] Backend API failed, falling back to direct API:', err);
+    }
+  }
+
+  // Fallback：直接请求 Frankfurter API
+  console.log('[ExchangeRateWidget] Using direct Frankfurter API');
+  return fetchExchangeRatesDirect(pairs);
+}
+
+/**
+ * Fetch exchange rates from our backend proxy.
+ */
+async function fetchExchangeRatesFromBackend(serverUrl: string, pairs: ExchangeRatePair[]): Promise<RateData[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`${serverUrl}/api/v1/finance/exchange-rate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pairs: pairs.map(p => ({ from: p.from, to: p.to })) }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const items: Array<{ from: string; to: string; rate: number; change: number }> = json.data || [];
+    return items.map(item => ({
+      from: item.from,
+      to: item.to,
+      rate: item.rate || 0,
+      change: item.change || 0,
+      error: item.rate === 0,
+    }));
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
+ * Fetch exchange rates directly from Frankfurter API (European Central Bank data).
+ * Uses latest + previous day to compute daily change.
+ */
+async function fetchExchangeRatesDirect(pairs: ExchangeRatePair[]): Promise<RateData[]> {
   if (pairs.length === 0) return [];
 
   // Group by base currency to minimize API calls
@@ -177,7 +238,7 @@ async function fetchExchangeRates(pairs: ExchangeRatePair[]): Promise<RateData[]
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         try {
           const res = await fetch(
-            `https://api.frankfurter.app/${dateStr}?from=${base}&to=${to}`,
+            `https://api.frankfurter.dev/v1/${dateStr}?from=${base}&to=${to}`,
             { signal: controller.signal },
           );
           clearTimeout(timeoutId);
@@ -252,9 +313,14 @@ export const ExchangeRateWidget: React.FC<ExchangeRateWidgetProps> = ({ size, co
     try {
       const data = await fetchExchangeRates(pairs);
       setRates(data);
-      writeRateCache(cacheKey, data);
+      // 只缓存至少有一条有效数据的结果，避免缓存全部失败数据
+      const hasValid = data.some(d => !d.error && d.rate > 0);
+      if (hasValid) {
+        writeRateCache(cacheKey, data);
+      }
       setError(null);
-    } catch {
+    } catch (err) {
+      console.error('[ExchangeRateWidget] fetchData error:', err);
       if (rates.length === 0) setError(isZh ? '无法获取汇率数据' : 'Unable to fetch exchange rates');
     } finally {
       setLoading(false);

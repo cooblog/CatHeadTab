@@ -17,6 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { WidgetSize, StockWidgetConfig, StockItem, StockMarket } from '../../store/layoutStore';
 import { useLayoutStore } from '../../store/layoutStore';
+import { useConfigStore } from '../../store/configStore';
 import { useTranslation } from '../../i18n/useTranslation';
 
 interface StockWidgetProps {
@@ -526,10 +527,78 @@ function makeErrorQuote(item: StockItem): StockQuote {
 }
 
 /**
- * Unified data fetcher: picks Sina (zh) or Yahoo (en) based on language.
- * Falls back to the other source on failure.
+ * Unified data fetcher: first tries backend API (with cache + singleflight),
+ * then falls back to direct Sina/Yahoo API calls.
  */
 async function fetchStockQuotes(items: StockItem[], language: string): Promise<StockQuote[]> {
+  if (items.length === 0) return [];
+
+  // 优先通过后端 API 获取（有缓存 + singleflight）
+  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
+  if (serverUrl) {
+    try {
+      const result = await fetchStockQuotesFromBackend(serverUrl, items, language);
+      // 检查是否至少有一条有效数据
+      if (result.some(q => !q.error)) {
+        console.log('[StockWidget] Backend API succeeded');
+        return result;
+      }
+    } catch (err) {
+      console.warn('[StockWidget] Backend API failed, falling back to direct API:', err);
+    }
+  }
+
+  // Fallback：直接请求数据源
+  return fetchStockQuotesDirect(items, language);
+}
+
+/**
+ * Fetch stock quotes from our backend proxy.
+ */
+async function fetchStockQuotesFromBackend(serverUrl: string, items: StockItem[], language: string): Promise<StockQuote[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(`${serverUrl}/api/v1/finance/stock-quotes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: items.map(i => ({ symbol: i.symbol, name: i.name, market: i.market })),
+        language,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const data: StockQuote[] = (json.data || []).map((item: StockQuote) => ({
+      symbol: item.symbol,
+      name: item.name,
+      market: item.market as StockMarket,
+      price: item.price || 0,
+      change: item.change || 0,
+      changePercent: item.changePercent || 0,
+      open: item.open || 0,
+      high: item.high || 0,
+      low: item.low || 0,
+      prevClose: item.prevClose || 0,
+      volume: item.volume || 0,
+      marketCap: item.marketCap || 0,
+      currency: item.currency || 'USD',
+      error: item.error || false,
+    }));
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
+ * Direct data fetcher: picks Sina (zh) or Yahoo (en) based on language.
+ * Falls back to the other source on failure.
+ */
+async function fetchStockQuotesDirect(items: StockItem[], language: string): Promise<StockQuote[]> {
   if (items.length === 0) return [];
 
   const isZh = language === 'zh';
@@ -537,7 +606,7 @@ async function fetchStockQuotes(items: StockItem[], language: string): Promise<S
   const fallback = isZh ? fetchStockQuotesYahoo : fetchStockQuotesSina;
 
   console.log(
-    `[StockWidget] language="${language}", isZh=${isZh}, primary=${isZh ? 'Sina' : 'Yahoo'}, symbols:`,
+    `[StockWidget] Direct fetch: language="${language}", isZh=${isZh}, primary=${isZh ? 'Sina' : 'Yahoo'}, symbols:`,
     items.map(i => i.symbol),
   );
 

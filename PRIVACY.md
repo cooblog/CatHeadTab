@@ -56,7 +56,7 @@ CatHeadTab requests the following browser permissions, each used solely for the 
 | `https://query1.finance.yahoo.com/*` | Fetch US and Hong Kong stock market data |
 | `https://query2.finance.yahoo.com/*` | Fetch US and Hong Kong stock market data |
 | `https://hq.sinajs.cn/*` | Fetch China A-share stock market data |
-| `https://api.frankfurter.app/*` | Fetch currency exchange rate data (European Central Bank) |
+| `https://api.frankfurter.dev/*` | Fetch currency exchange rate data (European Central Bank) |
 
 These requests are made **directly from your browser** to the respective APIs. CatHeadTab does not proxy, log, or store any of this financial data on our servers.
 
