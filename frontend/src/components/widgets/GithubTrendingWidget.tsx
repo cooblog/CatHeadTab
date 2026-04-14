@@ -29,7 +29,7 @@ function formatStars(n: number): string {
   return String(n);
 }
 
-export const GithubTrendingWidget: React.FC<GithubTrendingWidgetProps> = ({ size }) => {
+export const GithubTrendingWidget: React.FC<GithubTrendingWidgetProps> = ({ size: _size }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
   const serverUrl = useConfigStore(s => s.getEffectiveServerUrl());
@@ -71,7 +71,7 @@ export const GithubTrendingWidget: React.FC<GithubTrendingWidgetProps> = ({ size
           </svg>
           <span className="text-[13px] font-semibold text-white/80">Trending</span>
         </div>
-        <button onClick={load} disabled={loading} className="text-white/30 hover:text-white/60 transition-colors p-1 rounded" title={isZh ? '刷新' : 'Refresh'}>
+        <button onClick={(e) => { e.stopPropagation(); load(); }} disabled={loading} className="text-white/30 hover:text-white/60 transition-colors p-1 rounded" title={isZh ? '刷新' : 'Refresh'}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={loading ? 'animate-spin' : ''}>
             <path d="M21 12a9 9 0 11-6.22-8.56" strokeLinecap="round"/>
           </svg>
@@ -100,25 +100,25 @@ export const GithubTrendingWidget: React.FC<GithubTrendingWidgetProps> = ({ size
             target="_blank"
             rel="noreferrer"
             onClick={e => e.stopPropagation()}
-            className="block px-2.5 py-1.5 rounded-lg transition-colors group cursor-pointer"
+            className="block px-2.5 py-1.5 rounded-lg transition-colors hover:bg-white/[0.06] cursor-pointer"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[12px] font-medium text-white/80 group-hover:text-[#72d565] transition-colors truncate">{repo.fullName}</span>
+                <span className="text-[12px] font-medium text-white/80 hover:text-[#72d565] transition-colors truncate">{repo.fullName}</span>
               </div>
               {repo.description && (
                 <p className="text-[11px] text-white/35 leading-tight mt-0.5 line-clamp-1">{repo.description}</p>
               )}
-              <div className="flex items-center gap-3 mt-0.5">
+              <div className="flex items-center gap-3 mt-0.5 flex-nowrap overflow-hidden">
                 {repo.language && (
-                  <span className="flex items-center gap-1 text-[10px] text-white/30">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: LANG_COLORS[repo.language] || '#888' }} />
+                  <span className="flex items-center gap-1 text-[10px] text-white/30 whitespace-nowrap shrink-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: LANG_COLORS[repo.language] || '#888' }} />
                     {repo.language}
                   </span>
                 )}
-                <span className="text-[10px] text-white/30">★ {formatStars(repo.stars)}</span>
+                <span className="text-[10px] text-white/30 whitespace-nowrap shrink-0">★ {formatStars(repo.stars)}</span>
                 {repo.todayStars > 0 && (
-                  <span className="text-[10px] text-[#72d565]/60">+{repo.todayStars} today</span>
+                  <span className="text-[10px] text-[#72d565]/60 whitespace-nowrap shrink-0">+{repo.todayStars} today</span>
                 )}
               </div>
             </div>

@@ -4,13 +4,14 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/gin-gonic/gin"
 )
 
@@ -101,10 +102,19 @@ func (h *TrendingHandler) GithubTrending(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": repos, "cached": false})
 }
 
+// numberRe 用于从文本中提取带逗号的数字，如 "28,530" 或 "5,733 stars today"
+var numberRe = regexp.MustCompile(`[\d,]+`)
+
 func fetchGithubTrending() ([]GithubTrendingRepo, error) {
-	// Use the unofficial GitHub trending API (returns JSON)
-	// Fallback: parse HTML page
-	resp, err := http.Get("https://github.com/trending?spoken_language_code=")
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", "https://github.com/trending?since=daily", nil)
+	if err != nil {
+		return nil, fmt.Errorf("github trending request failed: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
+	req.Header.Set("Accept", "text/html")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("github trending request failed: %w", err)
 	}
@@ -114,94 +124,64 @@ func fetchGithubTrending() ([]GithubTrendingRepo, error) {
 		return nil, fmt.Errorf("github trending returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("github trending read body failed: %w", err)
-	}
-
-	return parseGithubTrendingHTML(string(body))
+	return parseGithubTrendingHTML(resp)
 }
 
-// parseGithubTrendingHTML extracts trending repos from the GitHub HTML page.
-// This is a simple parser that looks for specific patterns in the HTML.
-func parseGithubTrendingHTML(html string) ([]GithubTrendingRepo, error) {
-	var repos []GithubTrendingRepo
-
-	// Split by article tags
-	articles := strings.Split(html, "<article")
-	if len(articles) <= 1 {
-		return nil, fmt.Errorf("no trending repos found in HTML")
+// parseGithubTrendingHTML 使用 goquery 通过 CSS 选择器精确提取 GitHub trending 页面数据。
+func parseGithubTrendingHTML(resp *http.Response) ([]GithubTrendingRepo, error) {
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("github trending parse html failed: %w", err)
 	}
 
-	for _, article := range articles[1:] { // skip first split (before first article)
+	var repos []GithubTrendingRepo
+
+	doc.Find("article.Box-row").Each(func(_ int, s *goquery.Selection) {
 		repo := GithubTrendingRepo{}
 
-		// Extract repo full name from href
-		if idx := strings.Index(article, `<h2`); idx >= 0 {
-			segment := article[idx:]
-			if hrefIdx := strings.Index(segment, `href="`); hrefIdx >= 0 {
-				start := hrefIdx + 6
-				end := strings.Index(segment[start:], `"`)
-				if end > 0 {
-					fullName := strings.TrimSpace(segment[start : start+end])
-					fullName = strings.TrimPrefix(fullName, "/")
+		// 提取仓库名称和 URL — h2 > a[href]
+		s.Find("h2 a").Each(func(_ int, a *goquery.Selection) {
+			if href, exists := a.Attr("href"); exists {
+				fullName := strings.TrimSpace(href)
+				fullName = strings.TrimPrefix(fullName, "/")
+				if fullName != "" {
 					repo.FullName = fullName
 					repo.URL = "https://github.com/" + fullName
 				}
 			}
-		}
+		})
 
 		if repo.FullName == "" {
-			continue
+			return
 		}
 
-		// Extract description
-		if idx := strings.Index(article, `<p class="`); idx >= 0 {
-			segment := article[idx:]
-			if gtIdx := strings.Index(segment, ">"); gtIdx >= 0 {
-				inner := segment[gtIdx+1:]
-				if endIdx := strings.Index(inner, "</p>"); endIdx >= 0 {
-					repo.Description = strings.TrimSpace(inner[:endIdx])
-					if len(repo.Description) > 200 {
-						repo.Description = repo.Description[:200] + "…"
-					}
-				}
+		// 提取描述 — p 标签
+		desc := strings.TrimSpace(s.Find("p").First().Text())
+		if len(desc) > 200 {
+			desc = desc[:200] + "…"
+		}
+		repo.Description = desc
+
+		// 提取编程语言 — span[itemprop="programmingLanguage"]
+		repo.Language = strings.TrimSpace(s.Find(`span[itemprop="programmingLanguage"]`).Text())
+
+		// 提取总 star 数 — href 以 /stargazers 结尾的 <a> 标签
+		starText := strings.TrimSpace(s.Find(`a[href$="/stargazers"]`).Text())
+		repo.Stars = parseFormattedNumber(starText)
+
+		// 提取今日新增 star 数 — 包含 "stars today" 或 "stars this" 的 <span>
+		s.Find("span.d-inline-block.float-sm-right").Each(func(_ int, span *goquery.Selection) {
+			text := strings.TrimSpace(span.Text())
+			if strings.Contains(text, "stars today") || strings.Contains(text, "stars this") {
+				repo.TodayStars = parseFormattedNumber(text)
 			}
-		}
-
-		// Extract language
-		if idx := strings.Index(article, `itemprop="programmingLanguage"`); idx >= 0 {
-			segment := article[idx:]
-			if gtIdx := strings.Index(segment, ">"); gtIdx >= 0 {
-				inner := segment[gtIdx+1:]
-				if endIdx := strings.Index(inner, "<"); endIdx >= 0 {
-					repo.Language = strings.TrimSpace(inner[:endIdx])
-				}
-			}
-		}
-
-		// Extract stars — look for SVG with star icon followed by number
-		if idx := strings.Index(article, `Link--muted`); idx >= 0 {
-			segment := article[idx:]
-			// Find the number after the closing tag
-			if gtIdx := strings.Index(segment, ">"); gtIdx >= 0 {
-				inner := segment[gtIdx:]
-				// Look through the inner content for a number
-				num := extractNumber(inner)
-				repo.Stars = num
-			}
-		}
-
-		// Extract today's stars
-		if idx := strings.Index(article, "stars today"); idx >= 0 {
-			segment := article[max(0, idx-50):idx]
-			repo.TodayStars = extractNumber(segment)
-		} else if idx := strings.Index(article, "stars this"); idx >= 0 {
-			segment := article[max(0, idx-50):idx]
-			repo.TodayStars = extractNumber(segment)
-		}
+		})
 
 		repos = append(repos, repo)
+	})
+
+	if len(repos) == 0 {
+		return nil, fmt.Errorf("no trending repos found in HTML")
 	}
 
 	if len(repos) > 25 {
@@ -211,19 +191,19 @@ func parseGithubTrendingHTML(html string) ([]GithubTrendingRepo, error) {
 	return repos, nil
 }
 
-// extractNumber finds the first number in a string.
-func extractNumber(s string) int {
+// parseFormattedNumber 从字符串中提取第一个带逗号分隔的数字并转为 int。
+// 例如 "28,530" → 28530, "5,733 stars today" → 5733
+func parseFormattedNumber(s string) int {
+	match := numberRe.FindString(s)
+	if match == "" {
+		return 0
+	}
+	// 移除逗号后解析
+	clean := strings.ReplaceAll(match, ",", "")
 	var num int
-	inNumber := false
-	for _, ch := range s {
+	for _, ch := range clean {
 		if ch >= '0' && ch <= '9' {
 			num = num*10 + int(ch-'0')
-			inNumber = true
-		} else if ch == ',' && inNumber {
-			// Skip commas in numbers like "1,234"
-			continue
-		} else if inNumber {
-			break
 		}
 	}
 	return num

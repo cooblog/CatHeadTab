@@ -29,7 +29,7 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export const BilibiliHotWidget: React.FC<BilibiliHotWidgetProps> = ({ size }) => {
+export const BilibiliHotWidget: React.FC<BilibiliHotWidgetProps> = ({ size: _size }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
   const serverUrl = useConfigStore(s => s.getEffectiveServerUrl());
@@ -70,7 +70,7 @@ export const BilibiliHotWidget: React.FC<BilibiliHotWidgetProps> = ({ size }) =>
           </svg>
           <span className="text-[13px] font-semibold text-white/80">{isZh ? '哔哩哔哩热门' : 'Bilibili Hot'}</span>
         </div>
-        <button onClick={load} disabled={loading} className="text-white/30 hover:text-white/60 transition-colors p-1 rounded" title={isZh ? '刷新' : 'Refresh'}>
+        <button onClick={(e) => { e.stopPropagation(); load(); }} disabled={loading} className="text-white/30 hover:text-white/60 transition-colors p-1 rounded" title={isZh ? '刷新' : 'Refresh'}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={loading ? 'animate-spin' : ''}>
             <path d="M21 12a9 9 0 11-6.22-8.56" strokeLinecap="round"/>
           </svg>
@@ -92,24 +92,24 @@ export const BilibiliHotWidget: React.FC<BilibiliHotWidgetProps> = ({ size }) =>
             <button onClick={load} className="text-[11px] text-[#00A1D6]/70 hover:text-[#00A1D6]">{isZh ? '重试' : 'Retry'}</button>
           </div>
         )}
-        {videos.map((video, i) => (
+        {videos.map((video) => (
           <a
             key={video.bvid}
             href={video.url}
             target="_blank"
             rel="noreferrer"
             onClick={e => e.stopPropagation()}
-            className="block px-2.5 py-1.5 rounded-lg transition-colors group cursor-pointer"
+            className="block px-2.5 py-1.5 rounded-lg transition-colors hover:bg-white/[0.06] cursor-pointer"
           >
             <div>
-              <p className="text-[12px] font-medium text-white/80 group-hover:text-[#00A1D6] transition-colors line-clamp-2 leading-tight">{video.title}</p>
+              <p className="text-[12px] font-medium text-white/80 hover:text-[#00A1D6] transition-colors line-clamp-2 leading-tight">{video.title}</p>
               <div className="flex items-center gap-2.5 mt-1">
                 <span className="text-[10px] text-white/30 truncate">{video.owner}</span>
-                <span className="text-[10px] text-white/25 flex items-center gap-0.5">
+                <span className="text-[10px] text-white/25 flex items-center gap-0.5 whitespace-nowrap shrink-0">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                   {formatNumber(video.view)}
                 </span>
-                <span className="text-[10px] text-white/25">{formatDuration(video.duration)}</span>
+                <span className="text-[10px] text-white/25 whitespace-nowrap shrink-0">{formatDuration(video.duration)}</span>
               </div>
             </div>
           </a>
