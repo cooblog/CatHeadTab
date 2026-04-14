@@ -132,14 +132,14 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
         icon: '🐙',
         labelKey: 'widget.githubTrending',
         descKey: 'widget.githubTrendingDesc',
-        sizes: ['medium'],
+        sizes: ['medium', 'large', 'tall', 'xlarge'],
       },
       {
         type: 'bilibiliHot',
         icon: '📺',
         labelKey: 'widget.bilibiliHot',
         descKey: 'widget.bilibiliHotDesc',
-        sizes: ['medium'],
+        sizes: ['medium', 'large', 'tall', 'xlarge'],
       },
     ],
   },
@@ -465,6 +465,9 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
     const nameMap: Record<WidgetSize, { en: string; zh: string }> = {
       small: { en: 'Small', zh: '小' },
       medium: { en: 'Medium', zh: '中' },
+      large: { en: 'Large', zh: '大' },
+      tall: { en: 'Tall', zh: '高' },
+      xlarge: { en: 'Extra Large', zh: '超大' },
     };
     const name = isZh ? nameMap[s].zh : nameMap[s].en;
     return `${name} (${rows}×${cols})`;

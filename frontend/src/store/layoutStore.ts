@@ -20,12 +20,15 @@ export type DesktopItemType = 'app' | 'link' | 'folder' | 'widget';
 export type WidgetType = 'calendar' | 'weather' | 'countdown' | 'systemMonitor' | 'clock' | 'itTools' | 'stickyNote' | 'stock' | 'exchangeRate' | 'calculator' | 'aiAgent' | 'githubTrending' | 'bilibiliHot';
 
 /** Widget size presets (columns × rows in the desktop grid). */
-export type WidgetSize = 'small' | 'medium';
+export type WidgetSize = 'small' | 'medium' | 'large' | 'tall' | 'xlarge';
 
 /** Maps widget size to grid span dimensions. */
 export const WIDGET_SIZE_MAP: Record<WidgetSize, { cols: number; rows: number }> = {
   small: { cols: 2, rows: 1 },
   medium: { cols: 2, rows: 2 },
+  large: { cols: 4, rows: 2 },
+  tall: { cols: 2, rows: 4 },
+  xlarge: { cols: 4, rows: 4 },
 };
 
 /** Configuration specific to each widget type. */
