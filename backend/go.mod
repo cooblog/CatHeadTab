@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/DeaglePC/go-favicon v0.0.0-20250426104944-da376789bdc7
+	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/dgraph-io/ristretto/v2 v2.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.2.3
@@ -12,10 +13,10 @@ require (
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.73
 	golang.org/x/crypto v0.40.0
 	golang.org/x/sync v0.20.0
+	golang.org/x/text v0.27.0
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.10.3 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/bytedance/sonic v1.11.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -46,7 +47,6 @@ require (
 	golang.org/x/arch v0.7.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
