@@ -4,6 +4,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import type { TranslationKeys } from '../i18n/useTranslation';
 import type { WidgetType, WidgetSize, WidgetConfig } from '../store/layoutStore';
 import { useLayoutStore, WIDGET_SIZE_MAP } from '../store/layoutStore';
+import { useConfigStore } from '../store/configStore';
 import { DatePicker } from './DatePicker';
 
 interface AddWidgetModalProps {
@@ -578,22 +579,37 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
               {/* Active category widget list */}
               <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
-                {WIDGET_CATEGORIES[activeTab].widgets.map((opt, idx) => (
+                {WIDGET_CATEGORIES[activeTab].widgets.map((opt, idx) => {
+                  const userProfile = useConfigStore.getState().userProfile;
+                  const proGateEnabled = userProfile?.pro_gate_enabled ?? false;
+                  const userRole = userProfile?.role;
+                  const isProLocked = opt.type === 'aiAgent' && proGateEnabled && userRole !== 'pro' && userRole !== 'admin';
+                  return (
                   <button
                     key={opt.type}
                     className={`w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/5 group ${
                       idx < WIDGET_CATEGORIES[activeTab].widgets.length - 1 ? 'border-b border-white/5' : ''
-                    }`}
-                    onClick={() => setSelectedType(opt.type)}
+                    } ${isProLocked ? 'opacity-50' : ''}`}
+                    onClick={() => { if (!isProLocked) setSelectedType(opt.type); }}
                   >
                     <span className="text-2xl shrink-0">{opt.icon}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[14px] font-medium text-white/90">{t(opt.labelKey)}</div>
+                      <div className="text-[14px] font-medium text-white/90 flex items-center gap-2">
+                        {t(opt.labelKey)}
+                        {isProLocked && (
+                          <span className="text-[10px] text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded-full border border-purple-400/20 font-semibold">Pro</span>
+                        )}
+                      </div>
                       <div className="text-[12px] text-white/40 mt-0.5">{t(opt.descKey)}</div>
                     </div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/20 group-hover:text-white/50 transition-colors shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+                    {isProLocked ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-400/50 shrink-0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/20 group-hover:text-white/50 transition-colors shrink-0"><path d="m9 18 6-6-6-6"/></svg>
+                    )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (

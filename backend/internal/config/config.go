@@ -64,6 +64,17 @@ type Config struct {
 	JWTTokenTTL time.Duration
 	// TokenCleanupInterval controls how often expired tokens are purged from the database.
 	TokenCleanupInterval time.Duration
+
+	// Pro membership gating
+	// ProGateEnabled controls whether Pro role gating is enforced.
+	// When false (default), all users have full access to Pro features (e.g. AI assistant).
+	// When true, only users with role "pro" or "admin" can access Pro features.
+	// Set to "true" for SaaS deployments; leave unset for self-hosted/open-source.
+	ProGateEnabled bool
+	// ProFreeUntil is an optional ISO 8601 datetime (e.g. "2026-06-01T00:00:00Z").
+	// Users who register before this time automatically receive the "pro" role.
+	// Leave empty to disable the promotion window.
+	ProFreeUntil time.Time
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -103,6 +114,9 @@ func Load() *Config {
 		PasswordResetTokenTTL: getDurationEnv("PASSWORD_RESET_TOKEN_TTL_HOURS", 1) * time.Hour,
 		JWTTokenTTL:           getDurationEnv("JWT_TOKEN_TTL_DAYS", 30) * 24 * time.Hour,
 		TokenCleanupInterval:  getDurationEnv("TOKEN_CLEANUP_INTERVAL_HOURS", 6) * time.Hour,
+
+		ProGateEnabled: getEnv("PRO_GATE_ENABLED", "") == "true",
+		ProFreeUntil:   parseTimeEnv("PRO_FREE_UNTIL"),
 	}
 }
 
@@ -135,4 +149,45 @@ func getDurationEnv(key string, fallback int) time.Duration {
 		return time.Duration(fallback)
 	}
 	return time.Duration(n)
+}
+
+// parseTimeEnv reads an ISO 8601 datetime from an environment variable.
+// Returns zero time if the variable is not set or cannot be parsed.
+func parseTimeEnv(key string) time.Time {
+	v := os.Getenv(key)
+	if v == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		// Try without timezone suffix (e.g. "2026-06-01T00:00:00")
+		t, err = time.Parse("2006-01-02T15:04:05", v)
+		if err != nil {
+			// Try date-only (e.g. "2026-06-01")
+			t, err = time.Parse("2006-01-02", v)
+			if err != nil {
+				return time.Time{}
+			}
+		}
+	}
+	return t
+}
+
+// IsProFreeNow reports whether the current time is within the free Pro
+// promotion window (i.e. ProFreeUntil is set and has not passed yet).
+func (c *Config) IsProFreeNow() bool {
+	if c.ProFreeUntil.IsZero() {
+		return false
+	}
+	return time.Now().Before(c.ProFreeUntil)
+}
+
+// DefaultRoleForNewUser returns the role that should be assigned to newly
+// registered users. Returns "pro" during the free promotion window,
+// otherwise "user".
+func (c *Config) DefaultRoleForNewUser() string {
+	if c.IsProFreeNow() {
+		return string("pro")
+	}
+	return string("user")
 }

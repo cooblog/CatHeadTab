@@ -18,7 +18,7 @@ export const ENV_API_URL: string = (import.meta.env.VITE_API_URL as string || ''
  */
 export const isEnvConfigured: boolean = !!ENV_API_URL;
 
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'user' | 'pro' | 'admin';
 
 export interface UserProfile {
   username: string;
@@ -28,6 +28,8 @@ export interface UserProfile {
   has_password: boolean;
   user_id: string;
   role: UserRole;
+  /** Whether the server enforces Pro role gating. When false, all users have full access. */
+  pro_gate_enabled?: boolean;
 }
 
 /** Per-provider AI configuration. API keys are stored separately per provider. */

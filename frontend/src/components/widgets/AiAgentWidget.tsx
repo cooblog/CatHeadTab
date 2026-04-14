@@ -1,7 +1,7 @@
 import React from 'react';
 import type { WidgetSize } from '../../store/layoutStore';
 import { useConfigStore } from '../../store/configStore';
-import { isAIConfigured } from '../../ai/provider';
+import { isAIConfigured, hasAIAccess } from '../../ai/provider';
 
 interface AiAgentWidgetProps {
   size: WidgetSize;
@@ -10,7 +10,32 @@ interface AiAgentWidgetProps {
 /** Small entry card for the AI Agent. Clicking opens the full chat modal. */
 export const AiAgentWidget: React.FC<AiAgentWidgetProps> = () => {
   const language = useConfigStore(s => s.language);
+  const proAccess = hasAIAccess();
   const configured = isAIConfigured();
+
+  if (!proAccess) {
+    return (
+      <div className="w-full h-full flex items-center gap-3 px-4 select-none overflow-hidden cursor-pointer">
+        <div
+          className="shrink-0 flex items-center justify-center rounded-xl"
+          style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #ec4899 100%)', opacity: 0.35 }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h-1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
+          </svg>
+        </div>
+        <div className="flex flex-col justify-center min-w-0" style={{ gap: '3px' }}>
+          <span className="text-[15px] font-semibold text-white/40 leading-none tracking-tight">
+            AI {language === 'zh' ? '助手' : 'Agent'}
+          </span>
+          <span className="text-[11px] text-purple-400/60 leading-none flex items-center gap-1">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            {language === 'zh' ? 'Pro 专属功能' : 'Pro Feature'}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (!configured) {
     return (

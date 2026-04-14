@@ -12,19 +12,32 @@ type UserRole string
 const (
 	// RoleUser is the default role for regular users.
 	RoleUser UserRole = "user"
-	// RoleAdmin grants administrative privileges (e.g. wallpaper search).
+	// RolePro grants access to premium features (e.g. AI assistant).
+	RolePro UserRole = "pro"
+	// RoleAdmin grants full administrative privileges (superset of pro).
 	RoleAdmin UserRole = "admin"
 )
 
 // ValidRoles contains all recognised user roles for validation.
 var ValidRoles = map[UserRole]bool{
 	RoleUser:  true,
+	RolePro:   true,
 	RoleAdmin: true,
 }
 
 // IsAdmin reports whether the role has admin privileges.
 func (r UserRole) IsAdmin() bool {
 	return r == RoleAdmin
+}
+
+// IsPro reports whether the role is a Pro member.
+func (r UserRole) IsPro() bool {
+	return r == RolePro
+}
+
+// IsProOrAdmin reports whether the role has at least Pro-level access.
+func (r UserRole) IsProOrAdmin() bool {
+	return r == RolePro || r == RoleAdmin
 }
 
 // User represents a registered user with OAuth credentials.

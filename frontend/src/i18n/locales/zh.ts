@@ -138,6 +138,7 @@ export const zh = {
   'profile.verifyEmail': '验证邮箱',
   'profile.emailVerified': '邮箱已验证',
   'profile.roleAdmin': '管理员',
+  'profile.rolePro': 'Pro 会员',
   'profile.roleUser': '普通用户',
   'profile.verificationSent': '验证邮件已发送！请检查您的收件箱。',
   'profile.avatarChange': '更换头像',

@@ -138,6 +138,7 @@ export const en = {
   'profile.verifyEmail': 'Verify Email',
   'profile.emailVerified': 'Email Verified',
   'profile.roleAdmin': 'Admin',
+  'profile.rolePro': 'Pro Member',
   'profile.roleUser': 'User',
   'profile.verificationSent': 'Verification email sent! Check your inbox.',
   'profile.avatarChange': 'Change Avatar',

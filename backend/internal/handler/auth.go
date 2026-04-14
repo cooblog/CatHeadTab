@@ -81,6 +81,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Email:        input.Email,
 		Username:     input.Username,
 		PasswordHash: string(hashedPassword),
+		Role:         model.UserRole(h.cfg.DefaultRoleForNewUser()),
 	}
 
 	if err := h.userRepo.Create(newUser); err != nil {
@@ -711,6 +712,7 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 			Username:      h.ensureUniqueUsername(displayName),
 			AvatarURL:     avatarURL,
 			EmailVerified: email != "",
+			Role:          model.UserRole(h.cfg.DefaultRoleForNewUser()),
 		}
 		if err := h.userRepo.Create(user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})

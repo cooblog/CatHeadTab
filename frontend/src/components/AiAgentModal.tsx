@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../i18n/useTranslation';
-import { isAIConfigured } from '../ai/provider';
+import { isAIConfigured, hasAIAccess } from '../ai/provider';
 import { runAgent } from '../ai/agent';
 import type { AgentMessage } from '../ai/agent';
 import { customStorage, useConfigStore } from '../store/configStore';
@@ -216,6 +216,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const configured = isAIConfigured();
+  const proAccess = hasAIAccess();
 
   // Load saved chat history on mount
   useEffect(() => {
@@ -356,7 +357,21 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
         </div>
 
         {/* ── Body ── */}
-        {!configured ? (
+        {!proAccess ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #ec4899 100%)', opacity: 0.6 }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-[15px] font-semibold text-white/70">{isZh ? 'Pro 专属功能' : 'Pro Feature'}</p>
+              <p className="text-[13px] text-white/35 leading-relaxed">
+                {isZh ? 'AI 助手是 Pro 会员专属功能，升级后即可使用智能桌面管家。' : 'AI Agent is a Pro-exclusive feature. Upgrade to unlock the smart desktop assistant.'}
+              </p>
+            </div>
+          </div>
+        ) : !configured ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center">
             <span className="text-4xl">🔑</span>
             <p className="text-[13px] text-white/40 leading-relaxed">

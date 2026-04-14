@@ -31,3 +31,13 @@ export function isAIConfigured(): boolean {
   const { apiKey, baseUrl } = useConfigStore.getState().getActiveAIConfig();
   return !!(apiKey && baseUrl);
 }
+
+/** Check whether the current user has Pro or Admin role (required for AI features). 
+ *  When pro_gate_enabled is false (self-hosted default), all users have access. */
+export function hasAIAccess(): boolean {
+  const profile = useConfigStore.getState().userProfile;
+  // If server doesn't enforce Pro gating, everyone has access
+  if (!profile?.pro_gate_enabled) return true;
+  const role = profile?.role;
+  return role === 'pro' || role === 'admin';
+}

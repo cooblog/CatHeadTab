@@ -134,8 +134,27 @@ func (h *TrendingHandler) GithubTrending(c *gin.Context) {
 var numberRe = regexp.MustCompile(`[\d,]+`)
 
 func fetchGithubTrending() ([]GithubTrendingRepo, error) {
+	// Try daily first; if too few results, fall back to weekly
+	repos, err := fetchGithubTrendingByPeriod("daily")
+	if err == nil && len(repos) >= 15 {
+		return repos, nil
+	}
+	log.Printf("[trending] github daily returned only %d repos, trying weekly", len(repos))
+
+	weeklyRepos, weeklyErr := fetchGithubTrendingByPeriod("weekly")
+	if weeklyErr != nil {
+		// If weekly also fails, return whatever daily gave us (or its error)
+		if err != nil {
+			return nil, err
+		}
+		return repos, nil
+	}
+	return weeklyRepos, nil
+}
+
+func fetchGithubTrendingByPeriod(period string) ([]GithubTrendingRepo, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", "https://github.com/trending?since=daily", nil)
+	req, err := http.NewRequest("GET", "https://github.com/trending?since="+period, nil)
 	if err != nil {
 		return nil, fmt.Errorf("github trending request failed: %w", err)
 	}
@@ -212,8 +231,8 @@ func parseGithubTrendingHTML(resp *http.Response) ([]GithubTrendingRepo, error) 
 		return nil, fmt.Errorf("no trending repos found in HTML")
 	}
 
-	if len(repos) > 25 {
-		repos = repos[:25]
+	if len(repos) > 30 {
+		repos = repos[:30]
 	}
 
 	return repos, nil

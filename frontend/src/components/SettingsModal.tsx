@@ -41,8 +41,35 @@ const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
 /** AI Assistant configuration section — independent tab. */
 const AISettingsSection: React.FC = () => {
-  const { aiActiveProvider, aiProviderConfigs, setAIProvider, updateAIProviderConfig } = useConfigStore();
+  const { aiActiveProvider, aiProviderConfigs, setAIProvider, updateAIProviderConfig, userProfile } = useConfigStore();
   const { t } = useTranslation();
+  const isZh = useConfigStore(s => s.language) === 'zh';
+  const proGateEnabled = userProfile?.pro_gate_enabled ?? false;
+  const isProOrAdmin = userProfile?.role === 'pro' || userProfile?.role === 'admin';
+
+  if (proGateEnabled && !isProOrAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-12 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #ec4899 100%)', opacity: 0.6 }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-[15px] font-semibold text-white/70">{isZh ? 'Pro 专属功能' : 'Pro Feature'}</p>
+          <p className="text-[13px] text-white/35 leading-relaxed max-w-xs">
+            {isZh
+              ? 'AI 助手是 Pro 会员专属功能。升级为 Pro 会员后，即可配置 API Key 并使用智能桌面管家。'
+              : 'AI Agent is a Pro-exclusive feature. Upgrade to Pro to configure API keys and unlock the smart desktop assistant.'}
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-purple-400 text-[12px] bg-purple-400/10 px-3 py-1.5 rounded-full border border-purple-400/20">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Pro
+        </span>
+      </div>
+    );
+  }
 
   // Presets: each provider has a key, display name, default URL and model
   const presets = [

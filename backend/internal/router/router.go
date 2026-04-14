@@ -25,9 +25,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Health check (no auth required)
 	r.GET("/api/v1/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"status":  "ok",
-			"service": "CatHeadTab API",
-			"version": "1.0.0",
+			"status":           "ok",
+			"service":          "CatHeadTab API",
+			"version":          "1.0.0",
+			"pro_gate_enabled": cfg.ProGateEnabled,
 		})
 	})
 
@@ -95,7 +96,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	authHandler := handler.NewAuthHandler(userRepo, verifyRepo, oauthRepo, emailService, cfg)
 	bookmarkHandler := handler.NewBookmarkHandler(repository.NewBookmarkRepository())
 	layoutHandler := handler.NewLayoutHandler(layoutRepo)
-	userHandler := handler.NewUserHandler(userRepo)
+	userHandler := handler.NewUserHandler(userRepo, cfg)
 	bgHandler := handler.NewBackgroundHandler(bgRepo)
 	presetHandler := handler.NewPresetHandler(presetRepo)
 	faviconHandler := handler.NewFaviconHandler(presetRepo)

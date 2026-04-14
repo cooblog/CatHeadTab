@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/CatHeadTab/backend/internal/config"
 	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,11 +20,12 @@ const (
 // UserHandler handles user preference operations.
 type UserHandler struct {
 	userRepo repository.UserRepository
+	cfg      *config.Config
 }
 
 // NewUserHandler creates a new UserHandler.
-func NewUserHandler(repo repository.UserRepository) *UserHandler {
-	return &UserHandler{userRepo: repo}
+func NewUserHandler(repo repository.UserRepository, cfg *config.Config) *UserHandler {
+	return &UserHandler{userRepo: repo, cfg: cfg}
 }
 
 // GetPreferences returns the user's preferences.
@@ -76,13 +78,14 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user_id":        user.ID,
-		"email":          user.Email,
-		"username":       user.Username,
-		"email_verified": user.EmailVerified,
-		"avatar_url":     user.AvatarURL,
-		"has_password":   user.PasswordHash != "",
-		"role":           user.Role,
+		"user_id":          user.ID,
+		"email":            user.Email,
+		"username":         user.Username,
+		"email_verified":   user.EmailVerified,
+		"avatar_url":       user.AvatarURL,
+		"has_password":     user.PasswordHash != "",
+		"role":             user.Role,
+		"pro_gate_enabled": h.cfg.ProGateEnabled,
 	})
 }
 

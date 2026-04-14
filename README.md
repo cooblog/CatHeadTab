@@ -298,3 +298,9 @@ curl http://localhost:8080/api/v1/auth/oauth-config
 
 ---
 *基于白皮书规范打造的数字中枢新标签页。*
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+
+You are free to use, modify, and self-host this software. If you modify the source code and provide it as a network service, you must make the modified source code available to users of that service under the same license.
