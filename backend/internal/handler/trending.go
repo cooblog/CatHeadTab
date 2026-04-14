@@ -35,6 +35,7 @@ type BilibiliHotVideo struct {
 	View     int64  `json:"view"`
 	Danmaku  int64  `json:"danmaku"`
 	Duration int    `json:"duration"`
+	Cover    string `json:"cover"`
 	URL      string `json:"url"`
 }
 
@@ -258,6 +259,7 @@ func fetchBilibiliHot() ([]BilibiliHotVideo, error) {
 			List []struct {
 				Title    string `json:"title"`
 				Bvid     string `json:"bvid"`
+				Pic      string `json:"pic"`
 				Duration int    `json:"duration"`
 				Owner    struct {
 					Name string `json:"name"`
@@ -287,6 +289,7 @@ func fetchBilibiliHot() ([]BilibiliHotVideo, error) {
 			View:     item.Stat.View,
 			Danmaku:  item.Stat.Danmaku,
 			Duration: item.Duration,
+			Cover:    item.Pic,
 			URL:      "https://www.bilibili.com/video/" + item.Bvid,
 		})
 	}

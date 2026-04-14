@@ -14,6 +14,7 @@ interface HotVideo {
   view: number;
   danmaku: number;
   duration: number;
+  cover: string;
   url: string;
 }
 
@@ -99,9 +100,21 @@ export const BilibiliHotWidget: React.FC<BilibiliHotWidgetProps> = ({ size: _siz
             target="_blank"
             rel="noreferrer"
             onClick={e => e.stopPropagation()}
-            className="block px-2.5 py-1.5 rounded-lg transition-colors hover:bg-white/[0.06] cursor-pointer"
+            className="flex items-start gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors hover:bg-white/[0.06] cursor-pointer"
           >
-            <div>
+            {/* 封面图 */}
+            {video.cover && (
+              <div className="shrink-0 w-[72px] h-[45px] rounded-md overflow-hidden bg-white/5 mt-0.5">
+                <img
+                  src={video.cover.replace('http://', 'https://')}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
               <p className="text-[12px] font-medium text-white/80 hover:text-[#00A1D6] transition-colors line-clamp-2 leading-tight">{video.title}</p>
               <div className="flex items-center gap-2.5 mt-1">
                 <span className="text-[10px] text-white/30 truncate">{video.owner}</span>

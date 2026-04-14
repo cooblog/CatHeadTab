@@ -20,6 +20,7 @@ interface HotVideo {
   view: number;
   danmaku: number;
   duration: number;
+  cover: string;
   url: string;
 }
 
@@ -202,6 +203,18 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, onClose }) =
               className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-colors group cursor-pointer"
             >
               <span className={`shrink-0 w-5 text-[11px] text-right mt-0.5 font-mono ${i < 3 ? 'font-bold' : 'text-white/25'}`} style={i < 3 ? { color: accentColor } : {}}>{i + 1}</span>
+              {/* 封面图 */}
+              {video.cover && (
+                <div className="shrink-0 w-[96px] h-[60px] rounded-lg overflow-hidden bg-white/5 mt-0.5">
+                  <img
+                    src={video.cover.replace('http://', 'https://')}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-white/85 group-hover:text-[#00A1D6] transition-colors line-clamp-2 leading-snug">{video.title}</p>
                 <div className="flex items-center gap-2.5 mt-1">
