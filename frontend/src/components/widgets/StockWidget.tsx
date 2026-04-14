@@ -691,9 +691,14 @@ export const StockWidget: React.FC<StockWidgetProps> = ({ size, config, itemId }
     try {
       const data = await fetchStockQuotes(watchlist, language);
       setQuotes(data);
-      writeStockCache(cacheKey, data);
+      // 只缓存至少有一条有效数据的结果，避免缓存全部失败数据
+      const hasValid = data.some(d => !d.error && d.price > 0);
+      if (hasValid) {
+        writeStockCache(cacheKey, data);
+      }
       setError(null);
-    } catch {
+    } catch (err) {
+      console.error('[StockWidget] fetchData error:', err);
       if (quotes.length === 0) setError(isZh ? '无法获取行情数据' : 'Unable to fetch stock data');
     } finally {
       setLoading(false);
@@ -1325,8 +1330,8 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
                   <div className="rounded-xl bg-black/20 border border-white/[0.06] p-3">
                     <p className="text-[11px] text-white/40 leading-relaxed">
                       {isZh
-                        ? '💡 支持股票和指数。美股如 AAPL、指数 ^GSPC，港股如 0700.HK、指数 ^HSI，A股沪市 600519.SS、深市 000001.SZ。预设列表找不到的可直接输入代码添加'
-                        : '💡 Supports stocks & indices. US: AAPL, ^GSPC; HK: 0700.HK, ^HSI; CN: 600519.SS, 000001.SZ. Type any symbol to add custom entries'
+                        ? '💡 支持股票和指数。美股如 AAPL、指数 ^GSPC，港股如 0700.HK、指数 ^HSI，A股沪市 600519.SS、深市 000001.SZ。预设列表找不到的可直接输入代码添加。数据来源：新浪财经（中文）/ Yahoo Finance（英文），每 5 分钟刷新。'
+                        : '💡 Supports stocks & indices. US: AAPL, ^GSPC; HK: 0700.HK, ^HSI; CN: 600519.SS, 000001.SZ. Type any symbol to add custom entries. Data from Sina Finance (Chinese) / Yahoo Finance (English), refreshed every 5 min.'
                       }
                     </p>
                   </div>

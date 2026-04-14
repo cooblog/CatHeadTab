@@ -95,6 +95,11 @@ export const BBCNewsWidget: React.FC<BBCNewsWidgetProps> = ({ size: _size }) => 
           </a>
         ))}
       </div>
+
+      {/* Data source */}
+      <div className="shrink-0 px-3 pb-1.5">
+        <span className="text-[9px] text-white/20">{isZh ? '数据来源：BBC News RSS' : 'Data: BBC News RSS'}</span>
+      </div>
     </div>
   );
 };

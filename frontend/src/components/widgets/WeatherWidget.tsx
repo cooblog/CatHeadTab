@@ -259,7 +259,10 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
 
         setWeather(weatherData);
         setError(null);
-        writeWeatherCache(cacheKey, weatherData);
+        // 只缓存有效天气数据（温度非零或有天气描述）
+        if (weatherData.temp !== undefined && weatherData.description) {
+          writeWeatherCache(cacheKey, weatherData);
+        }
       } catch (err) {
         if (cancelled) return;
         console.error('Weather fetch error:', err);
@@ -387,6 +390,11 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
           <span className="text-[9px] text-white/30 uppercase tracking-wider">{isZh ? '温差' : 'Range'}</span>
           <span className="text-sm text-white/80 font-light">{weather.low}~{weather.high}°</span>
         </div>
+      </div>
+
+      {/* Data source */}
+      <div className="shrink-0 px-2 pb-1 pt-0.5">
+        <span className="text-[9px] text-white/20">{isZh ? '数据来源：Open-Meteo（开放气象）' : 'Data: Open-Meteo'}</span>
       </div>
     </div>
   );

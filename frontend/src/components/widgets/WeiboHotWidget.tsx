@@ -127,6 +127,11 @@ export const WeiboHotWidget: React.FC<WeiboHotWidgetProps> = ({ size: _size }) =
           </a>
         ))}
       </div>
+
+      {/* Data source */}
+      <div className="shrink-0 px-2 pb-1.5">
+        <span className="text-[9px] text-white/20">{isZh ? '数据来源：微博热搜榜' : 'Data: Weibo Hot Search'}</span>
+      </div>
     </div>
   );
 };

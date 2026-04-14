@@ -96,6 +96,11 @@ export const XiaohongshuHotWidget: React.FC<XiaohongshuHotWidgetProps> = ({ size
           </a>
         ))}
       </div>
+
+      {/* Data source */}
+      <div className="shrink-0 px-2 pb-1.5">
+        <span className="text-[9px] text-white/20">{isZh ? '数据来源：小红书热搜榜' : 'Data: Xiaohongshu Hot Search'}</span>
+      </div>
     </div>
   );
 };

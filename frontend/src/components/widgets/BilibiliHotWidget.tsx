@@ -128,6 +128,11 @@ export const BilibiliHotWidget: React.FC<BilibiliHotWidgetProps> = ({ size: _siz
           </a>
         ))}
       </div>
+
+      {/* Data source */}
+      <div className="shrink-0 px-3 pb-1.5">
+        <span className="text-[9px] text-white/20">{isZh ? '数据来源：哔哩哔哩热门' : 'Data: Bilibili Popular'}</span>
+      </div>
     </div>
   );
 };
