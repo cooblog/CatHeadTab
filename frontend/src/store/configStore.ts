@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import builtinBgWebp from '../assets/bg.webp'
 
 /**
  * ENV_API_URL is the backend API base URL injected at build time via the
@@ -108,7 +109,7 @@ export const useConfigStore = create<ConfigState>()(
       serverUrl: '',
       jwtToken: null,
       language: 'zh',
-      backgroundImage: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop',
+      backgroundImage: builtinBgWebp,
       userProfile: null,
       isLocked: false,
       lockIdleTimeout: 0,

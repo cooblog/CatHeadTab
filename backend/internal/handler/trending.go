@@ -471,6 +471,10 @@ func fetchXiaohongshuHotFallback() ([]XiaohongshuHotItem, error) {
 		items = items[:30]
 	}
 
+	if len(items) == 0 {
+		return nil, fmt.Errorf("no xiaohongshu hot items found in webpage")
+	}
+
 	return items, nil
 }
 
@@ -552,6 +556,10 @@ func fetchWeiboHot() ([]WeiboHotItem, error) {
 		if len(items) >= 50 {
 			break
 		}
+	}
+
+	if len(items) == 0 {
+		return nil, fmt.Errorf("no weibo hot items found")
 	}
 
 	return items, nil
@@ -1612,6 +1620,10 @@ func fetchBilibiliHot() ([]BilibiliHotVideo, error) {
 			Cover:    item.Pic,
 			URL:      "https://www.bilibili.com/video/" + item.Bvid,
 		})
+	}
+
+	if len(videos) == 0 {
+		return nil, fmt.Errorf("no bilibili hot videos found")
 	}
 
 	return videos, nil

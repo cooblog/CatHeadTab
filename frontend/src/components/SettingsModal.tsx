@@ -1442,9 +1442,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                           <div className="flex flex-wrap gap-3">
                             {[
                               { url: builtinBgWebp, title: 'CatHeadTab Default' },
-                              { url: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop', title: 'Green Grass Dew' },
-                              { url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2073&auto=format&fit=crop', title: 'Beach Sunset' },
-                              { url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?q=80&w=2070&auto=format&fit=crop', title: 'Dark Starry Sky' },
                             ].map(item => (
                               <button
                                 key={item.url}
