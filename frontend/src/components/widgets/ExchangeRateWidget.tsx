@@ -208,7 +208,7 @@ async function fetchExchangeRatesDirect(pairs: ExchangeRatePair[]): Promise<Rate
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         try {
           const res = await fetch(
-            `https://api.frankfurter.app/latest?from=${base}&to=${to}`,
+            `https://api.frankfurter.dev/v1/latest?from=${base}&to=${to}`,
             { signal: controller.signal },
           );
           clearTimeout(timeoutId);

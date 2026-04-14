@@ -861,7 +861,7 @@ func fetchExchangeRates(req ExchangeRateRequest) ([]ExchangeRateItem, error) {
 		wg.Add(1)
 		go func(base, to string) {
 			defer wg.Done()
-			url := fmt.Sprintf("https://api.frankfurter.app/latest?from=%s&to=%s", base, to)
+			url := fmt.Sprintf("https://api.frankfurter.dev/v1/latest?from=%s&to=%s", base, to)
 			reqHTTP, err := http.NewRequest("GET", url, nil)
 			if err != nil {
 				log.Printf("[finance] frankfurter latest request build failed: %v", err)
