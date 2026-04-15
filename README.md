@@ -7,7 +7,7 @@
 <!-- TODO: 添加截图 -->
 <!-- ![CatHeadTab 截图](docs/assets/screenshot.png) -->
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)](https://www.postgresql.org/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
 
 中文 | [English](README_EN.md)
 
@@ -35,9 +35,53 @@
 
 真正理解你桌面布局并能执行操作的智能管家 — 不只是聊天。
 
-- **20 个内置技能**：整理桌面、创建文件夹、搜索书签/历史、更换壁纸、查询热搜等
-- **8 大 LLM 提供商**：OpenAI、Anthropic、Google、DeepSeek、智谱、Kimi (月之暗面)、MiniMax、通义千问 — 统一通过 OpenAI 兼容协议接入
-- **流式输出**，支持 `<think>` 思考块解析；API Key 仅本地存储，绝不上传
+#### 20 个内置技能
+
+| 分类 | 技能 | 说明 |
+|------|------|------|
+| **桌面操作** | `listDesktopItems` | 查看桌面所有图标、文件夹、小组件 |
+| | `addDesktopItem` | 添加网站快捷方式到桌面 |
+| | `removeDesktopItem` | 删除桌面项目 |
+| | `createFolder` | 创建新文件夹 |
+| | `moveItemToFolder` | 将图标移入文件夹 |
+| | `renameItem` | 重命名桌面项目 |
+| | `organizeDesktop` | **一键整理桌面** — 自动分析图标 URL 和标题，批量创建分类文件夹并归类 |
+| **书签** | `searchBookmarks` | 搜索浏览器书签 |
+| | `listBookmarkFolders` | 列出书签文件夹结构 |
+| | `getRecentBookmarks` | 获取最近添加的书签 |
+| **历史记录** | `searchHistory` | 搜索浏览历史 |
+| | `getRecentHistory` | 获取最近访问记录 |
+| **设置** | `changeWallpaper` | 通过 URL 更换壁纸 |
+| | `changeLanguage` | 切换界面语言（中/英） |
+| | `getSystemInfo` | 获取系统配置信息 |
+| **热榜资讯** | `getGithubTrending` | GitHub 今日热门仓库 |
+| | `getBilibiliHot` | B 站热门视频 |
+| | `getWeiboHot` | 微博实时热搜 |
+| | `getXiaohongshuHot` | 小红书热搜 |
+| | `getBBCNews` | BBC 新闻头条 |
+
+#### 8 大 LLM 提供商
+
+| 提供商 | 默认模型 | Base URL |
+|--------|---------|----------|
+| OpenAI | `gpt-4o-mini` | `https://api.openai.com/v1` |
+| Anthropic | `claude-sonnet-4-20250514` | `https://api.anthropic.com/v1` |
+| Google | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| DeepSeek | `deepseek-chat` | `https://api.deepseek.com/v1` |
+| 智谱 GLM | `glm-4-flash` | `https://open.bigmodel.cn/api/paas/v4` |
+| Kimi (月之暗面) | `moonshot-v1-8k` | `https://api.moonshot.cn/v1` |
+| MiniMax | `MiniMax-Text-01` | `https://api.minimax.chat/v1` |
+| 通义千问 | `qwen-turbo` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+
+所有提供商统一通过 **OpenAI 兼容协议**接入，支持自动拉取 `/models` 列表选择模型。Base URL 和模型均可自定义，兼容任何 OpenAI 兼容 API（如 Ollama、vLLM、LiteLLM 等）。
+
+#### 技术特性
+
+- **流式输出** — 基于 Vercel AI SDK `streamText`，逐字渲染，支持 `<think>` 思考块的折叠展示
+- **工具调用链** — 最多 10 步连续工具调用，AI 可以先查看桌面再整理
+- **CORS 绕过** — 通过 Chrome 扩展 Service Worker 代理请求，无需后端中转
+- **API Key 安全** — 每个提供商的 Key 独立存储在本地，**绝不上传到云端**
+- **上下文管理** — 聊天记录本地持久化（最近 50 条），上下文窗口 20 条消息
 
 ### 16 种桌面小组件
 
@@ -48,7 +92,7 @@
 | **生产力** | 系统监控（CPU/内存）、科学计算器（math.js）、便签（6 种颜色）、IT 工具箱（JSON/Base64/UUID/Hash...）、AI 助手 |
 | **资讯热榜** | GitHub Trending、B站热门、微博热搜、小红书热搜、BBC 新闻 |
 
-所有小组件支持 5 种网格尺寸（小/中/大/高/超大）和透明度调节。
+所有小组件支持 5 种网格尺寸（小/中/大/高/超大）。
 
 ### 壁纸系统
 
@@ -88,8 +132,8 @@
 | 层级 | 技术 |
 |------|------|
 | **前端** | React 18, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Zustand, Vercel AI SDK, @dnd-kit |
-| **后端** | Go 1.22+, Gin, jwt-go, zap + lumberjack（结构化日志 + 文件轮转） |
-| **数据库** | PostgreSQL 14+（ltree 树形结构, JSONB, GIN 全文搜索） |
+| **后端** | Go 1.25+, Gin, jwt-go, zap + lumberjack（结构化日志 + 文件轮转） |
+| **数据库** | PostgreSQL 17+（ltree 树形结构, JSONB, GIN 全文搜索） |
 | **缓存** | Ristretto（L1 内存 LRU）+ PostgreSQL JSONB（L2 持久化）+ singleflight 防雷群 |
 | **部署** | Docker（多阶段构建）, docker-compose |
 | **扩展** | Chrome Manifest V3, Service Worker |
@@ -101,8 +145,8 @@
 ### 环境要求
 
 - Node.js v18+
-- Go v1.22+
-- PostgreSQL v14+（或使用 Docker）
+- Go v1.25+
+- PostgreSQL v17+（或使用 Docker）
 
 ### 开发启动
 
@@ -165,6 +209,19 @@ docker compose up -d
 # 修改用户角色（可选角色：user / pro / admin）
 # user = 普通用户，pro = 高级会员（可用 AI 等付费功能），admin = 管理员
 ./server user set-role
+```
+
+**Docker 环境下**，通过 `docker exec` 在运行中的容器内执行 CLI 命令：
+
+```bash
+# 创建用户
+docker exec -it catheadtab-backend ./server user create
+
+# 重置密码
+docker exec -it catheadtab-backend ./server user reset-password
+
+# 修改角色
+docker exec -it catheadtab-backend ./server user set-role
 ```
 
 ### 配置要点

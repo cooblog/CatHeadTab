@@ -1,6 +1,6 @@
 services:
   catheadtab-db:
-    image: postgres:14-alpine
+    image: postgres:17-alpine
     container_name: catheadtab-db
     restart: unless-stopped
     environment:
@@ -54,6 +54,8 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-noreply@catheadtab.com}
+      # 使用隐式 SSL 连接（端口 465/994）设为 true，STARTTLS（端口 587）设为 false 或留空
+      - SMTP_SSL=${SMTP_SSL:-false}
 
       # ---- GitHub OAuth (可选，用于 SSO 登录) ----
       # 在此创建: https://github.com/settings/developers
@@ -86,8 +88,8 @@ services:
       # ---- Logging (可选) ----
       # 日志级别: debug / info / warn / error，默认: info
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      # 日志文件路径（容器内路径），留空则仅输出到控制台
-      - LOG_FILE=${LOG_FILE:-}
+      # 日志文件路径（容器内路径，映射到宿主机 ./data/logs/），留空则仅输出到控制台
+      - LOG_FILE=${LOG_FILE:-/app/logs/app.log}
       # 单个日志文件最大体积（MB），默认: 100
       - LOG_MAX_SIZE_MB=${LOG_MAX_SIZE_MB:-100}
       # 旧日志文件保留天数，默认: 30

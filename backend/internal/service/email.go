@@ -2,7 +2,9 @@
 package service
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
 	"net/smtp"
 
 	"github.com/CatHeadTab/backend/internal/config"
@@ -99,10 +101,65 @@ func (s *EmailService) sendMail(to, subject, body, contentType string) error {
 
 	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPassword, s.cfg.SMTPHost)
 
-	if err := smtp.SendMail(addr, auth, from, []string{to}, []byte(msg)); err != nil {
-		return fmt.Errorf("failed to send email to %s: %w", to, err)
+	if s.cfg.SMTPSSL {
+		// 隐式 SSL（端口 465）：直接建立 TLS 连接
+		if err := s.sendMailSSL(addr, auth, from, to, []byte(msg)); err != nil {
+			return fmt.Errorf("failed to send email to %s via SSL: %w", to, err)
+		}
+	} else {
+		// STARTTLS（端口 587）：明文连接后升级为 TLS
+		if err := smtp.SendMail(addr, auth, from, []string{to}, []byte(msg)); err != nil {
+			return fmt.Errorf("failed to send email to %s: %w", to, err)
+		}
 	}
 
-	logger.Info("Email sent", "to", to, "subject", subject)
+	logger.Info("Email sent", "to", to, "subject", subject, "ssl", s.cfg.SMTPSSL)
 	return nil
+}
+
+// sendMailSSL 通过隐式 TLS 连接发送邮件（用于端口 465）
+func (s *EmailService) sendMailSSL(addr string, auth smtp.Auth, from, to string, msg []byte) error {
+	tlsConfig := &tls.Config{
+		ServerName: s.cfg.SMTPHost,
+	}
+
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("TLS dial failed: %w", err)
+	}
+	defer conn.Close()
+
+	host, _, _ := net.SplitHostPort(addr)
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("SMTP client creation failed: %w", err)
+	}
+	defer client.Close()
+
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP auth failed: %w", err)
+	}
+
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("SMTP MAIL FROM failed: %w", err)
+	}
+
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("SMTP RCPT TO failed: %w", err)
+	}
+
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("SMTP DATA failed: %w", err)
+	}
+
+	if _, err := w.Write(msg); err != nil {
+		return fmt.Errorf("SMTP write failed: %w", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("SMTP data close failed: %w", err)
+	}
+
+	return client.Quit()
 }

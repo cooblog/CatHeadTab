@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CatHeadTab/backend/internal/config"
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/middleware"
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/repository"
@@ -85,7 +86,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.userRepo.Create(newUser); err != nil {
-		fmt.Println("DB Create Error:", err)
+		logger.Error("failed to create user", "email", input.Email, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
@@ -96,6 +97,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		_ = h.emailService.SendVerificationEmail(newUser.Email, verification.Token)
 	}
 
+	logger.Info("user registered", "user_id", newUser.ID, "email", input.Email)
 	c.JSON(http.StatusCreated, gin.H{
 		"pending_verification": true,
 		"message":              "Registration successful. Please check your email to verify your account before logging in.",
@@ -160,23 +162,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if user == nil || err != nil {
 		recordFailure()
+		logger.Warn("login failed: user not found", "identifier", input.Identifier)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email/username or password"})
 		return
 	}
 
 	if user.PasswordHash == "" {
+		logger.Warn("login failed: SSO-only account", "user_id", user.ID, "identifier", input.Identifier)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "This account uses SSO login. Please sign in with GitHub or Google"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
 		recordFailure()
+		logger.Warn("login failed: wrong password", "user_id", user.ID, "identifier", input.Identifier)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email/username or password"})
 		return
 	}
 
 	// Block login for unverified email addresses
 	if !user.EmailVerified {
+		logger.Warn("login failed: email not verified", "user_id", user.ID, "email", user.Email)
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":                "Email not verified. Please check your inbox and verify your email before logging in.",
 			"email_not_verified":   true,
@@ -187,12 +193,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	token, err := h.generateToken(user.ID.String())
 	if err != nil {
+		logger.Error("failed to generate token", "user_id", user.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
 	// 登录成功，清除失败记录
 	recordSuccess()
+	logger.Info("user logged in", "user_id", user.ID, "identifier", input.Identifier)
 
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,
@@ -217,28 +225,26 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("[VerifyEmail] Received token (len=%d): %q\n", len(input.Token), input.Token)
+	logger.Debug("verify email request", "token_length", len(input.Token))
 	verification, err := h.verifyRepo.GetEmailVerification(input.Token)
 	if err != nil {
-		fmt.Printf("[VerifyEmail] DB error: %v\n", err)
-	}
-	if verification == nil {
-		fmt.Printf("[VerifyEmail] No matching token found in DB (may be expired or not exist)\n")
-	} else {
-		fmt.Printf("[VerifyEmail] Found verification for user_id=%s, expires_at=%v\n", verification.UserID, verification.ExpiresAt)
+		logger.Error("verify email DB error", "error", err)
 	}
 	if err != nil || verification == nil {
+		logger.Warn("verify email failed: invalid or expired token")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired verification token"})
 		return
 	}
 
 	if err := h.userRepo.SetEmailVerified(verification.UserID, true); err != nil {
+		logger.Error("failed to set email verified", "user_id", verification.UserID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify email"})
 		return
 	}
 
 	_ = h.verifyRepo.DeleteEmailVerifications(verification.UserID)
 
+	logger.Info("email verified", "user_id", verification.UserID)
 	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
 }
 
@@ -261,15 +267,18 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 
 	verification, err := h.verifyRepo.CreateEmailVerification(user.ID, h.cfg.EmailVerifyTokenTTL)
 	if err != nil {
+		logger.Error("failed to create verification token", "user_id", user.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create verification token"})
 		return
 	}
 
 	if err := h.emailService.SendVerificationEmail(user.Email, verification.Token); err != nil {
+		logger.Error("failed to send verification email", "user_id", user.ID, "email", user.Email, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send verification email"})
 		return
 	}
 
+	logger.Info("verification email resent", "user_id", user.ID, "email", user.Email)
 	c.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
 }
 
@@ -300,12 +309,14 @@ func (h *AuthHandler) ResendVerificationPublic(c *gin.Context) {
 
 	verification, err := h.verifyRepo.CreateEmailVerification(user.ID, h.cfg.EmailVerifyTokenTTL)
 	if err != nil {
+		logger.Error("failed to create verification token (public)", "user_id", user.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create verification token"})
 		return
 	}
 
 	_ = h.emailService.SendVerificationEmail(user.Email, verification.Token)
 
+	logger.Info("verification email resent (public)", "email", input.Email)
 	c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a verification link has been sent"})
 }
 
@@ -326,18 +337,21 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	// Always return success to prevent email enumeration
 	user, _ := h.userRepo.GetByEmail(input.Email)
 	if user == nil {
+		logger.Debug("forgot password: email not found", "email", input.Email)
 		c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a reset link has been sent"})
 		return
 	}
 
 	reset, err := h.verifyRepo.CreatePasswordReset(user.ID, h.cfg.PasswordResetTokenTTL)
 	if err != nil {
+		logger.Error("failed to create password reset token", "user_id", user.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reset token"})
 		return
 	}
 
 	_ = h.emailService.SendPasswordResetEmail(user.Email, reset.Token)
 
+	logger.Info("password reset email sent", "user_id", user.ID, "email", user.Email)
 	c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a reset link has been sent"})
 }
 
@@ -358,23 +372,27 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	reset, err := h.verifyRepo.GetPasswordReset(input.Token)
 	if err != nil || reset == nil {
+		logger.Warn("reset password failed: invalid or expired token")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired reset token"})
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
+		logger.Error("failed to hash password", "user_id", reset.UserID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
 
 	if err := h.userRepo.UpdatePassword(reset.UserID, string(hashedPassword)); err != nil {
+		logger.Error("failed to update password", "user_id", reset.UserID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
 		return
 	}
 
 	_ = h.verifyRepo.MarkPasswordResetUsed(input.Token)
 
+	logger.Info("password reset successfully", "user_id", reset.UserID)
 	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
 }
 
@@ -419,10 +437,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := h.userRepo.UpdatePassword(userID, string(hashedPassword)); err != nil {
+		logger.Error("failed to update password", "user_id", userID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
 		return
 	}
 
+	logger.Info("password changed", "user_id", userID)
 	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
 }
 
@@ -440,6 +460,7 @@ func (h *AuthHandler) GitHubLogin(c *gin.Context) {
 	}
 
 	if h.cfg.GitHubClientID == "" || h.cfg.GitHubClientSecret == "" {
+		logger.Warn("GitHub OAuth not configured")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "GitHub OAuth not configured"})
 		return
 	}
@@ -447,6 +468,7 @@ func (h *AuthHandler) GitHubLogin(c *gin.Context) {
 	// Exchange code for access token
 	accessToken, err := h.exchangeGitHubCode(input.Code)
 	if err != nil {
+		logger.Error("GitHub code exchange failed", "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to authenticate with GitHub"})
 		return
 	}
@@ -454,6 +476,7 @@ func (h *AuthHandler) GitHubLogin(c *gin.Context) {
 	// Get GitHub user info
 	ghUser, err := h.getGitHubUser(accessToken)
 	if err != nil {
+		logger.Error("failed to get GitHub user info", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get GitHub user info"})
 		return
 	}
@@ -504,18 +527,21 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 	}
 
 	if h.cfg.GoogleClientID == "" || h.cfg.GoogleClientSecret == "" {
+		logger.Warn("Google OAuth not configured")
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Google OAuth not configured"})
 		return
 	}
 
 	accessToken, err := h.exchangeGoogleCode(input.Code)
 	if err != nil {
+		logger.Error("Google code exchange failed", "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to authenticate with Google"})
 		return
 	}
 
 	gUser, err := h.getGoogleUser(accessToken)
 	if err != nil {
+		logger.Error("failed to get Google user info", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get Google user info"})
 		return
 	}
@@ -670,15 +696,19 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 
 		user, _ := h.userRepo.GetByID(existing.UserID)
 		if user == nil {
+			logger.Error("OAuth linked user not found", "provider", provider, "provider_user_id", providerUserID)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Linked user not found"})
 			return
 		}
 
 		token, err := h.generateToken(user.ID.String())
 		if err != nil {
+			logger.Error("failed to generate token for OAuth user", "user_id", user.ID, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 			return
 		}
+
+		logger.Info("OAuth login", "provider", provider, "user_id", user.ID, "email", user.Email)
 
 		c.JSON(http.StatusOK, gin.H{
 			"token": token,
@@ -715,9 +745,11 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 			Role:          model.UserRole(h.cfg.DefaultRoleForNewUser()),
 		}
 		if err := h.userRepo.Create(user); err != nil {
+			logger.Error("failed to create OAuth user", "provider", provider, "email", email, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
+		logger.Info("OAuth new user created", "provider", provider, "user_id", user.ID, "email", email)
 	}
 
 	// Link OAuth account
@@ -732,6 +764,7 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 		RefreshToken:     refreshToken,
 	}
 	if err := h.oauthRepo.Create(oauthAccount); err != nil {
+		logger.Error("failed to link OAuth account", "provider", provider, "user_id", user.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to link OAuth account"})
 		return
 	}

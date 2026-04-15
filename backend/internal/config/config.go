@@ -27,6 +27,8 @@ type Config struct {
 	SMTPUser     string
 	SMTPPassword string
 	SMTPFrom     string
+	// SMTPSSL enables implicit TLS (port 465). When false, uses STARTTLS (port 587).
+	SMTPSSL bool
 
 	// GitHub OAuth
 	GitHubClientID     string
@@ -107,6 +109,7 @@ func Load() *Config {
 		SMTPUser:     getEnv("SMTP_USER", ""),
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", "noreply@catheadtab.com"),
+		SMTPSSL:      getEnv("SMTP_SSL", "") == "true",
 
 		GitHubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),

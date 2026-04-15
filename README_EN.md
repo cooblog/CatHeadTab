@@ -7,7 +7,7 @@
 <!-- TODO: Add screenshot -->
 <!-- ![CatHeadTab Screenshot](docs/assets/screenshot.png) -->
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)](https://www.postgresql.org/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
 
 [**中文**](README.md) | English
 
@@ -35,9 +35,53 @@
 
 An intelligent assistant that truly understands your desktop and can take actions — not just chat.
 
-- **20 built-in skills**: organize desktop, create folders, search bookmarks/history, change wallpaper, fetch trending news, and more
-- **8 LLM providers**: OpenAI, Anthropic, Google, DeepSeek, GLM, Kimi, MiniMax, Qwen — all via OpenAI-compatible API
-- **Streaming output** with `<think>` block parsing; API keys stored locally, never uploaded
+#### 20 Built-in Skills
+
+| Category | Skill | Description |
+|----------|-------|-------------|
+| **Desktop** | `listDesktopItems` | View all icons, folders, and widgets on the desktop |
+| | `addDesktopItem` | Add a website shortcut to the desktop |
+| | `removeDesktopItem` | Remove a desktop item |
+| | `createFolder` | Create a new folder |
+| | `moveItemToFolder` | Move an icon into a folder |
+| | `renameItem` | Rename a desktop item |
+| | `organizeDesktop` | **Auto-organize desktop** — analyzes icon URLs and titles, batch-creates categorized folders |
+| **Bookmarks** | `searchBookmarks` | Search browser bookmarks |
+| | `listBookmarkFolders` | List bookmark folder structure |
+| | `getRecentBookmarks` | Get recently added bookmarks |
+| **History** | `searchHistory` | Search browsing history |
+| | `getRecentHistory` | Get recent visits |
+| **Settings** | `changeWallpaper` | Change wallpaper by URL |
+| | `changeLanguage` | Switch UI language (zh/en) |
+| | `getSystemInfo` | Get system configuration info |
+| **Trending** | `getGithubTrending` | GitHub trending repositories today |
+| | `getBilibiliHot` | Bilibili popular videos |
+| | `getWeiboHot` | Weibo real-time hot search |
+| | `getXiaohongshuHot` | Xiaohongshu (RED) hot topics |
+| | `getBBCNews` | BBC News headlines |
+
+#### 8 LLM Providers
+
+| Provider | Default Model | Base URL |
+|----------|--------------|----------|
+| OpenAI | `gpt-4o-mini` | `https://api.openai.com/v1` |
+| Anthropic | `claude-sonnet-4-20250514` | `https://api.anthropic.com/v1` |
+| Google | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| DeepSeek | `deepseek-chat` | `https://api.deepseek.com/v1` |
+| GLM (Zhipu) | `glm-4-flash` | `https://open.bigmodel.cn/api/paas/v4` |
+| Kimi (Moonshot) | `moonshot-v1-8k` | `https://api.moonshot.cn/v1` |
+| MiniMax | `MiniMax-Text-01` | `https://api.minimax.chat/v1` |
+| Qwen (Tongyi) | `qwen-turbo` | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+
+All providers connect via the **OpenAI-compatible API** protocol with auto-fetching of `/models` list. Base URL and model are fully customizable, compatible with any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.).
+
+#### Technical Highlights
+
+- **Streaming output** — Powered by Vercel AI SDK `streamText`, renders token-by-token with collapsible `<think>` block display
+- **Tool call chaining** — Up to 10 consecutive tool calls; AI can inspect the desktop before organizing it
+- **CORS bypass** — Requests proxied through Chrome extension Service Worker, no backend relay needed
+- **API key security** — Each provider's key stored independently on-device, **never uploaded to the cloud**
+- **Context management** — Chat history persisted locally (last 50 messages), 20-message context window
 
 ### 16 Desktop Widgets
 
@@ -48,7 +92,7 @@ An intelligent assistant that truly understands your desktop and can take action
 | **Productivity** | System Monitor (CPU/RAM), Calculator (math.js), Sticky Notes (6 colors), IT Tools (JSON/Base64/UUID/Hash...), AI Agent |
 | **Trending** | GitHub Trending, Bilibili Hot, Weibo Hot Search, Xiaohongshu Hot, BBC News |
 
-All widgets support 5 grid sizes (small/medium/large/tall/xlarge) and adjustable opacity.
+All widgets support 5 grid sizes (small/medium/large/tall/xlarge).
 
 ### Wallpaper System
 
@@ -88,8 +132,8 @@ All widgets support 5 grid sizes (small/medium/large/tall/xlarge) and adjustable
 | Layer | Technologies |
 |-------|-------------|
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS v4, Framer Motion, Zustand, Vercel AI SDK, @dnd-kit |
-| **Backend** | Go 1.22+, Gin, jwt-go, zap + lumberjack (structured logging with rotation) |
-| **Database** | PostgreSQL 14+ (ltree, JSONB, GIN full-text search) |
+| **Backend** | Go 1.25+, Gin, jwt-go, zap + lumberjack (structured logging with rotation) |
+| **Database** | PostgreSQL 17+ (ltree, JSONB, GIN full-text search) |
 | **Caching** | Ristretto (L1 in-memory LRU) + PostgreSQL JSONB (L2 persistent) + singleflight |
 | **Deployment** | Docker (multi-stage build), docker-compose |
 | **Extension** | Chrome Manifest V3, Service Worker |
@@ -101,8 +145,8 @@ All widgets support 5 grid sizes (small/medium/large/tall/xlarge) and adjustable
 ### Prerequisites
 
 - Node.js v18+
-- Go v1.22+
-- PostgreSQL v14+ (or use Docker)
+- Go v1.25+
+- PostgreSQL v17+ (or use Docker)
 
 ### Development
 
@@ -165,6 +209,19 @@ For self-hosted deployments, manage users directly from the command line — no 
 # Change a user's role (available roles: user / pro / admin)
 # user = regular, pro = premium features (AI, etc.), admin = full access
 ./server user set-role
+```
+
+**In Docker**, use `docker exec` to run CLI commands inside the running container:
+
+```bash
+# Create user
+docker exec -it catheadtab-backend ./server user create
+
+# Reset password
+docker exec -it catheadtab-backend ./server user reset-password
+
+# Change role
+docker exec -it catheadtab-backend ./server user set-role
 ```
 
 ### Configuration Highlights
