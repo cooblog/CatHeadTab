@@ -238,11 +238,13 @@ body {
 }
 
 /* 桌面图标网格：显式列数，支持 widget 跨多格子 (grid-column/row span) */
-/* cell 尺寸行高=列宽=80px，统一间距，使 2×2 widget 呈完美正方形 */
+/* 移动端：动态 cell 尺寸 = (视口宽 - 32px padding - 36px gap) / 4 列，保持正方形 */
 .desktop-icon-grid {
-  grid-template-columns: repeat(4, 80px) !important;
-  grid-auto-rows: 80px !important;
-  gap: 28px !important;
+  grid-template-columns: repeat(4, calc((100vw - 32px - 36px) / 4)) !important;
+  grid-auto-rows: calc((100vw - 32px - 36px) / 4) !important;
+  gap: 12px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
   justify-content: center !important;
   -webkit-user-select: none;
   user-select: none;
@@ -253,6 +255,8 @@ body {
     grid-template-columns: repeat(6, 72px) !important;
     grid-auto-rows: 72px !important;
     gap: 32px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 }
 

@@ -75,6 +75,22 @@ services:
       # "sketchy" 和 "nsfw" 需要设置 WALLHAVEN_API_KEY
       - WALLHAVEN_PURITY=${WALLHAVEN_PURITY:-sfw}
 
+      # ---- Wallpaper Source: Tencent Cloud COS (可选) ----
+      # 配置后可从 COS 对象存储搜索壁纸
+      - COS_SECRET_ID=${COS_SECRET_ID:-}
+      - COS_SECRET_KEY=${COS_SECRET_KEY:-}
+      - COS_BUCKET=${COS_BUCKET:-}
+      - COS_REGION=${COS_REGION:-}
+      # COS 目录前缀：原图和缩略图分开存储，文件名一一对应
+      - COS_ORIGINAL_PREFIX=${COS_ORIGINAL_PREFIX:-}
+      - COS_THUMB_PREFIX=${COS_THUMB_PREFIX:-}
+
+      # ---- Pro 会员门控 (可选) ----
+      # 设为 true 启用 Pro 角色限制（SaaS 部署），不设则所有用户全功能（自部署）
+      - PRO_GATE_ENABLED=${PRO_GATE_ENABLED:-false}
+      # 在此日期前注册的用户自动成为 Pro（ISO 8601），不设则不启用早鸟活动
+      - PRO_FREE_UNTIL=${PRO_FREE_UNTIL:-}
+
       # ---- Token 有效期配置 (可选) ----
       # 邮箱验证 Token 有效期（小时），默认: 24
       - EMAIL_VERIFY_TOKEN_TTL_HOURS=${EMAIL_VERIFY_TOKEN_TTL_HOURS:-24}
