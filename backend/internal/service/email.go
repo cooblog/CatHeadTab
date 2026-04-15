@@ -3,10 +3,10 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"net/smtp"
 
 	"github.com/CatHeadTab/backend/internal/config"
+	"github.com/CatHeadTab/backend/internal/logger"
 )
 
 // EmailService handles sending transactional emails.
@@ -27,7 +27,7 @@ func (s *EmailService) IsConfigured() bool {
 // SendVerificationEmail sends an email verification link.
 func (s *EmailService) SendVerificationEmail(toEmail, token string) error {
 	if !s.IsConfigured() {
-		log.Printf("⚠️  SMTP not configured, skipping verification email for %s (token: %s)", toEmail, token)
+		logger.Warn("SMTP not configured, skipping verification email", "to", toEmail, "token", token)
 		return nil
 	}
 
@@ -56,7 +56,7 @@ func (s *EmailService) SendVerificationEmail(toEmail, token string) error {
 // SendPasswordResetEmail sends a password reset link.
 func (s *EmailService) SendPasswordResetEmail(toEmail, token string) error {
 	if !s.IsConfigured() {
-		log.Printf("⚠️  SMTP not configured, skipping password reset email for %s (token: %s)", toEmail, token)
+		logger.Warn("SMTP not configured, skipping password reset email", "to", toEmail, "token", token)
 		return nil
 	}
 
@@ -103,6 +103,6 @@ func (s *EmailService) sendMail(to, subject, body, contentType string) error {
 		return fmt.Errorf("failed to send email to %s: %w", to, err)
 	}
 
-	log.Printf("📧 Email sent to %s: %s", to, subject)
+	logger.Info("Email sent", "to", to, "subject", subject)
 	return nil
 }

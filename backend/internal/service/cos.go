@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/tencentyun/cos-go-sdk-v5"
 
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/model"
 )
 
@@ -120,8 +120,7 @@ func (c *COSProvider) Search(params model.WallpaperSearchParams) (*model.Wallpap
 		effectivePrefix = effectivePrefix + params.Query
 	}
 
-	log.Printf("[COS] Search: bucket=%s region=%s effectivePrefix=%q originalPrefix=%q thumbPrefix=%q",
-		c.bucket, c.region, effectivePrefix, c.originalPrefix, c.thumbPrefix)
+	logger.Debug("[COS] Search", "bucket", c.bucket, "region", c.region, "effectivePrefix", effectivePrefix, "originalPrefix", c.originalPrefix, "thumbPrefix", c.thumbPrefix)
 
 	// List all image objects under the original directory.
 	// COS doesn't have native page-number pagination, so we list all
@@ -136,13 +135,12 @@ func (c *COSProvider) Search(params model.WallpaperSearchParams) (*model.Wallpap
 		}
 		result, resp, err := c.client.Bucket.Get(ctx, opt)
 		if err != nil {
-			log.Printf("[COS] Bucket.Get error: %v", err)
+			logger.Error("[COS] Bucket.Get error", "error", err)
 			return nil, fmt.Errorf("failed to list COS objects: %w", err)
 		}
-		log.Printf("[COS] Bucket.Get: HTTP %d, Contents=%d, IsTruncated=%v, Prefix=%q, Name=%q",
-			resp.StatusCode, len(result.Contents), result.IsTruncated, result.Prefix, result.Name)
+		logger.Debug("[COS] Bucket.Get", "status", resp.StatusCode, "contents", len(result.Contents), "isTruncated", result.IsTruncated, "prefix", result.Prefix)
 		if len(result.Contents) > 0 {
-			log.Printf("[COS] First key: %q, Last key: %q", result.Contents[0].Key, result.Contents[len(result.Contents)-1].Key)
+			logger.Debug("[COS] keys range", "first", result.Contents[0].Key, "last", result.Contents[len(result.Contents)-1].Key)
 		}
 		for _, obj := range result.Contents {
 			ext := strings.ToLower(path.Ext(obj.Key))
@@ -159,7 +157,7 @@ func (c *COSProvider) Search(params model.WallpaperSearchParams) (*model.Wallpap
 		}
 	}
 
-	log.Printf("[COS] Total image keys found: %d", len(allKeys))
+	logger.Debug("[COS] Total image keys found", "count", len(allKeys))
 
 	// Sort by key (alphabetical)
 	sort.Slice(allKeys, func(i, j int) bool {

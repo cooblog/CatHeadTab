@@ -3,7 +3,6 @@ package repository
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,6 +10,8 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+
+	"github.com/CatHeadTab/backend/internal/logger"
 )
 
 // DB holds the database connection pool.
@@ -33,7 +34,7 @@ func Connect(dsn string) error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	log.Println("✅ Connected to PostgreSQL")
+	logger.Info("Connected to PostgreSQL")
 	return nil
 }
 
@@ -72,7 +73,7 @@ func RunMigrations(migrationsDir string) error {
 			return fmt.Errorf("failed to check migration status for %s: %w", filename, err)
 		}
 		if count > 0 {
-			log.Printf("⏭️  Migration already applied: %s", filename)
+			logger.Debug("Migration already applied", "filename", filename)
 			continue
 		}
 
@@ -93,7 +94,7 @@ func RunMigrations(migrationsDir string) error {
 			return fmt.Errorf("failed to record migration %s: %w", filename, err)
 		}
 
-		log.Printf("✅ Applied migration: %s", filename)
+		logger.Info("Applied migration", "filename", filename)
 	}
 
 	return nil
@@ -103,6 +104,6 @@ func RunMigrations(migrationsDir string) error {
 func Close() {
 	if DB != nil {
 		DB.Close()
-		log.Println("🔌 Database connection closed")
+		logger.Info("Database connection closed")
 	}
 }

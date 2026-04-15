@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -17,6 +16,8 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/CatHeadTab/backend/internal/logger"
 )
 
 // ── Data models ──────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ func (h *TrendingHandler) GithubTrending(c *gin.Context) {
 		return fetchGithubTrending()
 	})
 	if err != nil {
-		log.Printf("[trending] github fetch error: %v", err)
+		logger.Error("[trending] github fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch GitHub trending"})
 		return
 	}
@@ -139,7 +140,7 @@ func fetchGithubTrending() ([]GithubTrendingRepo, error) {
 	if err == nil && len(repos) >= 15 {
 		return repos, nil
 	}
-	log.Printf("[trending] github daily returned only %d repos, trying weekly", len(repos))
+	logger.Info("[trending] github daily returned few repos, trying weekly", "count", len(repos))
 
 	weeklyRepos, weeklyErr := fetchGithubTrendingByPeriod("weekly")
 	if weeklyErr != nil {
@@ -268,7 +269,7 @@ func (h *TrendingHandler) BilibiliHot(c *gin.Context) {
 		return fetchBilibiliHot()
 	})
 	if err != nil {
-		log.Printf("[trending] bilibili fetch error: %v", err)
+		logger.Error("[trending] bilibili fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch Bilibili hot"})
 		return
 	}
@@ -296,7 +297,7 @@ func (h *TrendingHandler) XiaohongshuHot(c *gin.Context) {
 		return fetchXiaohongshuHot()
 	})
 	if err != nil {
-		log.Printf("[trending] xiaohongshu fetch error: %v", err)
+		logger.Error("[trending] xiaohongshu fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch Xiaohongshu hot"})
 		return
 	}
@@ -310,14 +311,14 @@ func fetchXiaohongshuHot() ([]XiaohongshuHotItem, error) {
 	if err == nil && len(items) > 0 {
 		return items, nil
 	}
-	log.Printf("[trending] xiaohongshu 60s API failed: %v, trying vvhan", err)
+	logger.Warn("[trending] xiaohongshu 60s API failed, trying vvhan", "error", err)
 
 	// 备选1：vvhan 聚合 API
 	items, err = fetchXiaohongshuFromVvhanAPI()
 	if err == nil && len(items) > 0 {
 		return items, nil
 	}
-	log.Printf("[trending] xiaohongshu vvhan API failed: %v, trying web scrape", err)
+	logger.Warn("[trending] xiaohongshu vvhan API failed, trying web scrape", "error", err)
 
 	// 备选2：通过爬取网页获取
 	return fetchXiaohongshuHotFallback()
@@ -518,7 +519,7 @@ func (h *TrendingHandler) WeiboHot(c *gin.Context) {
 		return fetchWeiboHot()
 	})
 	if err != nil {
-		log.Printf("[trending] weibo fetch error: %v", err)
+		logger.Error("[trending] weibo fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch Weibo hot"})
 		return
 	}
@@ -605,7 +606,7 @@ func (h *TrendingHandler) BBCNews(c *gin.Context) {
 		return fetchBBCNews()
 	})
 	if err != nil {
-		log.Printf("[trending] bbc fetch error: %v", err)
+		logger.Error("[trending] bbc fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch BBC News"})
 		return
 	}
@@ -619,7 +620,7 @@ func fetchBBCNews() ([]BBCNewsItem, error) {
 	if err == nil && len(items) > 0 {
 		return items, nil
 	}
-	log.Printf("[trending] bbc webpage scrape failed: %v, trying RSS feed", err)
+	logger.Warn("[trending] bbc webpage scrape failed, trying RSS feed", "error", err)
 
 	// 备选：RSS feed
 	return fetchBBCNewsFromRSS()
@@ -822,7 +823,7 @@ func (h *TrendingHandler) ExchangeRate(c *gin.Context) {
 		return fetchExchangeRates(req)
 	})
 	if err != nil {
-		log.Printf("[finance] exchange rate fetch error: %v", err)
+		logger.Error("[finance] exchange rate fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch exchange rates"})
 		return
 	}
@@ -891,20 +892,20 @@ func fetchExchangeRates(req ExchangeRateRequest) ([]ExchangeRateItem, error) {
 			url := fmt.Sprintf("https://api.frankfurter.dev/v1/latest?from=%s&to=%s", base, to)
 			reqHTTP, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				log.Printf("[finance] frankfurter latest request build failed: %v", err)
+				logger.Error("[finance] frankfurter latest request build failed", "error", err)
 				return
 			}
 			reqHTTP.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
 
 			resp, err := client.Do(reqHTTP)
 			if err != nil {
-				log.Printf("[finance] frankfurter latest request failed: %v", err)
+				logger.Error("[finance] frankfurter latest request failed", "error", err)
 				return
 			}
 			defer resp.Body.Close()
 
 			if resp.StatusCode != 200 {
-				log.Printf("[finance] frankfurter latest returned status %d", resp.StatusCode)
+				logger.Warn("[finance] frankfurter latest returned non-200 status", "status", resp.StatusCode)
 				return
 			}
 
@@ -912,7 +913,7 @@ func fetchExchangeRates(req ExchangeRateRequest) ([]ExchangeRateItem, error) {
 				Rates map[string]float64 `json:"rates"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-				log.Printf("[finance] frankfurter latest decode failed: %v", err)
+				logger.Error("[finance] frankfurter latest decode failed", "error", err)
 				return
 			}
 
@@ -1033,7 +1034,7 @@ func (h *TrendingHandler) StockQuotes(c *gin.Context) {
 		return fetchStockQuotes(req)
 	})
 	if err != nil {
-		log.Printf("[finance] stock quotes fetch error: %v", err)
+		logger.Error("[finance] stock quotes fetch error", "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch stock quotes"})
 		return
 	}
@@ -1115,7 +1116,7 @@ func fetchStockQuotes(req StockQuoteRequest) ([]StockQuoteItem, error) {
 	if err == nil {
 		return result, nil
 	}
-	log.Printf("[finance] stock primary source failed: %v, trying fallback", err)
+	logger.Warn("[finance] stock primary source failed, trying fallback", "error", err)
 
 	return fallback(req.Items)
 }

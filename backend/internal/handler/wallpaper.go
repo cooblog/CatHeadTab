@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/service"
 )
@@ -102,7 +102,7 @@ func (h *WallpaperHandler) Search(c *gin.Context) {
 
 	result, err := h.svc.Search(provider, params)
 	if err != nil {
-		log.Printf("[wallpaper] search error: provider=%s sorting=%s page=%d err=%v", provider, params.Sorting, params.Page, err)
+		logger.Error("[wallpaper] search error", "provider", provider, "sorting", params.Sorting, "page", params.Page, "error", err)
 		// Distinguish between "provider not found" (client error) and upstream failures
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "not configured") {
@@ -255,7 +255,7 @@ func (h *WallpaperHandler) COSImage(c *gin.Context) {
 
 	presignedURL, err := cosProvider.GeneratePresignedURL(key)
 	if err != nil {
-		log.Printf("[wallpaper] COS image proxy error: key=%s err=%v", key, err)
+		logger.Error("[wallpaper] COS image proxy error", "key", key, "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to generate image URL"})
 		return
 	}

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/repository"
 )
 
@@ -86,7 +86,7 @@ func NewFaviconHandler(presetRepo repository.PresetRepository) *FaviconHandler {
 	}
 
 	if err := os.MkdirAll(h.cacheDir, 0755); err != nil {
-		log.Printf("⚠️  Failed to create favicon cache dir: %v", err)
+		logger.Warn("Failed to create favicon cache dir", "error", err)
 	}
 
 	return h
@@ -138,7 +138,7 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 		// Write to disk cache (best-effort, don't block response)
 		go func() {
 			if writeErr := h.writeCache(cachePath, data, contentType); writeErr != nil {
-				log.Printf("⚠️  Failed to write favicon cache for %s: %v", domain, writeErr)
+				logger.Warn("Failed to write favicon cache", "domain", domain, "error", writeErr)
 			}
 		}()
 		return &faviconResult{data: data, contentType: contentType}, nil
@@ -183,7 +183,7 @@ func (h *FaviconHandler) fetchFavicon(domain, sz string) ([]byte, string, error)
 		if isImageLargeEnough(data, desiredSize) {
 			return data, ct, nil
 		}
-		log.Printf("ℹ️  Google S2 returned small icon for %s (%s), trying fallback sources", domain, sz)
+		logger.Info("Google S2 returned small icon, trying fallback sources", "domain", domain, "sz", sz)
 	}
 
 	// Source 2: DuckDuckGo API — fast, returns ico format
@@ -240,7 +240,7 @@ func (h *FaviconHandler) fetchViaGoFavicon(domain string) ([]byte, string, error
 			continue
 		}
 		if data, ct, fetchErr := h.fetchWithSemaphore(icon.URL); fetchErr == nil && len(data) > 0 && isValidImage(data) {
-			log.Printf("ℹ️  go-favicon found icon for %s: %s", domain, icon.URL)
+			logger.Info("go-favicon found icon", "domain", domain, "url", icon.URL)
 			return data, ct, nil
 		}
 	}
@@ -271,12 +271,12 @@ func (h *FaviconHandler) checkAndRemoveDeadSite(domain string) {
 	if err != nil {
 		// Network-level failure: DNS resolution failed, connection refused,
 		// timeout, TLS handshake failed, etc. The site is likely dead.
-		log.Printf("🗑️  Site %s is unreachable (%v), removing from ExploreWorld", domain, err)
+		logger.Warn("Site is unreachable, removing from ExploreWorld", "domain", domain, "error", err)
 		deleted, delErr := h.presetRepo.DeleteSiteByDomain(domain)
 		if delErr != nil {
-			log.Printf("⚠️  Failed to delete dead site %s: %v", domain, delErr)
+			logger.Warn("Failed to delete dead site", "domain", domain, "error", delErr)
 		} else if deleted > 0 {
-			log.Printf("✅  Removed %d dead site(s) matching domain %s from ExploreWorld", deleted, domain)
+			logger.Info("Removed dead site(s) from ExploreWorld", "count", deleted, "domain", domain)
 		}
 		return
 	}

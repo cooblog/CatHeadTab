@@ -75,6 +75,20 @@ type Config struct {
 	// Users who register before this time automatically receive the "pro" role.
 	// Leave empty to disable the promotion window.
 	ProFreeUntil time.Time
+
+	// Logging configuration
+	// LogLevel controls the minimum log level: debug, info, warn, error. Default: info.
+	LogLevel string
+	// LogFile is the path to the log file. Leave empty to disable file logging (console only).
+	LogFile string
+	// LogMaxSize is the maximum size in MB of a single log file before rotation. Default: 100.
+	LogMaxSize int
+	// LogMaxAge is the maximum number of days to retain old log files. Default: 30.
+	LogMaxAge int
+	// LogMaxBackups is the maximum number of old log files to retain. Default: 10.
+	LogMaxBackups int
+	// LogCompress enables gzip compression for rotated log files. Default: false.
+	LogCompress bool
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -117,6 +131,13 @@ func Load() *Config {
 
 		ProGateEnabled: getEnv("PRO_GATE_ENABLED", "") == "true",
 		ProFreeUntil:   parseTimeEnv("PRO_FREE_UNTIL"),
+
+		LogLevel:      getEnv("LOG_LEVEL", "info"),
+		LogFile:       getEnv("LOG_FILE", ""),
+		LogMaxSize:    int(getDurationEnv("LOG_MAX_SIZE_MB", 100)),
+		LogMaxAge:     int(getDurationEnv("LOG_MAX_AGE_DAYS", 30)),
+		LogMaxBackups: int(getDurationEnv("LOG_MAX_BACKUPS", 10)),
+		LogCompress:   getEnv("LOG_COMPRESS", "") == "true",
 	}
 }
 

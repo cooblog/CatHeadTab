@@ -1,7 +1,6 @@
 package router
 
 import (
-	"log"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +8,7 @@ import (
 	"github.com/CatHeadTab/backend/internal/cache"
 	"github.com/CatHeadTab/backend/internal/config"
 	"github.com/CatHeadTab/backend/internal/handler"
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/middleware"
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/repository"
@@ -17,7 +17,8 @@ import (
 
 // Setup configures all API routes and middleware.
 func Setup(cfg *config.Config) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(logger.GinLogger(), logger.GinRecovery())
 
 	// Global middleware
 	r.Use(middleware.CORS())
@@ -67,9 +68,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 		for range ticker.C {
 			deleted, err := verifyRepo.CleanupExpiredTokens()
 			if err != nil {
-				log.Printf("[token-cleanup] error: %v", err)
+				logger.Error("[token-cleanup] error", "error", err)
 			} else if deleted > 0 {
-				log.Printf("[token-cleanup] removed %d expired token(s)", deleted)
+				logger.Info("[token-cleanup] removed expired tokens", "count", deleted)
 			}
 		}
 	}()
@@ -85,9 +86,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 		for range ticker.C {
 			processed, err := wpCache.RefreshStale(wallpaperSvc.FetchFromProvider(), 100)
 			if err != nil {
-				log.Printf("[wallpaper-cache] refresh error: %v", err)
+				logger.Error("[wallpaper-cache] refresh error", "error", err)
 			} else if processed > 0 {
-				log.Printf("[wallpaper-cache] refresh completed: %d stale entries processed", processed)
+				logger.Info("[wallpaper-cache] refresh completed", "processed", processed)
 			}
 		}
 	}()

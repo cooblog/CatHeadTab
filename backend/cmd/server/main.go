@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/CatHeadTab/backend/internal/config"
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/model"
 	"github.com/CatHeadTab/backend/internal/repository"
 	"github.com/CatHeadTab/backend/internal/router"
@@ -69,10 +69,20 @@ func handleUserCommand(args []string) {
 		os.Exit(1)
 	}
 
-	// 加载配置并连接数据库（CLI 命令只需要数据库连接，不执行 migration）
+	// 加载配置并初始化日志和数据库连接（CLI 命令只需要数据库连接，不执行 migration）
 	cfg := config.Load()
+	logger.Init(logger.Config{
+		Level:      cfg.LogLevel,
+		FilePath:   cfg.LogFile,
+		MaxSize:    cfg.LogMaxSize,
+		MaxAge:     cfg.LogMaxAge,
+		MaxBackups: cfg.LogMaxBackups,
+		Compress:   cfg.LogCompress,
+	})
+	defer logger.Sync()
+
 	if err := repository.Connect(cfg.DBDSN); err != nil {
-		log.Fatalf("❌ Failed to connect to database: %v", err)
+		logger.Fatal("Failed to connect to database", "error", err)
 	}
 	defer repository.Close()
 
@@ -95,17 +105,17 @@ func cmdUserCreate() {
 
 	username := promptInput(reader, "Username: ")
 	if username == "" {
-		log.Fatal("❌ Username is required")
+		logger.Fatal("Username is required")
 	}
 
 	email := promptInput(reader, "Email: ")
 	if email == "" {
-		log.Fatal("❌ Email is required")
+		logger.Fatal("Email is required")
 	}
 
 	password := promptInput(reader, "Password (min 6 chars): ")
 	if len(password) < 6 {
-		log.Fatal("❌ Password must be at least 6 characters")
+		logger.Fatal("Password must be at least 6 characters")
 	}
 
 	// Check for duplicate username / email
@@ -113,23 +123,23 @@ func cmdUserCreate() {
 
 	existing, err := userRepo.GetByUsername(username)
 	if err != nil {
-		log.Fatalf("❌ Failed to check username: %v", err)
+		logger.Fatal("Failed to check username", "error", err)
 	}
 	if existing != nil {
-		log.Fatalf("❌ Username %q already exists", username)
+		logger.Fatal("Username already exists", "username", username)
 	}
 
 	existing, err = userRepo.GetByEmail(email)
 	if err != nil {
-		log.Fatalf("❌ Failed to check email: %v", err)
+		logger.Fatal("Failed to check email", "error", err)
 	}
 	if existing != nil {
-		log.Fatalf("❌ Email %q already exists", email)
+		logger.Fatal("Email already exists", "email", email)
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Fatalf("❌ Failed to hash password: %v", err)
+		logger.Fatal("Failed to hash password", "error", err)
 	}
 
 	user := &model.User{
@@ -141,7 +151,7 @@ func cmdUserCreate() {
 	}
 
 	if err := userRepo.Create(user); err != nil {
-		log.Fatalf("❌ Failed to create user: %v", err)
+		logger.Fatal("Failed to create user", "error", err)
 	}
 
 	fmt.Printf("✅ User created successfully!\n")
@@ -156,7 +166,7 @@ func cmdUserResetPassword() {
 
 	identifier := promptInput(reader, "Username or Email: ")
 	if identifier == "" {
-		log.Fatal("❌ Username or email is required")
+		logger.Fatal("Username or email is required")
 	}
 
 	userRepo := repository.NewUserRepository(repository.DB)
@@ -164,32 +174,32 @@ func cmdUserResetPassword() {
 	// Try to find the user by username first, then by email
 	user, err := userRepo.GetByUsername(identifier)
 	if err != nil {
-		log.Fatalf("❌ Failed to query user: %v", err)
+		logger.Fatal("Failed to query user", "error", err)
 	}
 	if user == nil {
 		user, err = userRepo.GetByEmail(identifier)
 		if err != nil {
-			log.Fatalf("❌ Failed to query user: %v", err)
+			logger.Fatal("Failed to query user", "error", err)
 		}
 	}
 	if user == nil {
-		log.Fatalf("❌ User %q not found", identifier)
+		logger.Fatal("User not found", "identifier", identifier)
 	}
 
 	fmt.Printf("   Found user: %s (%s)\n", user.Username, user.Email)
 
 	newPassword := promptInput(reader, "New Password (min 6 chars): ")
 	if len(newPassword) < 6 {
-		log.Fatal("❌ Password must be at least 6 characters")
+		logger.Fatal("Password must be at least 6 characters")
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		log.Fatalf("❌ Failed to hash password: %v", err)
+		logger.Fatal("Failed to hash password", "error", err)
 	}
 
 	if err := userRepo.UpdatePassword(user.ID, string(hashedPassword)); err != nil {
-		log.Fatalf("❌ Failed to update password: %v", err)
+		logger.Fatal("Failed to update password", "error", err)
 	}
 
 	fmt.Printf("✅ Password updated successfully for user %q\n", user.Username)
@@ -201,7 +211,7 @@ func cmdUserSetRole() {
 
 	identifier := promptInput(reader, "Username or Email: ")
 	if identifier == "" {
-		log.Fatal("❌ Username or email is required")
+		logger.Fatal("Username or email is required")
 	}
 
 	userRepo := repository.NewUserRepository(repository.DB)
@@ -209,16 +219,16 @@ func cmdUserSetRole() {
 	// Try to find the user by username first, then by email
 	user, err := userRepo.GetByUsername(identifier)
 	if err != nil {
-		log.Fatalf("❌ Failed to query user: %v", err)
+		logger.Fatal("Failed to query user", "error", err)
 	}
 	if user == nil {
 		user, err = userRepo.GetByEmail(identifier)
 		if err != nil {
-			log.Fatalf("❌ Failed to query user: %v", err)
+			logger.Fatal("Failed to query user", "error", err)
 		}
 	}
 	if user == nil {
-		log.Fatalf("❌ User %q not found", identifier)
+		logger.Fatal("User not found", "identifier", identifier)
 	}
 
 	fmt.Printf("   Found user: %s (%s)\n", user.Username, user.Email)
@@ -233,12 +243,12 @@ func cmdUserSetRole() {
 
 	newRole := promptInput(reader, "New role: ")
 	if newRole == "" {
-		log.Fatal("❌ Role is required")
+		logger.Fatal("Role is required")
 	}
 
 	role := model.UserRole(newRole)
 	if !model.ValidRoles[role] {
-		log.Fatalf("❌ Invalid role %q. Valid roles: %s", newRole, strings.Join(validRoles, ", "))
+		logger.Fatal("Invalid role", "role", newRole, "validRoles", strings.Join(validRoles, ", "))
 	}
 
 	if user.Role == role {
@@ -247,7 +257,7 @@ func cmdUserSetRole() {
 	}
 
 	if err := userRepo.UpdateRole(user.ID, role); err != nil {
-		log.Fatalf("❌ Failed to update role: %v", err)
+		logger.Fatal("Failed to update role", "error", err)
 	}
 
 	fmt.Printf("✅ Role updated: %s → %s (user: %s)\n", user.Role, role, user.Username)
@@ -264,10 +274,21 @@ func promptInput(reader *bufio.Reader, prompt string) string {
 func runServer() {
 	cfg := config.Load()
 
+	// 初始化日志系统
+	logger.Init(logger.Config{
+		Level:      cfg.LogLevel,
+		FilePath:   cfg.LogFile,
+		MaxSize:    cfg.LogMaxSize,
+		MaxAge:     cfg.LogMaxAge,
+		MaxBackups: cfg.LogMaxBackups,
+		Compress:   cfg.LogCompress,
+	})
+	defer logger.Sync()
+
 	gin.SetMode(cfg.GinMode)
 
 	if err := repository.Connect(cfg.DBDSN); err != nil {
-		log.Fatalf("❌ Failed to connect to database: %v", err)
+		logger.Fatal("Failed to connect to database", "error", err)
 	}
 	defer repository.Close()
 
@@ -276,9 +297,9 @@ func runServer() {
 	r := router.Setup(cfg)
 
 	addr := ":" + cfg.Port
-	log.Printf("🚀 CatHeadTab API server starting on %s", addr)
+	logger.Info("CatHeadTab API server starting", "addr", addr)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("❌ Failed to start server: %v", err)
+		logger.Fatal("Failed to start server", "error", err)
 	}
 }
 
@@ -286,7 +307,7 @@ func runServer() {
 func runMigrations() {
 	execPath, err := os.Executable()
 	if err != nil {
-		log.Printf("⚠️  Could not determine executable path: %v", err)
+		logger.Warn("Could not determine executable path", "error", err)
 	}
 	migrationsDir := filepath.Join(filepath.Dir(execPath), "migrations")
 
@@ -297,9 +318,9 @@ func runMigrations() {
 
 	if _, err := os.Stat(migrationsDir); err == nil {
 		if err := repository.RunMigrations(migrationsDir); err != nil {
-			log.Fatalf("❌ Failed to run migrations: %v", err)
+			logger.Fatal("Failed to run migrations", "error", err)
 		}
 	} else {
-		log.Printf("⚠️  Migrations directory not found, skipping: %s", migrationsDir)
+		logger.Warn("Migrations directory not found, skipping", "path", migrationsDir)
 	}
 }

@@ -15,13 +15,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/CatHeadTab/backend/internal/logger"
 	"github.com/CatHeadTab/backend/internal/model"
 )
 
@@ -219,12 +219,11 @@ func WithMaxEntries(max int64) Option {
 			OnEvict: func(item *ristretto.Item[*model.WallpaperSearchResult]) {
 				c.metrics.evictions.Add(1)
 				c.metrics.l1Entries.Add(-1)
-				log.Printf("[wallpaper-cache] L1 evicted (cost=%d), total_evictions=%d",
-					item.Cost, c.metrics.evictions.Load())
+				logger.Debug("[wallpaper-cache] L1 evicted", "cost", item.Cost, "totalEvictions", c.metrics.evictions.Load())
 			},
 		})
 		if err != nil {
-			log.Printf("[wallpaper-cache] failed to create L1 cache with max=%d, using default: %v", max, err)
+			logger.Warn("[wallpaper-cache] failed to create L1 cache with new max, using default", "max", max, "error", err)
 			return
 		}
 		c.store = store
@@ -252,8 +251,7 @@ func NewWallpaperCache(opts ...Option) *WallpaperCache {
 		OnEvict: func(item *ristretto.Item[*model.WallpaperSearchResult]) {
 			c.metrics.evictions.Add(1)
 			c.metrics.l1Entries.Add(-1)
-			log.Printf("[wallpaper-cache] L1 evicted (cost=%d), total_evictions=%d",
-				item.Cost, c.metrics.evictions.Load())
+			logger.Debug("[wallpaper-cache] L1 evicted", "cost", item.Cost, "totalEvictions", c.metrics.evictions.Load())
 		},
 	})
 	if err != nil {
@@ -265,8 +263,9 @@ func NewWallpaperCache(opts ...Option) *WallpaperCache {
 		opt(c)
 	}
 
-	log.Printf("[wallpaper-cache] initialized: L1(max=%d, ttl=%s, slow_ttl=%s) L2(enabled=%t, refresh_interval=%s)",
-		c.maxEntries, c.ttl, c.slowL1TTL, c.dbStore != nil, c.dbTTL)
+	logger.Info("[wallpaper-cache] initialized",
+		"l1Max", c.maxEntries, "l1TTL", c.ttl, "l1SlowTTL", c.slowL1TTL,
+		"l2Enabled", c.dbStore != nil, "l2RefreshInterval", c.dbTTL)
 	return c
 }
 
@@ -349,8 +348,7 @@ func (c *WallpaperCache) GetOrFetch(
 	// L1: fast path — check in-memory cache
 	if val, found := c.store.Get(key); found {
 		c.metrics.l1Hits.Add(1)
-		log.Printf("[wallpaper-cache] L1 HIT  key=%s sorting=%s l1_hits=%d",
-			key[:16], params.Sorting, c.metrics.l1Hits.Load())
+		logger.Debug("[wallpaper-cache] L1 HIT", "key", key[:16], "sorting", params.Sorting, "l1Hits", c.metrics.l1Hits.Load())
 		return val, nil
 	}
 
@@ -366,11 +364,10 @@ func (c *WallpaperCache) GetOrFetch(
 		if isSlowChanging && c.dbStore != nil {
 			entry, dbErr := c.dbStore.Get(key)
 			if dbErr != nil {
-				log.Printf("[wallpaper-cache] L2 ERROR key=%s err=%v", key[:16], dbErr)
+				logger.Error("[wallpaper-cache] L2 ERROR", "key", key[:16], "error", dbErr)
 			} else if entry != nil {
 				c.metrics.l2Hits.Add(1)
-				log.Printf("[wallpaper-cache] L2 HIT  key=%s sorting=%s stale=%t l2_hits=%d",
-					key[:16], params.Sorting, entry.Stale, c.metrics.l2Hits.Load())
+				logger.Debug("[wallpaper-cache] L2 HIT", "key", key[:16], "sorting", params.Sorting, "stale", entry.Stale, "l2Hits", c.metrics.l2Hits.Load())
 				// Promote to L1 for faster subsequent access
 				c.storeL1(key, entry.Result, params.Sorting)
 				// If stale, trigger async refresh (compare & update/extend)
@@ -388,8 +385,7 @@ func (c *WallpaperCache) GetOrFetch(
 		result, fetchErr := fetchFn(providerName, params)
 		if fetchErr != nil {
 			c.metrics.fetchErrors.Add(1)
-			log.Printf("[wallpaper-cache] FETCH_ERROR key=%s total_errors=%d err=%v",
-				key[:16], c.metrics.fetchErrors.Load(), fetchErr)
+			logger.Error("[wallpaper-cache] FETCH_ERROR", "key", key[:16], "totalErrors", c.metrics.fetchErrors.Load(), "error", fetchErr)
 			return nil, fetchErr
 		}
 
@@ -410,11 +406,9 @@ func (c *WallpaperCache) GetOrFetch(
 
 	if shared {
 		c.metrics.shared.Add(1)
-		log.Printf("[wallpaper-cache] SHARED key=%s total_shared=%d",
-			key[:16], c.metrics.shared.Load())
+		logger.Debug("[wallpaper-cache] SHARED", "key", key[:16], "totalShared", c.metrics.shared.Load())
 	} else {
-		log.Printf("[wallpaper-cache] MISS  key=%s sorting=%s l1_entries=%d",
-			key[:16], params.Sorting, c.metrics.l1Entries.Load())
+		logger.Debug("[wallpaper-cache] MISS", "key", key[:16], "sorting", params.Sorting, "l1Entries", c.metrics.l1Entries.Load())
 	}
 
 	return val.(*model.WallpaperSearchResult), nil
@@ -436,12 +430,11 @@ func (c *WallpaperCache) storeL1(key string, result *model.WallpaperSearchResult
 func (c *WallpaperCache) storeL2(key, provider, sorting string, result *model.WallpaperSearchResult) {
 	refreshAfter := time.Now().Add(c.dbTTL)
 	if err := c.dbStore.Set(key, provider, sorting, result, refreshAfter); err != nil {
-		log.Printf("[wallpaper-cache] L2 WRITE_ERROR key=%s err=%v", key[:16], err)
+		logger.Error("[wallpaper-cache] L2 WRITE_ERROR", "key", key[:16], "error", err)
 		return
 	}
 	c.metrics.l2Writes.Add(1)
-	log.Printf("[wallpaper-cache] L2 WRITE key=%s sorting=%s refresh_after=%s l2_writes=%d",
-		key[:16], sorting, refreshAfter.Format(time.RFC3339), c.metrics.l2Writes.Load())
+	logger.Debug("[wallpaper-cache] L2 WRITE", "key", key[:16], "sorting", sorting, "refreshAfter", refreshAfter.Format(time.RFC3339), "l2Writes", c.metrics.l2Writes.Load())
 }
 
 // refreshL2 is called asynchronously when a stale L2 entry is served.
@@ -459,11 +452,11 @@ func (c *WallpaperCache) refreshL2(
 	fresh, err := fetchFn(providerName, params)
 	if err != nil {
 		c.metrics.fetchErrors.Add(1)
-		log.Printf("[wallpaper-cache] L2 REFRESH_ERROR key=%s err=%v", key[:16], err)
+		logger.Error("[wallpaper-cache] L2 REFRESH_ERROR", "key", key[:16], "error", err)
 		// On error, just extend the deadline so we don't hammer upstream
 		refreshAfter := time.Now().Add(c.dbTTL)
 		if extErr := c.dbStore.ExtendRefreshAfter(key, refreshAfter); extErr != nil {
-			log.Printf("[wallpaper-cache] L2 EXTEND_ERROR key=%s err=%v", key[:16], extErr)
+			logger.Error("[wallpaper-cache] L2 EXTEND_ERROR", "key", key[:16], "error", extErr)
 		}
 		return
 	}
@@ -473,21 +466,19 @@ func (c *WallpaperCache) refreshL2(
 	if wallpapersEqual(cached, fresh) {
 		// Data unchanged — just extend the refresh deadline
 		if err := c.dbStore.ExtendRefreshAfter(key, refreshAfter); err != nil {
-			log.Printf("[wallpaper-cache] L2 EXTEND_ERROR key=%s err=%v", key[:16], err)
+			logger.Error("[wallpaper-cache] L2 EXTEND_ERROR", "key", key[:16], "error", err)
 			return
 		}
 		c.metrics.l2Extends.Add(1)
-		log.Printf("[wallpaper-cache] L2 EXTEND key=%s sorting=%s (data unchanged) l2_extends=%d",
-			key[:16], params.Sorting, c.metrics.l2Extends.Load())
+		logger.Debug("[wallpaper-cache] L2 EXTEND (data unchanged)", "key", key[:16], "sorting", params.Sorting, "l2Extends", c.metrics.l2Extends.Load())
 	} else {
 		// Data changed — update with fresh data
 		if err := c.dbStore.Set(key, providerName, params.Sorting, fresh, refreshAfter); err != nil {
-			log.Printf("[wallpaper-cache] L2 REFRESH_WRITE_ERROR key=%s err=%v", key[:16], err)
+			logger.Error("[wallpaper-cache] L2 REFRESH_WRITE_ERROR", "key", key[:16], "error", err)
 			return
 		}
 		c.metrics.l2Refreshes.Add(1)
-		log.Printf("[wallpaper-cache] L2 REFRESH key=%s sorting=%s (data changed) l2_refreshes=%d",
-			key[:16], params.Sorting, c.metrics.l2Refreshes.Load())
+		logger.Debug("[wallpaper-cache] L2 REFRESH (data changed)", "key", key[:16], "sorting", params.Sorting, "l2Refreshes", c.metrics.l2Refreshes.Load())
 		// Update L1 with the fresh data too
 		c.storeL1(key, fresh, params.Sorting)
 	}
@@ -534,7 +525,7 @@ func (c *WallpaperCache) RefreshStale(fetchFn FetchFunc, batchSize int) (int, er
 		return 0, nil
 	}
 
-	log.Printf("[wallpaper-cache] L2 REFRESH_START stale_count=%d", len(staleEntries))
+	logger.Info("L2 REFRESH_START", "stale_count", len(staleEntries))
 
 	processed := 0
 	for _, entry := range staleEntries {
@@ -542,7 +533,7 @@ func (c *WallpaperCache) RefreshStale(fetchFn FetchFunc, batchSize int) (int, er
 		processed++
 	}
 
-	log.Printf("[wallpaper-cache] L2 REFRESH_DONE processed=%d", processed)
+	logger.Info("L2 REFRESH_DONE", "processed", processed)
 	return processed, nil
 }
 
@@ -552,7 +543,7 @@ func (c *WallpaperCache) refreshStaleEntry(entry StaleEntry, fetchFn FetchFunc) 
 	// Read the current cached data for comparison
 	cached, err := c.dbStore.Get(entry.CacheKey)
 	if err != nil {
-		log.Printf("[wallpaper-cache] L2 REFRESH_READ_ERROR key=%s err=%v", entry.CacheKey[:16], err)
+		logger.Error("L2 REFRESH_READ_ERROR", "key", entry.CacheKey[:16], "error", err)
 		return
 	}
 	if cached == nil {
@@ -570,21 +561,30 @@ func (c *WallpaperCache) refreshStaleEntry(entry StaleEntry, fetchFn FetchFunc) 
 	// been accessed and are sitting stale — it doesn't fetch upstream.
 	refreshAfter := time.Now().Add(c.dbTTL)
 	if err := c.dbStore.ExtendRefreshAfter(entry.CacheKey, refreshAfter); err != nil {
-		log.Printf("[wallpaper-cache] L2 BATCH_EXTEND_ERROR key=%s err=%v", entry.CacheKey[:16], err)
+		logger.Error("L2 BATCH_EXTEND_ERROR", "key", entry.CacheKey[:16], "error", err)
 		return
 	}
 	c.metrics.l2Extends.Add(1)
-	log.Printf("[wallpaper-cache] L2 BATCH_EXTEND key=%s sorting=%s (no access, extended deadline)",
-		entry.CacheKey[:16], entry.Sorting)
+	logger.Debug("L2 BATCH_EXTEND", "key", entry.CacheKey[:16], "sorting", entry.Sorting)
 }
 
 // Close releases cache resources and logs final statistics.
 func (c *WallpaperCache) Close() {
 	stats := c.Stats()
-	log.Printf("[wallpaper-cache] shutting down: L1(hits=%d misses=%d rate=%.1f%%) L2(hits=%d misses=%d writes=%d refreshes=%d extends=%d rate=%.1f%%) shared=%d evictions=%d errors=%d",
-		stats.L1Hits, stats.L1Misses, stats.L1HitRate,
-		stats.L2Hits, stats.L2Misses, stats.L2Writes, stats.L2Refreshes, stats.L2Extends, stats.L2HitRate,
-		stats.Shared, stats.Evictions, stats.FetchErrors)
+	logger.Info("shutting down wallpaper cache",
+		"l1_hits", stats.L1Hits,
+		"l1_misses", stats.L1Misses,
+		"l1_hit_rate", fmt.Sprintf("%.1f%%", stats.L1HitRate),
+		"l2_hits", stats.L2Hits,
+		"l2_misses", stats.L2Misses,
+		"l2_writes", stats.L2Writes,
+		"l2_refreshes", stats.L2Refreshes,
+		"l2_extends", stats.L2Extends,
+		"l2_hit_rate", fmt.Sprintf("%.1f%%", stats.L2HitRate),
+		"shared", stats.Shared,
+		"evictions", stats.Evictions,
+		"fetch_errors", stats.FetchErrors,
+	)
 	c.store.Close()
 }
 
