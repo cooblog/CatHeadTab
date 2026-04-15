@@ -151,10 +151,13 @@ function App() {
     }
   }, [pullLayoutFromCloud, uploadLayoutToCloud, mergeLayoutWithCloud, setLastSyncResolvedAt]);
 
+  // DEBUG: Log render values every time App renders (outside effect so always visible)
+  console.log('[App] RENDER:', { hydrated, jwtToken: !!jwtToken, serverUrl: !!serverUrl, tokenVal: jwtToken?.slice(0, 10) });
+
   // Token freshness check + smart sync on page load
   // Only attempt when both serverUrl and jwtToken are available AND stores are hydrated
   useEffect(() => {
-    console.log('[App] Effect check:', { hydrated, hasJwt: !!jwtToken, hasServerUrl: !!serverUrl });
+    console.log('[App] Effect RUN:', { hydrated, hasJwt: !!jwtToken, hasServerUrl: !!serverUrl });
     if (hydrated && jwtToken && serverUrl) {
       // Skip if we've already handled sync for this token
       if (syncedTokenRef.current === jwtToken) {
