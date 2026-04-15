@@ -850,6 +850,15 @@ func (h *AuthHandler) handleOAuthLogin(c *gin.Context, provider, providerUserID,
 		user.AvatarURL = avatarURL
 	}
 
+	// If the user's email matches the OAuth email and isn't verified yet,
+	// mark it as verified — the OAuth provider (GitHub/Google) has already
+	// confirmed the email address.
+	if !user.EmailVerified && email != "" && user.Email == email {
+		_ = h.userRepo.SetEmailVerified(user.ID, true)
+		user.EmailVerified = true
+		logger.Info("auto-verified email via OAuth", "user_id", user.ID, "provider", provider, "email", email)
+	}
+
 	token, err := h.generateToken(user.ID.String())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})

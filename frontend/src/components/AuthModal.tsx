@@ -34,6 +34,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -139,6 +140,12 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         // 校验密码强度
         if (!isPasswordAcceptable(password)) {
           setError(t('password.tooWeak'));
+          setLoading(false);
+          return;
+        }
+        // 校验两次密码一致
+        if (password !== confirmPassword) {
+          setError(t('auth.passwordMismatch'));
           setLoading(false);
           return;
         }
@@ -265,6 +272,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setView(newView);
     setError('');
     setSuccess('');
+    setConfirmPassword('');
     setCooldown(0);
     if (cooldownRef.current) {
       clearInterval(cooldownRef.current);
@@ -483,6 +491,18 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   placeholder={t('auth.password')} 
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
+                />
+              )}
+
+              {view === 'register' && (
+                <input 
+                  type="password" 
+                  placeholder={t('auth.confirmPassword')} 
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
                   required
                   minLength={6}
                   className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
