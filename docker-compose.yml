@@ -133,6 +133,11 @@ services:
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-80}:80"
+    environment:
+      # 后端 API 地址（运行时注入到前端 JS 中）
+      # 留空则前端使用相对路径 /api，由 nginx 反代到后端（推荐同域部署）
+      # 跨域部署时设为完整 URL，如 https://api.catheadtab.com
+      - VITE_API_URL=${VITE_API_URL:-}
     depends_on:
       - catheadtab-backend
     logging:

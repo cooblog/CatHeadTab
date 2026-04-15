@@ -3,14 +3,25 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import builtinBgWebp from '../assets/bg.webp'
 
 /**
- * ENV_API_URL is the backend API base URL injected at build time via the
- * `VITE_API_URL` environment variable. When set, it takes precedence over
- * the user-configured serverUrl and the server-address input is hidden.
+ * ENV_API_URL is the backend API base URL.
  *
- * Example `.env`:
- *   VITE_API_URL=https://api.catheadtab.com
+ * Resolution order:
+ * 1. Runtime injection via Docker entrypoint (window.__RUNTIME_CONFIG__.API_URL)
+ * 2. Build-time injection via Vite env (VITE_API_URL)
+ *
+ * The runtime value takes precedence so that a single Docker image can be
+ * configured at startup without rebuilding.
  */
-export const ENV_API_URL: string = (import.meta.env.VITE_API_URL as string || '').replace(/\/+$/, '');
+function resolveApiUrl(): string {
+  // Runtime injection (Docker entrypoint replaces the placeholder in index.html)
+  const runtime = (window as unknown as Record<string, unknown>).__RUNTIME_CONFIG__ as { API_URL?: string } | undefined;
+  if (runtime?.API_URL && !runtime.API_URL.startsWith('__')) {
+    return runtime.API_URL.replace(/\/+$/, '');
+  }
+  // Build-time injection (Vite)
+  return (import.meta.env.VITE_API_URL as string || '').replace(/\/+$/, '');
+}
+export const ENV_API_URL: string = resolveApiUrl();
 
 /**
  * Whether the backend API URL is pre-configured via environment variable.

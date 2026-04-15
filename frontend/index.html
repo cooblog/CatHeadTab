@@ -9,6 +9,8 @@
     <title>CatHeadTab</title>
   </head>
   <body>
+    <!-- Runtime config injected by Docker entrypoint (envsubst replaces __VITE_API_URL__) -->
+    <script>window.__RUNTIME_CONFIG__={API_URL:"__VITE_API_URL__"};</script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
