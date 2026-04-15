@@ -10,6 +10,10 @@ interface AiAgentWidgetProps {
 /** Small entry card for the AI Agent. Clicking opens the full chat modal. */
 export const AiAgentWidget: React.FC<AiAgentWidgetProps> = () => {
   const language = useConfigStore(s => s.language);
+  const serverAIConfig = useConfigStore(s => s.serverAIConfig);
+  const userProfile = useConfigStore(s => s.userProfile);
+  const aiProviderConfigs = useConfigStore(s => s.aiProviderConfigs);
+  const aiActiveProvider = useConfigStore(s => s.aiActiveProvider);
   const proAccess = hasAIAccess();
   const configured = isAIConfigured();
 

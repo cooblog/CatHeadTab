@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useConfigStore, isEnvConfigured, ENV_API_URL } from '../store/configStore';
+import { hasAIAccess } from '../ai/provider';
 import { useLayoutStore } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { saveImageBlob, loadImageBlob, compressImageToWebP, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
@@ -129,7 +130,8 @@ const AISettingsSection: React.FC = () => {
   const serverAI = useConfigStore(s => s.serverAIConfig);
   const preferLocal = useConfigStore(s => s.aiPreferLocal);
   const setAIPreferLocal = useConfigStore(s => s.setAIPreferLocal);
-  const hasServerAI = !!serverAI?.configured;
+  const hasServerAI = !!serverAI?.configured && hasAIAccess();
+  console.log('[AI Settings]', { serverAI, userProfile: useConfigStore.getState().userProfile?.role, hasServerAI, proGate: useConfigStore.getState().userProfile?.pro_gate_enabled, hasAIAccess: hasAIAccess() });
 
   // Presets: each provider has a key, display name, default URL and model
   const presets = [
@@ -276,7 +278,7 @@ const AISettingsSection: React.FC = () => {
       <h3 className="text-xl font-bold text-white mb-2">{t('settings.aiTitle')}</h3>
       <p className="text-[13px] text-white/50 mb-4">{t('settings.aiDesc')}</p>
 
-      {/* Server AI / Local AI mode switcher — only show when server AI is available */}
+      {/* Server AI / Local AI mode switcher — only for Pro+Admin users when server AI is available */}
       {hasServerAI && (
         <div className="mb-5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
           <div className="flex items-center justify-between">
@@ -315,8 +317,23 @@ const AISettingsSection: React.FC = () => {
         </div>
       )}
 
-      {/* Local API Key configuration — show when: no server AI, or user chose local mode */}
-      {(!hasServerAI || preferLocal) && (
+      {/* Server AI is available but user lacks Pro — show lock notice */}
+      {!!serverAI?.configured && !hasServerAI && (
+        <div className="mb-5 p-3 rounded-xl bg-purple-500/[0.06] border border-purple-400/15 flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div>
+            <p className="text-[13px] font-medium text-purple-300">{isZh ? '服务端 AI 已配置（Pro 专属）' : 'Server AI Available (Pro Only)'}</p>
+            <p className="text-[11px] text-white/30 mt-0.5">
+              {isZh
+                ? `管理员已启用服务端 AI（${serverAI?.provider}/${serverAI?.model}），升级为 Pro 用户即可免费使用，无需配置 API Key`
+                : `Server AI (${serverAI?.provider}/${serverAI?.model}) is enabled by admin. Upgrade to Pro to use it without configuring an API key.`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Local API Key configuration — show when: no server AI, or user chose local mode, or user lacks Pro */}
+      {(!serverAI?.configured || !hasServerAI || preferLocal) && (
       <>
       {/* Provider selector — pill buttons */}
       <div className="flex flex-wrap gap-2 mb-5">
