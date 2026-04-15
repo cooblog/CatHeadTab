@@ -131,7 +131,6 @@ const AISettingsSection: React.FC = () => {
   const preferLocal = useConfigStore(s => s.aiPreferLocal);
   const setAIPreferLocal = useConfigStore(s => s.setAIPreferLocal);
   const hasServerAI = !!serverAI?.configured && hasAIAccess();
-  console.log('[AI Settings]', { serverAI, userProfile: useConfigStore.getState().userProfile?.role, hasServerAI, proGate: useConfigStore.getState().userProfile?.pro_gate_enabled, hasAIAccess: hasAIAccess() });
 
   // Presets: each provider has a key, display name, default URL and model
   const presets = [
