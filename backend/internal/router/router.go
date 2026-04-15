@@ -110,6 +110,10 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
 	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
 
+	// Rate limiter for resend-verification with exponential backoff:
+	// 1 min → 2 min → 4 min → 8 min (cap), resets after 16 min idle
+	resendVerifyLimiter := middleware.NewExponentialRateLimiter(1*time.Minute, 8*time.Minute)
+
 	// Rate limiter for login endpoint (max 10 requests per minute per IP + progressive blocking)
 	loginRateLimiter := middleware.NewLoginRateLimiter(10)
 
@@ -156,7 +160,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 		auth.POST("/forgot-password", middleware.EmailRateLimit(emailRateLimiter), authHandler.ForgotPassword)
 		auth.POST("/reset-password", authHandler.ResetPassword)
 		auth.GET("/oauth-config", authHandler.GetOAuthConfig)
-		auth.POST("/resend-verification", middleware.EmailRateLimit(emailRateLimiter), authHandler.ResendVerificationPublic)
+		auth.POST("/resend-verification", middleware.EmailRateLimit(resendVerifyLimiter), authHandler.ResendVerificationPublic)
 
 		// OAuth login (public — user is not yet authenticated)
 		auth.POST("/github", authHandler.GitHubLogin)
@@ -184,7 +188,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 
 			// Account management (authenticated, no verification required)
 			user.POST("/change-password", authHandler.ChangePassword)
-			user.POST("/resend-verification", middleware.EmailRateLimit(emailRateLimiter), authHandler.ResendVerification)
+			user.POST("/resend-verification", middleware.EmailRateLimit(resendVerifyLimiter), authHandler.ResendVerification)
 			user.GET("/linked-accounts", authHandler.GetLinkedAccounts)
 			user.POST("/link/github", authHandler.GitHubLinkAccount)
 			user.POST("/link/google", authHandler.GoogleLinkAccount)

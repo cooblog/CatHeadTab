@@ -111,12 +111,32 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if user, _ := h.userRepo.GetByEmail(input.Email); user != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
-		return
+		if !user.EmailVerified {
+			// Unverified user occupying this email — remove it so re-registration can proceed
+			logger.Info("removing unverified user occupying email", "old_user_id", user.ID, "email", input.Email)
+			if err := h.userRepo.DeleteByID(user.ID); err != nil {
+				logger.Error("failed to remove unverified user by email", "user_id", user.ID, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+				return
+			}
+		} else {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+			return
+		}
 	}
 	if user, _ := h.userRepo.GetByUsername(input.Username); user != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
-		return
+		if !user.EmailVerified {
+			// Unverified user occupying this username — remove it so re-registration can proceed
+			logger.Info("removing unverified user occupying username", "old_user_id", user.ID, "username", input.Username)
+			if err := h.userRepo.DeleteByID(user.ID); err != nil {
+				logger.Error("failed to remove unverified user by username", "user_id", user.ID, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+				return
+			}
+		} else {
+			c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+			return
+		}
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -141,7 +161,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	// Send verification email — user must verify before logging in
 	verification, err := h.verifyRepo.CreateEmailVerification(newUser.ID, h.cfg.EmailVerifyTokenTTL)
 	if err == nil && verification != nil {
-		_ = h.emailService.SendVerificationEmail(newUser.Email, verification.Token)
+		if sendErr := h.emailService.SendVerificationEmail(newUser.Email, verification.Token); sendErr != nil {
+			logger.Error("failed to send verification email on register", "user_id", newUser.ID, "email", newUser.Email, "error", sendErr)
+		}
 	}
 
 	logger.Info("user registered", "user_id", newUser.ID, "email", input.Email)
@@ -363,7 +385,9 @@ func (h *AuthHandler) ResendVerificationPublic(c *gin.Context) {
 		return
 	}
 
-	_ = h.emailService.SendVerificationEmail(user.Email, verification.Token)
+	if sendErr := h.emailService.SendVerificationEmail(user.Email, verification.Token); sendErr != nil {
+		logger.Error("failed to send verification email (public resend)", "user_id", user.ID, "email", user.Email, "error", sendErr)
+	}
 
 	logger.Info("verification email resent (public)", "email", input.Email)
 	c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a verification link has been sent"})
@@ -398,7 +422,9 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	_ = h.emailService.SendPasswordResetEmail(user.Email, reset.Token)
+	if sendErr := h.emailService.SendPasswordResetEmail(user.Email, reset.Token); sendErr != nil {
+		logger.Error("failed to send password reset email", "user_id", user.ID, "email", user.Email, "error", sendErr)
+	}
 
 	logger.Info("password reset email sent", "user_id", user.ID, "email", user.Email)
 	c.JSON(http.StatusOK, gin.H{"message": "If an account exists with that email, a reset link has been sent"})

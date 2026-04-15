@@ -17,6 +17,7 @@ type UserRepository interface {
 	GetByID(id uuid.UUID) (*model.User, error)
 	GetByEmail(email string) (*model.User, error)
 	GetByUsername(username string) (*model.User, error)
+	DeleteByID(id uuid.UUID) error
 	UpdatePreferences(id uuid.UUID, prefs map[string]interface{}) error
 	UpdatePassword(id uuid.UUID, passwordHash string) error
 	SetEmailVerified(id uuid.UUID, verified bool) error
@@ -200,5 +201,12 @@ func (r *postgresUserRepository) UpdateAvatar(id uuid.UUID, avatarURL string) er
 
 func (r *postgresUserRepository) UpdateRole(id uuid.UUID, role model.UserRole) error {
 	_, err := r.db.Exec(`UPDATE users SET role = $1 WHERE id = $2`, string(role), id)
+	return err
+}
+
+// DeleteByID removes a user by ID. Related rows (email_verifications, password_resets,
+// oauth_accounts, etc.) are cascade-deleted via foreign key constraints.
+func (r *postgresUserRepository) DeleteByID(id uuid.UUID) error {
+	_, err := r.db.Exec(`DELETE FROM users WHERE id = $1`, id)
 	return err
 }

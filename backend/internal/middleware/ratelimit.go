@@ -11,18 +11,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// rateLimitEntry tracks the last request time for a given key.
+// rateLimitEntry tracks the last request time and consecutive attempts for a given key.
 type rateLimitEntry struct {
 	lastRequest time.Time
+	attempts    int // number of consecutive requests (for exponential backoff)
 }
 
 // RateLimiter is an in-memory, per-key rate limiter. Each unique key
 // (e.g. IP address or email) is allowed at most one request per Window.
+// When exponential backoff is enabled, the cooldown doubles after each
+// consecutive request: baseWindow, 2×baseWindow, 4×baseWindow, etc.
 // Stale entries are cleaned up automatically every CleanupEvery interval.
 type RateLimiter struct {
 	mu           sync.Mutex
 	entries      map[string]*rateLimitEntry
 	window       time.Duration
+	maxWindow    time.Duration // 0 means no cap (only relevant for exponential mode)
+	exponential  bool
 	cleanupEvery time.Duration
 }
 
@@ -38,25 +43,76 @@ func NewRateLimiter(window time.Duration) *RateLimiter {
 	return rl
 }
 
+// NewExponentialRateLimiter creates a RateLimiter with exponential backoff.
+// The first cooldown is baseWindow, then 2×baseWindow, 4×baseWindow, etc.,
+// capped at maxWindow. The attempt counter resets after maxWindow has elapsed
+// since the last request.
+func NewExponentialRateLimiter(baseWindow, maxWindow time.Duration) *RateLimiter {
+	rl := &RateLimiter{
+		entries:      make(map[string]*rateLimitEntry),
+		window:       baseWindow,
+		maxWindow:    maxWindow,
+		exponential:  true,
+		cleanupEvery: 5 * time.Minute,
+	}
+	go rl.cleanupLoop()
+	return rl
+}
+
+// cooldownFor returns the cooldown duration for the given entry.
+func (rl *RateLimiter) cooldownFor(entry *rateLimitEntry) time.Duration {
+	if !rl.exponential || entry.attempts <= 1 {
+		return rl.window
+	}
+	// baseWindow * 2^(attempts-1)
+	d := rl.window
+	for i := 1; i < entry.attempts; i++ {
+		d *= 2
+		if rl.maxWindow > 0 && d > rl.maxWindow {
+			d = rl.maxWindow
+			break
+		}
+	}
+	return d
+}
+
 // Allow returns true if the given key has not been seen within the current
-// window, and records the access. Returns false if the key is rate-limited.
-// When rate-limited, retryAfter contains the number of seconds the caller
-// must wait before retrying.
+// cooldown window, and records the access. Returns false if the key is
+// rate-limited. When rate-limited, retryAfter contains the number of seconds
+// the caller must wait before retrying.
 func (rl *RateLimiter) Allow(key string) (allowed bool, retryAfter int) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
 	now := time.Now()
 	entry, exists := rl.entries[key]
-	if exists && now.Sub(entry.lastRequest) < rl.window {
-		remaining := rl.window - now.Sub(entry.lastRequest)
-		return false, int(remaining.Seconds()) + 1 // round up
+
+	if exists {
+		cooldown := rl.cooldownFor(entry)
+		elapsed := now.Sub(entry.lastRequest)
+
+		if elapsed < cooldown {
+			// Still in cooldown — reject
+			remaining := cooldown - elapsed
+			return false, int(remaining.Seconds()) + 1 // round up
+		}
+
+		// Cooldown expired. If enough time has passed (beyond maxWindow or 2x window),
+		// reset the attempt counter (user "cooled off").
+		resetThreshold := 2 * rl.window
+		if rl.maxWindow > 0 {
+			resetThreshold = 2 * rl.maxWindow
+		}
+		if elapsed > resetThreshold {
+			entry.attempts = 0
+		}
 	}
 
 	if !exists {
 		entry = &rateLimitEntry{}
 		rl.entries[key] = entry
 	}
+	entry.attempts++
 	entry.lastRequest = now
 	return true, 0
 }
