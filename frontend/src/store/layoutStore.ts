@@ -160,6 +160,8 @@ interface LayoutState {
   layout: DesktopLayout;
   loading: boolean;
   error: string | null;
+  /** 布局快照历史，用于回滚操作。最多保留 10 个快照。 */
+  layoutSnapshots: DesktopLayout[];
 
   // Convenience getters
   get pages(): DesktopItem[][];
@@ -185,6 +187,15 @@ interface LayoutState {
   moveItemOutOfFolder: (sourceId: string, folderId: string, pageIndex?: number) => void;
   /** Merge two items into a new folder at the target's position. */
   mergeItemsToNewFolder: (sourceId: string, targetId: string) => void;
+
+  /** 保存当前布局快照（在批量操作前调用） */
+  saveSnapshot: () => void;
+  /** 回滚到上一个布局快照 */
+  rollbackLayout: () => boolean;
+  /** 是否有可回滚的快照 */
+  get canRollback(): boolean;
+  /** 恢复为默认布局（保存快照后重置） */
+  resetToDefault: () => void;
 
   // Widget Actions
   /** Add a widget to a specific page. */
@@ -217,12 +228,12 @@ const defaultDock: DesktopItem[] = [
 const defaultDesktopItems: DesktopItem[] = [
   // Row 1: Widgets (each occupies 2 cols × 2 rows)
   {
-    id: 'widget-clock-default',
+    id: 'widget-weather-default',
     type: 'widget',
-    title: 'Clock',
-    widgetType: 'clock',
+    title: 'Weather',
+    widgetType: 'weather',
     widgetSize: 'medium',
-    widgetConfig: { widgetType: 'clock' },
+    widgetConfig: { widgetType: 'weather' },
   },
   {
     id: 'widget-calendar-default',
@@ -233,12 +244,12 @@ const defaultDesktopItems: DesktopItem[] = [
     widgetConfig: { widgetType: 'calendar' },
   },
   {
-    id: 'widget-weather-default',
+    id: 'widget-clock-default',
     type: 'widget',
-    title: 'Weather',
-    widgetType: 'weather',
+    title: 'Clock',
+    widgetType: 'clock',
     widgetSize: 'medium',
-    widgetConfig: { widgetType: 'weather' },
+    widgetConfig: { widgetType: 'clock' },
   },
   {
     id: 'widget-ittools-default',
@@ -253,7 +264,7 @@ const defaultDesktopItems: DesktopItem[] = [
     type: 'widget',
     title: 'GitHub Trending',
     widgetType: 'githubTrending',
-    widgetSize: 'large',
+    widgetSize: 'tall',
     widgetConfig: { widgetType: 'githubTrending' },
   },
   {
@@ -261,7 +272,7 @@ const defaultDesktopItems: DesktopItem[] = [
     type: 'widget',
     title: 'Weibo Hot',
     widgetType: 'weiboHot',
-    widgetSize: 'large',
+    widgetSize: 'tall',
     widgetConfig: { widgetType: 'weiboHot' },
   },
   // Popular sites — a curated selection of widely-used websites
@@ -273,11 +284,7 @@ const defaultDesktopItems: DesktopItem[] = [
   { id: 'default-deepseek', type: 'link', title: 'DeepSeek', url: 'https://chat.deepseek.com', icon: '' },
   { id: 'default-claude', type: 'link', title: 'Claude', url: 'https://claude.ai', icon: '' },
   { id: 'default-gemini', type: 'link', title: 'Gemini', url: 'https://gemini.google.com', icon: '' },
-  { id: 'default-weibo', type: 'link', title: '微博', url: 'https://weibo.com', icon: '' },
   { id: 'default-zhihu', type: 'link', title: '知乎', url: 'https://www.zhihu.com', icon: '' },
-  { id: 'default-xiaohongshu', type: 'link', title: '小红书', url: 'https://www.xiaohongshu.com', icon: '' },
-  { id: 'default-taobao', type: 'link', title: '淘宝', url: 'https://www.taobao.com', icon: '' },
-  { id: 'default-jd', type: 'link', title: '京东', url: 'https://www.jd.com', icon: '' },
   { id: 'default-baidu', type: 'link', title: '百度', url: 'https://www.baidu.com', icon: '' },
   { id: 'default-douyin', type: 'link', title: '抖音', url: 'https://www.douyin.com', icon: '' },
   { id: 'default-gmail', type: 'link', title: 'Gmail', url: 'https://mail.google.com', icon: '' },
@@ -363,6 +370,12 @@ function removeFromPages(pages: DesktopItem[][], id: string): { pages: DesktopIt
   return { pages: newPages, removed };
 }
 
+/** 清理所有空页面（任意位置），至少保留 1 页 */
+function cleanEmptyPages(pages: DesktopItem[][]): DesktopItem[][] {
+  const nonEmpty = pages.filter(page => page.length > 0);
+  return nonEmpty.length > 0 ? nonEmpty : [[]];
+}
+
 function updateItemInList(list: DesktopItem[], id: string, updates: Partial<DesktopItem>): DesktopItem[] {
   return list.map(i => {
     if (i.id === id) return { ...i, ...updates };
@@ -445,11 +458,38 @@ export const useLayoutStore = create<LayoutState>()(
       layout: defaultLayout,
       loading: false,
       error: null,
+      layoutSnapshots: [],
 
       get pages() { return get().layout.pages; },
       get dock() { return get().layout.dock; },
+      get canRollback() { return get().layoutSnapshots.length > 0; },
 
       setLayout: (layout) => set({ layout }),
+
+      saveSnapshot: () => {
+        const current = get().layout;
+        // 深拷贝当前布局，保留最多 10 个快照
+        const snapshot = JSON.parse(JSON.stringify(current)) as DesktopLayout;
+        const snapshots = [...get().layoutSnapshots, snapshot].slice(-10);
+        set({ layoutSnapshots: snapshots });
+      },
+
+      rollbackLayout: () => {
+        const snapshots = [...get().layoutSnapshots];
+        if (snapshots.length === 0) return false;
+        const previous = snapshots.pop()!;
+        set({ layout: previous, layoutSnapshots: snapshots });
+        triggerAutoSync();
+        return true;
+      },
+
+      resetToDefault: () => {
+        // 先保存快照，允许后悔
+        get().saveSnapshot();
+        const fresh = JSON.parse(JSON.stringify(defaultLayout)) as DesktopLayout;
+        set({ layout: fresh });
+        triggerAutoSync();
+      },
 
       addDesktopItem: (item, pageIndex, parentFolderId) => {
         const currentLayout = get().layout;
@@ -500,10 +540,8 @@ export const useLayoutStore = create<LayoutState>()(
           const dr = removeItemFromList(layout.dock, id);
           layout.dock = dr.result;
         }
-        // Clean empty trailing pages (keep at least 1)
-        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
-          layout.pages.pop();
-        }
+        // Clean empty pages (any position, keep at least 1)
+        layout.pages = cleanEmptyPages(layout.pages);
         set({ layout });
         triggerAutoSync();
       },
@@ -526,9 +564,7 @@ export const useLayoutStore = create<LayoutState>()(
           layout.dock = [...layout.dock, pr.removed];
         }
         // Clean empty trailing pages
-        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
-          layout.pages.pop();
-        }
+        layout.pages = cleanEmptyPages(layout.pages);
         set({ layout });
         triggerAutoSync();
       },
@@ -637,6 +673,12 @@ export const useLayoutStore = create<LayoutState>()(
       moveItemToFolder: (sourceId, folderId) => {
         if (sourceId === folderId) return;
         const layout = { ...get().layout };
+
+        // 查找源 item，widget 和 folder 不允许放入文件夹
+        const allItems = [...layout.pages.flat(), ...layout.dock];
+        const sourceCheck = allItems.find(i => i.id === sourceId);
+        if (sourceCheck && (sourceCheck.type === 'widget' || sourceCheck.type === 'folder')) return;
+
         let sourceItem: DesktopItem | null = null;
 
         const pr = removeFromPages(layout.pages, sourceId);
@@ -655,9 +697,7 @@ export const useLayoutStore = create<LayoutState>()(
         layout.pages = layout.pages.map(page => addToFolder(page, folderId, sourceItem!));
         layout.dock = addToFolder(layout.dock, folderId, sourceItem);
 
-        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
-          layout.pages.pop();
-        }
+        layout.pages = cleanEmptyPages(layout.pages);
         set({ layout });
         triggerAutoSync();
       },
@@ -686,9 +726,7 @@ export const useLayoutStore = create<LayoutState>()(
           layout.pages[pageIndex].push(sourceItem);
         }
 
-        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
-          layout.pages.pop();
-        }
+        layout.pages = cleanEmptyPages(layout.pages);
         set({ layout });
         triggerAutoSync();
       },
@@ -814,9 +852,7 @@ export const useLayoutStore = create<LayoutState>()(
         }
 
         // 5. Clean empty trailing pages
-        while (layout.pages.length > 1 && layout.pages[layout.pages.length - 1].length === 0) {
-          layout.pages.pop();
-        }
+        layout.pages = cleanEmptyPages(layout.pages);
 
         set({ layout });
         triggerAutoSync();
@@ -1050,6 +1086,11 @@ export const useLayoutStore = create<LayoutState>()(
     {
       name: 'catheadtab-layout-storage',
       storage: createJSONStorage(() => customStorage),
+      // layoutSnapshots 是运行时数据，不需要持久化
+      partialize: (state) => {
+        const { layoutSnapshots, ...rest } = state;
+        return rest;
+      },
       // Migrate persisted state on load
       migrate: (persisted: any) => {
         if (persisted && persisted.layout && persisted.layout.pages) {

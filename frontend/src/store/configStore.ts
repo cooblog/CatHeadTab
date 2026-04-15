@@ -57,6 +57,10 @@ interface ConfigState {
   aiActiveProvider: string
   /** Per-provider configs. Each provider has its own apiKey, baseUrl, model. */
   aiProviderConfigs: Record<string, AIProviderConfig>
+  /** Server-side AI configuration (fetched from backend /api/v1/ai/config). */
+  serverAIConfig: { configured: boolean; provider: string; model: string } | null
+  /** When true, prefer local API Key over server AI even if server is available. */
+  aiPreferLocal: boolean
   setServerUrl: (url: string) => void
   setLanguage: (lang: 'zh' | 'en') => void
   setJwtToken: (token: string | null) => void
@@ -72,6 +76,10 @@ interface ConfigState {
   updateAIProviderConfig: (providerKey: string, config: Partial<AIProviderConfig>) => void
   /** Get the currently active provider's config. */
   getActiveAIConfig: () => { provider: string } & AIProviderConfig
+  /** Set the server-side AI config (from /api/v1/ai/config). */
+  setServerAIConfig: (config: { configured: boolean; provider: string; model: string } | null) => void
+  /** Toggle preference for local AI vs server AI. */
+  setAIPreferLocal: (prefer: boolean) => void
   /** Convenience: set lastLocalModifiedAt to Date.now(). Call when user changes layout/preferences. */
   markLocalModified: () => void
   logout: () => void
@@ -119,6 +127,8 @@ export const useConfigStore = create<ConfigState>()(
       lastLocalModifiedAt: 0,
       aiActiveProvider: '',
       aiProviderConfigs: {},
+      serverAIConfig: null,
+      aiPreferLocal: false,
       setServerUrl: (url) => set({ serverUrl: url }),
       setLanguage: (lang) => set({ language: lang }),
       setJwtToken: (token) => set({ jwtToken: token }),
@@ -152,6 +162,8 @@ export const useConfigStore = create<ConfigState>()(
         const cfg = state.aiProviderConfigs[state.aiActiveProvider] || { apiKey: '', baseUrl: '', model: '' };
         return { provider: state.aiActiveProvider, ...cfg };
       },
+      setServerAIConfig: (config) => set({ serverAIConfig: config }),
+      setAIPreferLocal: (prefer) => set({ aiPreferLocal: prefer }),
       markLocalModified: () => set({ lastLocalModifiedAt: Date.now() }),
       logout: () => set({ jwtToken: null, userProfile: null }),
       isConfigured: () => !!(ENV_API_URL || get().serverUrl),

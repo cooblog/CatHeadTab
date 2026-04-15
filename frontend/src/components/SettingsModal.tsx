@@ -39,6 +39,61 @@ const IDB_BG_KEY = 'bg-custom';
 // Max original file size allowed before compression (20 MB)
 const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
 
+/** Reset layout button with two-step confirmation (no confirm() dialog). */
+const ResetLayoutButton: React.FC<{ language: string }> = ({ language }) => {
+  const [confirming, setConfirming] = useState(false);
+  const [done, setDone] = useState(false);
+  const isZh = language === 'zh';
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    if (confirming) {
+      const timer = setTimeout(() => setConfirming(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [confirming]);
+
+  const handleClick = () => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    useLayoutStore.getState().resetToDefault();
+    setConfirming(false);
+    setDone(true);
+    setTimeout(() => setDone(false), 3000);
+  };
+
+  if (done) {
+    return (
+      <p className="text-[13px] text-[#72d565] font-medium">
+        ✓ {isZh ? '已恢复默认布局（可在 AI 助手中回滚）' : 'Layout reset to default (rollback available in AI Agent)'}
+      </p>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-colors ${
+        confirming
+          ? 'bg-red-500/30 hover:bg-red-500/40 border border-red-500/40 text-red-300 animate-pulse'
+          : 'bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400'
+      }`}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+        <path d="M3 3v5h5"/>
+      </svg>
+      {confirming
+        ? (isZh ? '再次点击确认恢复' : 'Click again to confirm')
+        : t('settings.resetLayout')
+      }
+    </button>
+  );
+};
+
 /** AI Assistant configuration section — independent tab. */
 const AISettingsSection: React.FC = () => {
   const { aiActiveProvider, aiProviderConfigs, setAIProvider, updateAIProviderConfig, userProfile } = useConfigStore();
@@ -70,6 +125,11 @@ const AISettingsSection: React.FC = () => {
       </div>
     );
   }
+
+  const serverAI = useConfigStore(s => s.serverAIConfig);
+  const preferLocal = useConfigStore(s => s.aiPreferLocal);
+  const setAIPreferLocal = useConfigStore(s => s.setAIPreferLocal);
+  const hasServerAI = !!serverAI?.configured;
 
   // Presets: each provider has a key, display name, default URL and model
   const presets = [
@@ -216,6 +276,48 @@ const AISettingsSection: React.FC = () => {
       <h3 className="text-xl font-bold text-white mb-2">{t('settings.aiTitle')}</h3>
       <p className="text-[13px] text-white/50 mb-4">{t('settings.aiDesc')}</p>
 
+      {/* Server AI / Local AI mode switcher — only show when server AI is available */}
+      {hasServerAI && (
+        <div className="mb-5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-[13px] font-medium text-white/70 mb-0.5">
+                {isZh ? 'AI 来源' : 'AI Source'}
+              </p>
+              <p className="text-[11px] text-white/30">
+                {!preferLocal
+                  ? (isZh ? `使用服务端 AI（${serverAI?.provider || 'Server'} / ${serverAI?.model || ''}），无需配置 API Key` : `Using server AI (${serverAI?.provider || 'Server'} / ${serverAI?.model || ''}), no API Key needed`)
+                  : (isZh ? '使用自己的 API Key 直接调用 LLM' : 'Using your own API Key to call LLM directly')
+                }
+              </p>
+            </div>
+            <div className="flex bg-black/40 rounded-lg p-0.5 border border-white/10">
+              <button
+                type="button"
+                onClick={() => setAIPreferLocal(false)}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                  !preferLocal ? 'bg-[#72d565]/20 text-[#72d565]' : 'text-white/40 hover:text-white/60'
+                }`}
+              >
+                {isZh ? '服务端' : 'Server'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAIPreferLocal(true)}
+                className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
+                  preferLocal ? 'bg-[#72d565]/20 text-[#72d565]' : 'text-white/40 hover:text-white/60'
+                }`}
+              >
+                {isZh ? '本地 Key' : 'Local Key'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Local API Key configuration — show when: no server AI, or user chose local mode */}
+      {(!hasServerAI || preferLocal) && (
+      <>
       {/* Provider selector — pill buttons */}
       <div className="flex flex-wrap gap-2 mb-5">
         {presets.map(p => (
@@ -373,6 +475,8 @@ const AISettingsSection: React.FC = () => {
         <p className={`text-[12px] mt-2 ml-1 ${testResult.ok ? 'text-[#72d565]' : 'text-red-400'}`}>
           {testResult.msg}
         </p>
+      )}
+      </>
       )}
     </div>
   );
@@ -1946,6 +2050,15 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                         onChange={handleImportFile}
                       />
                     </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* Reset to default layout */}
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-red-400/70 mb-2">{t('settings.dangerZone')}</h4>
+                    <ResetLayoutButton language={language} />
                   </div>
                 </div>
               )}

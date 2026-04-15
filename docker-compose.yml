@@ -99,6 +99,18 @@ services:
       # 是否 gzip 压缩轮转后的日志文件，默认: false
       - LOG_COMPRESS=${LOG_COMPRESS:-false}
 
+      # ---- Server-side AI (可选) ----
+      # 配置后 Pro/Admin 用户可直接使用 AI，无需自己配置 API Key
+      # 支持任何 OpenAI 兼容 API（OpenAI、DeepSeek、智谱、Kimi 等）
+      - AI_PROVIDER=${AI_PROVIDER:-}
+      - AI_BASE_URL=${AI_BASE_URL:-}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      # 每用户每分钟最大 AI 请求数，默认: 20
+      - AI_RATE_LIMIT_RPM=${AI_RATE_LIMIT_RPM:-20}
+      # 每用户每天最大 Token 用量，0 = 不限，默认: 100000
+      - AI_DAILY_TOKEN_LIMIT=${AI_DAILY_TOKEN_LIMIT:-100000}
+
       # 时区
       - TZ=${TZ:-Asia/Shanghai}
     volumes:

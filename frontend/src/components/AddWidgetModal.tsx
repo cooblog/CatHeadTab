@@ -496,7 +496,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
     const nameMap: Record<WidgetSize, { en: string; zh: string }> = {
       small: { en: 'Small', zh: '小' },
       medium: { en: 'Medium', zh: '中' },
-      large: { en: 'Large', zh: '大' },
+      large: { en: 'Wide', zh: '宽' },
       tall: { en: 'Tall', zh: '高' },
       xlarge: { en: 'Extra Large', zh: '超大' },
     };
@@ -517,7 +517,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
       {/* macOS-style Window */}
       <div
-        className="bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-auto sm:h-auto sm:max-w-lg sm:min-w-[440px]"
+        className="bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-[640px] sm:h-[600px]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header — macOS traffic lights */}
@@ -552,33 +552,35 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 bg-gradient-to-br from-white/[0.02] to-transparent no-scrollbar">
           {!selectedType ? (
-            /* Step 1: Choose widget type — Tab-based category selection */
+            /* Step 1: Choose widget type — Side-tab category layout */
             <div className="space-y-4 fade-in">
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">{t('widget.addWidget')}</h3>
                 <p className="text-[13px] text-white/50">{t('widget.chooseType')}</p>
               </div>
 
-              {/* Category Tab bar */}
-              <div className="flex gap-1 bg-black/40 border border-white/10 rounded-xl p-1">
-                {WIDGET_CATEGORIES.map((cat, idx) => (
-                  <button
-                    key={cat.labelKey}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
-                      activeTab === idx
-                        ? 'bg-white/10 text-white shadow-sm'
-                        : 'text-white/40 hover:text-white/60 hover:bg-white/5'
-                    }`}
-                    onClick={() => setActiveTab(idx)}
-                  >
-                    <span className="text-[14px]">{cat.icon}</span>
-                    <span className="truncate">{t(cat.labelKey)}</span>
-                  </button>
-                ))}
-              </div>
+              {/* Side-tab layout: left categories + right widget list */}
+              <div className="flex gap-3 min-h-[340px]">
+                {/* Left: Category tabs (vertical) */}
+                <div className="flex flex-col gap-1 shrink-0">
+                  {WIDGET_CATEGORIES.map((cat, idx) => (
+                    <button
+                      key={cat.labelKey}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-medium transition-all text-left whitespace-nowrap ${
+                        activeTab === idx
+                          ? 'bg-white/10 text-white shadow-sm'
+                          : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+                      }`}
+                      onClick={() => setActiveTab(idx)}
+                    >
+                      <span className="text-[14px] shrink-0">{cat.icon}</span>
+                      <span>{t(cat.labelKey)}</span>
+                    </button>
+                  ))}
+                </div>
 
-              {/* Active category widget list */}
-              <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                {/* Right: Active category widget list */}
+                <div className="flex-1 bg-black/40 border border-white/10 rounded-xl overflow-hidden min-w-0">
                 {WIDGET_CATEGORIES[activeTab].widgets.map((opt, idx) => {
                   const userProfile = useConfigStore.getState().userProfile;
                   const proGateEnabled = userProfile?.pro_gate_enabled ?? false;
@@ -610,6 +612,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                   </button>
                   );
                 })}
+              </div>
               </div>
             </div>
           ) : (

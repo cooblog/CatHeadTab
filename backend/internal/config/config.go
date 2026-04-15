@@ -91,6 +91,21 @@ type Config struct {
 	LogMaxBackups int
 	// LogCompress enables gzip compression for rotated log files. Default: false.
 	LogCompress bool
+
+	// Server-side AI configuration (optional).
+	// When configured, Pro/Admin users can use AI features without their own API Key.
+	// AIProvider is a label for the provider (e.g. "openai", "deepseek"). Informational only.
+	AIProvider string
+	// AIBaseURL is the OpenAI-compatible API base URL (e.g. "https://api.openai.com/v1").
+	AIBaseURL string
+	// AIAPIKey is the API key for the configured AI provider.
+	AIAPIKey string
+	// AIModel is the model identifier (e.g. "gpt-4o-mini", "deepseek-chat").
+	AIModel string
+	// AIRateLimitRPM is the max requests per minute per user for AI chat. Default: 20.
+	AIRateLimitRPM int
+	// AIDailyTokenLimit is the max total tokens per user per day. 0 = unlimited. Default: 100000.
+	AIDailyTokenLimit int
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -141,6 +156,13 @@ func Load() *Config {
 		LogMaxAge:     int(getDurationEnv("LOG_MAX_AGE_DAYS", 30)),
 		LogMaxBackups: int(getDurationEnv("LOG_MAX_BACKUPS", 10)),
 		LogCompress:   getEnv("LOG_COMPRESS", "") == "true",
+
+		AIProvider: getEnv("AI_PROVIDER", ""),
+		AIBaseURL:  getEnv("AI_BASE_URL", ""),
+		AIAPIKey:   getEnv("AI_API_KEY", ""),
+		AIModel:    getEnv("AI_MODEL", ""),
+		AIRateLimitRPM:    int(getDurationEnv("AI_RATE_LIMIT_RPM", 20)),
+		AIDailyTokenLimit: int(getDurationEnv("AI_DAILY_TOKEN_LIMIT", 100000)),
 	}
 }
 
@@ -214,4 +236,9 @@ func (c *Config) DefaultRoleForNewUser() string {
 		return string("pro")
 	}
 	return string("user")
+}
+
+// IsAIConfigured returns true if server-side AI is configured.
+func (c *Config) IsAIConfigured() bool {
+	return c.AIBaseURL != "" && c.AIAPIKey != ""
 }

@@ -164,6 +164,15 @@ function App() {
         .then(async (res: any) => {
           setUserProfile(res.data);
 
+          // 拉取后端 AI 配置（公开端点，不需要登录但在这里拉取更方便）
+          try {
+            const aiRes = await client.get('/api/v1/ai/config');
+            useConfigStore.getState().setServerAIConfig(aiRes.data);
+          } catch {
+            // AI config fetch failed — server AI not available
+            useConfigStore.getState().setServerAIConfig(null);
+          }
+
           // Fetch cloud layout to compare with local
           const localLayout = useLayoutStore.getState().layout;
           const localCount = countItems(localLayout.pages, localLayout.dock);

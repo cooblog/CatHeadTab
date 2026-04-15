@@ -30,6 +30,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 			"service":          "CatHeadTab API",
 			"version":          "1.0.0",
 			"pro_gate_enabled": cfg.ProGateEnabled,
+			"ai_configured":    cfg.IsAIConfigured(),
 		})
 	})
 
@@ -103,12 +104,17 @@ func Setup(cfg *config.Config) *gin.Engine {
 	faviconHandler := handler.NewFaviconHandler(presetRepo)
 	wallpaperHandler := handler.NewWallpaperHandler(wallpaperSvc)
 	trendingHandler := handler.NewTrendingHandler()
+	aiUsageRepo := repository.NewAIUsageRepository(repository.DB)
+	aiHandler := handler.NewAIHandler(cfg, aiUsageRepo)
 
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
 	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
 
 	// Rate limiter for login endpoint (max 10 requests per minute per IP + progressive blocking)
 	loginRateLimiter := middleware.NewLoginRateLimiter(10)
+
+	// Rate limiter for AI chat endpoint (RPM + daily token limit)
+	aiRateLimiter := middleware.NewAIRateLimiter(cfg.AIRateLimitRPM, cfg.AIDailyTokenLimit, aiUsageRepo)
 
 	// Public routes (no auth) — Preset sites (available to all users)
 	r.GET("/api/v1/preset-sites", presetHandler.ListAll)                       // Legacy: returns everything
@@ -137,6 +143,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Public routes (no auth) — Finance data (exchange rates & stock quotes, cached server-side)
 	r.POST("/api/v1/finance/exchange-rate", trendingHandler.ExchangeRate)
 	r.POST("/api/v1/finance/stock-quotes", trendingHandler.StockQuotes)
+
+	// Public routes (no auth) — AI config discovery (frontend needs to know if server-side AI is available)
+	r.GET("/api/v1/ai/config", aiHandler.GetConfig)
 
 	// Public routes (no auth)
 	auth := r.Group("/api/v1/auth")
@@ -214,6 +223,15 @@ func Setup(cfg *config.Config) *gin.Engine {
 		admin.Use(middleware.RequireRole(userRepo, model.RoleAdmin))
 		{
 			// Reserved for future admin-only endpoints
+		}
+
+		// AI routes (JWT + Pro or Admin role required)
+		ai := api.Group("/ai")
+		ai.Use(middleware.RequireRole(userRepo, model.RolePro, model.RoleAdmin))
+		{
+			ai.POST("/chat/completions", middleware.AIRateLimit(aiRateLimiter), aiHandler.Chat)
+			ai.GET("/models", aiHandler.Models)
+			ai.GET("/usage", aiHandler.GetUsage)
 		}
 	}
 

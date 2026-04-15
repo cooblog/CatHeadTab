@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../i18n/useTranslation';
-import { isAIConfigured, hasAIAccess } from '../ai/provider';
+import { isAIConfigured, hasAIAccess, getAIMode } from '../ai/provider';
 import { runAgent } from '../ai/agent';
 import type { AgentMessage } from '../ai/agent';
 import { customStorage, useConfigStore } from '../store/configStore';
+import { useLayoutStore } from '../store/layoutStore';
 
 const CHAT_STORAGE_KEY = 'catheadtab-ai-chat';
 
@@ -147,7 +148,7 @@ const MessageBubble: React.FC<{ msg: AgentMessage; isStreaming: boolean; isZh: b
   }
 
   // Assistant message
-  const isError = msg.content.startsWith('❌');
+  const isError = !!msg.isError;
   const isEmpty = !msg.content;
 
   if (isError) {
@@ -205,6 +206,8 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
   const activeModel = useConfigStore(s => {
+    const mode = getAIMode();
+    if (mode === 'server') return s.serverAIConfig?.model || 'Server AI';
     const cfg = s.aiProviderConfigs[s.aiActiveProvider];
     return cfg?.model || '';
   });
@@ -279,7 +282,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
       } catch { /* not JSON */ }
       setMessages(prev => {
         const filtered = prev.filter(m => m.content !== '');
-        return [...filtered, { role: 'assistant', content: `❌ ${isZh ? '出错了' : 'Error'}: ${displayMsg}` }];
+        return [...filtered, { role: 'assistant', content: `❌ ${isZh ? '出错了' : 'Error'}: ${displayMsg}`, isError: true }];
       });
     } finally { setStreaming(false); }
   }, [input, streaming, messages, isZh]);
@@ -343,8 +346,23 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
             {activeModel && <span className="text-[11px] text-white/25 font-mono">{activeModel}</span>}
           </div>
 
-          {/* Right: clear + close */}
-          <div className="flex items-center w-auto md:w-20 justify-end gap-1">
+          {/* Right: rollback + clear + close */}
+          <div className="flex items-center w-auto md:w-28 justify-end gap-1">
+            {useLayoutStore.getState().canRollback && (
+              <button
+                onClick={() => {
+                  const ok = useLayoutStore.getState().rollbackLayout();
+                  if (ok) {
+                    const msg = isZh ? '✅ 布局已回滚到上一步' : '✅ Layout rolled back';
+                    setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
+                  }
+                }}
+                className="hidden md:block px-2.5 py-1 rounded-lg text-[11px] text-amber-400/60 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                title={isZh ? '回滚布局' : 'Undo layout change'}
+              >
+                {isZh ? '回滚' : 'Undo'}
+              </button>
+            )}
             {messages.length > 0 && (
               <button onClick={handleClear} className="hidden md:block px-2.5 py-1 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors">
                 {isZh ? '清空' : 'Clear'}

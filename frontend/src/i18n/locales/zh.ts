@@ -439,6 +439,8 @@ export const zh = {
   'settings.exportSuccess': '布局导出成功！',
   'settings.importSuccess': '布局导入成功！',
   'settings.importError': '导入布局失败，文件格式可能无效。',
+  'settings.dangerZone': '危险操作',
+  'settings.resetLayout': '恢复默认布局',
   'settings.importConfirmTitle': '导入布局',
   'settings.importOverwrite': '覆盖',
   'settings.importOverwriteDesc': '用导入的布局完全替换当前布局',

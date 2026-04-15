@@ -439,6 +439,8 @@ export const en = {
   'settings.exportSuccess': 'Layout exported successfully!',
   'settings.importSuccess': 'Layout imported successfully!',
   'settings.importError': 'Failed to import layout. The file may be invalid.',
+  'settings.dangerZone': 'Danger Zone',
+  'settings.resetLayout': 'Reset to Default Layout',
   'settings.importConfirmTitle': 'Import Layout',
   'settings.importOverwrite': 'Overwrite',
   'settings.importOverwriteDesc': 'Replace current layout entirely with the imported one',

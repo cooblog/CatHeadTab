@@ -36,12 +36,28 @@ export const addDesktopItem = defineTool<{ title: string; url: string; pageIndex
   },
 });
 
-export const removeDesktopItem = defineTool<{ id: string }>({
-  description: 'Remove a desktop item by its ID.',
-  schema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
-  execute: async ({ id }) => {
+export const removeDesktopItem = defineTool<{ id: string; confirmed?: boolean }>({
+  description: 'Remove a desktop item by its ID. Must set confirmed=true to actually delete. First call without confirmed to get item info, then ask user for confirmation.',
+  schema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, confirmed: { type: 'boolean', description: 'Set to true only after user explicitly confirms deletion.' } } },
+  execute: async ({ id, confirmed }) => {
+    const { layout } = useLayoutStore.getState();
+    // 查找 item 信息
+    const allItems = [...layout.pages.flat(), ...layout.dock];
+    const item = allItems.find(i => i.id === id);
+    if (!item) return { success: false, message: `Item ${id} not found.` };
+
+    if (!confirmed) {
+      return {
+        success: false,
+        needsConfirmation: true,
+        message: `Found "${item.title}" (type: ${item.type}). Please ask the user to confirm before deleting.`,
+        item: { id: item.id, type: item.type, title: item.title },
+      };
+    }
+
+    useLayoutStore.getState().saveSnapshot();
     useLayoutStore.getState().removeDesktopItem(id);
-    return { success: true, message: `Removed ${id}.` };
+    return { success: true, message: `Removed "${item.title}".` };
   },
 });
 
@@ -56,11 +72,17 @@ export const createFolder = defineTool<{ name: string; pageIndex?: number }>({
 });
 
 export const moveItemToFolder = defineTool<{ itemId: string; folderId: string }>({
-  description: 'Move a desktop item into an existing folder.',
+  description: 'Move a desktop link item into an existing folder. Cannot move widgets or folders.',
   schema: { type: 'object', required: ['itemId', 'folderId'], properties: { itemId: { type: 'string' }, folderId: { type: 'string' } } },
   execute: async ({ itemId, folderId }) => {
+    const { layout } = useLayoutStore.getState();
+    const allItems = [...layout.pages.flat(), ...layout.dock];
+    const item = allItems.find(i => i.id === itemId);
+    if (!item) return { success: false, message: `Item ${itemId} not found.` };
+    if (item.type === 'widget') return { success: false, message: `Cannot move widget "${item.title}" into a folder. Widgets must stay on the desktop.` };
+    if (item.type === 'folder') return { success: false, message: `Cannot move folder "${item.title}" into another folder.` };
     useLayoutStore.getState().moveItemToFolder(itemId, folderId);
-    return { success: true, message: `Moved ${itemId} into ${folderId}.` };
+    return { success: true, message: `Moved "${item.title}" into folder.` };
   },
 });
 
@@ -74,7 +96,7 @@ export const renameItem = defineTool<{ id: string; newTitle: string }>({
 });
 
 export const organizeDesktop = defineTool<{ categories: Array<{ folderName: string; itemIds: string[] }> }>({
-  description: 'Batch-organize desktop icons into categorized folders. Call listDesktopItems first.',
+  description: 'Batch-organize desktop link icons into categorized folders. Only moves "link" type items. Widgets and existing folders are never moved. Call listDesktopItems first.',
   schema: {
     type: 'object', required: ['categories'],
     properties: {
@@ -88,14 +110,30 @@ export const organizeDesktop = defineTool<{ categories: Array<{ folderName: stri
   },
   execute: async ({ categories }) => {
     const store = useLayoutStore.getState();
-    let foldersCreated = 0, itemsMoved = 0;
+    // 批量操作前保存快照，支持回滚
+    store.saveSnapshot();
+    const allItems = [...store.layout.pages.flat(), ...store.layout.dock];
+    let foldersCreated = 0, itemsMoved = 0, skipped = 0;
     for (const cat of categories) {
       if (!cat.itemIds.length) continue;
+      // 过滤掉 widget 和 folder 类型，只移动 link
+      const validIds = cat.itemIds.filter(id => {
+        const item = allItems.find(i => i.id === id);
+        if (!item || item.type === 'widget' || item.type === 'folder') {
+          skipped++;
+          return false;
+        }
+        return true;
+      });
+      if (!validIds.length) continue;
       const folderId = `folder-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       store.addDesktopItem({ id: folderId, type: 'folder', title: cat.folderName, children: [] });
       foldersCreated++;
-      for (const id of cat.itemIds) { store.moveItemToFolder(id, folderId); itemsMoved++; }
+      for (const id of validIds) { store.moveItemToFolder(id, folderId); itemsMoved++; }
     }
-    return { success: true, foldersCreated, itemsMoved, message: `Created ${foldersCreated} folder(s), organized ${itemsMoved} item(s).` };
+    return {
+      success: true, foldersCreated, itemsMoved, skipped,
+      message: `Created ${foldersCreated} folder(s), organized ${itemsMoved} item(s).${skipped > 0 ? ` Skipped ${skipped} widget(s)/folder(s).` : ''}`,
+    };
   },
 });
