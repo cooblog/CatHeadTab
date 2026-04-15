@@ -71,8 +71,8 @@ func (r *postgresVerificationRepository) CreateEmailVerification(userID uuid.UUI
 func (r *postgresVerificationRepository) GetEmailVerification(token string) (*model.EmailVerification, error) {
 	var v model.EmailVerification
 	err := r.db.QueryRow(
-		`SELECT id, user_id, token, expires_at, created_at FROM email_verifications WHERE token = $1 AND expires_at > NOW()`,
-		token,
+		`SELECT id, user_id, token, expires_at, created_at FROM email_verifications WHERE token = $1 AND expires_at > $2`,
+		token, time.Now(),
 	).Scan(&v.ID, &v.UserID, &v.Token, &v.ExpiresAt, &v.CreatedAt)
 
 	if err != nil {
@@ -118,8 +118,8 @@ func (r *postgresVerificationRepository) CreatePasswordReset(userID uuid.UUID, t
 func (r *postgresVerificationRepository) GetPasswordReset(token string) (*model.PasswordReset, error) {
 	var pr model.PasswordReset
 	err := r.db.QueryRow(
-		`SELECT id, user_id, token, expires_at, used, created_at FROM password_resets WHERE token = $1 AND expires_at > NOW() AND used = FALSE`,
-		token,
+		`SELECT id, user_id, token, expires_at, used, created_at FROM password_resets WHERE token = $1 AND expires_at > $2 AND used = FALSE`,
+		token, time.Now(),
 	).Scan(&pr.ID, &pr.UserID, &pr.Token, &pr.ExpiresAt, &pr.Used, &pr.CreatedAt)
 
 	if err != nil {

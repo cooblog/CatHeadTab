@@ -5,6 +5,10 @@ import { useTranslation } from '../i18n/useTranslation';
 import { isPasswordAcceptable } from '../utils/passwordStrength';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 
+// 参考 Twitter 规则：4-15 字符，只允许字母、数字、下划线
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{4,15}$/;
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+
 type AuthView = 'login' | 'register' | 'forgot' | 'verify-pending';
 type ModalStep = 'server' | 'auth';
 
@@ -120,7 +124,19 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
         onClose();
       } else if (view === 'register') {
-        // 注册时校验密码强度
+        // 校验邮箱格式
+        if (!EMAIL_REGEX.test(email)) {
+          setError(t('auth.invalidEmail'));
+          setLoading(false);
+          return;
+        }
+        // 校验用户名格式（4-15 字符，仅字母/数字/下划线）
+        if (!USERNAME_REGEX.test(username)) {
+          setError(t('auth.invalidUsername'));
+          setLoading(false);
+          return;
+        }
+        // 校验密码强度
         if (!isPasswordAcceptable(password)) {
           setError(t('password.tooWeak'));
           setLoading(false);
@@ -439,10 +455,14 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     type="text" 
                     placeholder={t('auth.username')} 
                     value={username}
-                    onChange={e => setUsername(e.target.value)}
+                    onChange={e => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                    minLength={4}
+                    maxLength={15}
+                    pattern="^[a-zA-Z0-9_]{4,15}$"
                     required
                     className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[15px] text-white focus:outline-none focus:border-white/50 transition-all shadow-inner placeholder-white/40"
                   />
+                  <p className="text-white/30 text-[11px] -mt-2 px-1">{t('auth.usernameHint')}</p>
                 </>
               )}
 

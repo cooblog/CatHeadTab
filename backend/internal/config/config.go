@@ -60,7 +60,7 @@ type Config struct {
 	// Token TTL settings
 	// EmailVerifyTokenTTL controls how long email verification tokens remain valid.
 	EmailVerifyTokenTTL time.Duration
-	// PasswordResetTokenTTL controls how long password reset tokens remain valid.
+	// PasswordResetTokenTTL controls how long password reset tokens remain valid. Default: 5 minutes.
 	PasswordResetTokenTTL time.Duration
 	// JWTTokenTTL controls how long JWT login tokens remain valid.
 	JWTTokenTTL time.Duration
@@ -128,7 +128,7 @@ func Load() *Config {
 		COSThumbPrefix:    getEnv("COS_THUMB_PREFIX", ""),
 
 		EmailVerifyTokenTTL:   getDurationEnv("EMAIL_VERIFY_TOKEN_TTL_HOURS", 24) * time.Hour,
-		PasswordResetTokenTTL: getDurationEnv("PASSWORD_RESET_TOKEN_TTL_HOURS", 1) * time.Hour,
+		PasswordResetTokenTTL: getDurationEnv("PASSWORD_RESET_TOKEN_TTL_MINUTES", 5) * time.Minute,
 		JWTTokenTTL:           getDurationEnv("JWT_TOKEN_TTL_DAYS", 30) * 24 * time.Hour,
 		TokenCleanupInterval:  getDurationEnv("TOKEN_CLEANUP_INTERVAL_HOURS", 6) * time.Hour,
 

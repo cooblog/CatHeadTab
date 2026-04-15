@@ -6,10 +6,34 @@ import (
 	"fmt"
 	"net"
 	"net/smtp"
+	"time"
 
 	"github.com/CatHeadTab/backend/internal/config"
 	"github.com/CatHeadTab/backend/internal/logger"
 )
+
+// formatDuration 将 time.Duration 格式化为人类可读的字符串（如 "24 hours"、"5 minutes"）
+func formatDuration(d time.Duration) string {
+	if d >= 24*time.Hour && d%(24*time.Hour) == 0 {
+		days := int(d / (24 * time.Hour))
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	}
+	if d >= time.Hour && d%time.Hour == 0 {
+		hours := int(d / time.Hour)
+		if hours == 1 {
+			return "1 hour"
+		}
+		return fmt.Sprintf("%d hours", hours)
+	}
+	minutes := int(d / time.Minute)
+	if minutes <= 1 {
+		return "1 minute"
+	}
+	return fmt.Sprintf("%d minutes", minutes)
+}
 
 // EmailService handles sending transactional emails.
 type EmailService struct {
@@ -36,6 +60,7 @@ func (s *EmailService) SendVerificationEmail(toEmail, token string) error {
 	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", s.cfg.FrontendURL, token)
 
 	subject := "Verify your CatHeadTab email"
+	expiry := formatDuration(s.cfg.EmailVerifyTokenTTL)
 	body := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -45,12 +70,12 @@ func (s *EmailService) SendVerificationEmail(toEmail, token string) error {
   <p>Thank you for registering with CatHeadTab!</p>
   <p>Please verify your email address by clicking the link below:</p>
   <p><a href="%s" style="color: #1a73e8; text-decoration: underline; word-break: break-all;">%s</a></p>
-  <p>This link will expire in 24 hours.</p>
+  <p>This link will expire in %s.</p>
   <p style="color: #999; font-size: 13px;">If you did not create this account, please ignore this email.</p>
   <p style="color: #999;">— CatHeadTab Team</p>
 </div>
 </body>
-</html>`, verifyURL, verifyURL)
+</html>`, verifyURL, verifyURL, expiry)
 
 	return s.sendHTML(toEmail, subject, body)
 }
@@ -65,6 +90,7 @@ func (s *EmailService) SendPasswordResetEmail(toEmail, token string) error {
 	resetURL := fmt.Sprintf("%s/reset-password?token=%s", s.cfg.FrontendURL, token)
 
 	subject := "Reset your CatHeadTab password"
+	expiry := formatDuration(s.cfg.PasswordResetTokenTTL)
 	body := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"></head>
@@ -74,12 +100,12 @@ func (s *EmailService) SendPasswordResetEmail(toEmail, token string) error {
   <p>We received a request to reset your CatHeadTab password.</p>
   <p>Click the link below to set a new password:</p>
   <p><a href="%s" style="color: #1a73e8; text-decoration: underline; word-break: break-all;">%s</a></p>
-  <p>This link will expire in 1 hour.</p>
+  <p>This link will expire in %s.</p>
   <p style="color: #999; font-size: 13px;">If you did not request this, please ignore this email and your password will remain unchanged.</p>
   <p style="color: #999;">— CatHeadTab Team</p>
 </div>
 </body>
-</html>`, resetURL, resetURL)
+</html>`, resetURL, resetURL, expiry)
 
 	return s.sendHTML(toEmail, subject, body)
 }

@@ -372,11 +372,23 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
             </div>
           </div>
         ) : !configured ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
             <span className="text-4xl">🔑</span>
-            <p className="text-[13px] text-white/40 leading-relaxed">
-              {isZh ? '请先在设置 → AI 助手中配置 API Key' : 'Configure API Key in Settings → AI Agent first'}
-            </p>
+            <div className="space-y-2">
+              <p className="text-[13px] text-white/50 leading-relaxed">
+                {isZh ? '请先在设置 → AI 助手中配置 API Key' : 'Configure API Key in Settings → AI Agent first'}
+              </p>
+              <div className="flex flex-col gap-1.5 mt-3 px-4">
+                <div className="flex items-start gap-2 text-[11px] text-white/25">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>{isZh ? 'API Key 仅保存在浏览器本地，绝不会上传到任何服务器' : 'API Keys are stored locally in your browser and never uploaded to any server'}</span>
+                </div>
+                <div className="flex items-start gap-2 text-[11px] text-white/25">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  <span>{isZh ? 'AI 完全在浏览器本地运行，直接调用你配置的 LLM API' : 'AI runs entirely in your browser, calling the LLM API you configured directly'}</span>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -401,6 +413,10 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
                       </button>
                     ))}
                   </div>
+                  <p className="text-[10px] text-white/15 mt-2 flex items-center gap-1.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    {isZh ? 'AI 在浏览器本地运行 · API Key 仅存储在本地' : 'AI runs locally in your browser · API Key stored on-device only'}
+                  </p>
                 </div>
               )}
               {messages.map((msg, i) => (

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/CatHeadTab/backend/internal/config"
@@ -18,6 +19,40 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// usernameRegex 参考 Twitter 规则：4-15 字符，只允许字母、数字、下划线
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]{4,15}$`)
+
+// emailRegex 基本邮箱格式校验
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+// validateUsername 校验用户名格式
+func validateUsername(username string) string {
+	if len(username) < 4 {
+		return "Username must be at least 4 characters"
+	}
+	if len(username) > 15 {
+		return "Username must be no more than 15 characters"
+	}
+	if !usernameRegex.MatchString(username) {
+		return "Username can only contain letters, numbers, and underscores"
+	}
+	return ""
+}
+
+// validateEmail 校验邮箱格式
+func validateEmail(email string) string {
+	if len(email) == 0 {
+		return "Email is required"
+	}
+	if len(email) > 254 {
+		return "Email address is too long"
+	}
+	if !emailRegex.MatchString(email) {
+		return "Invalid email format"
+	}
+	return ""
+}
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
@@ -60,6 +95,18 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	var input RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 校验邮箱格式
+	if errMsg := validateEmail(input.Email); errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		return
+	}
+
+	// 校验用户名格式（参考 Twitter：4-15 字符，仅字母/数字/下划线）
+	if errMsg := validateUsername(input.Username); errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 		return
 	}
 
@@ -225,16 +272,18 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	logger.Debug("verify email request", "token_length", len(input.Token))
+	logger.Debug("verify email request", "token_length", len(input.Token), "token_prefix", input.Token[:min(16, len(input.Token))], "now", time.Now().Format(time.RFC3339))
 	verification, err := h.verifyRepo.GetEmailVerification(input.Token)
 	if err != nil {
 		logger.Error("verify email DB error", "error", err)
 	}
 	if err != nil || verification == nil {
-		logger.Warn("verify email failed: invalid or expired token")
+		logger.Warn("verify email failed: invalid or expired token", "token_prefix", input.Token[:min(16, len(input.Token))])
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired verification token"})
 		return
 	}
+
+	logger.Debug("verify email token found", "user_id", verification.UserID, "expires_at", verification.ExpiresAt.Format(time.RFC3339), "now", time.Now().Format(time.RFC3339))
 
 	if err := h.userRepo.SetEmailVerified(verification.UserID, true); err != nil {
 		logger.Error("failed to set email verified", "user_id", verification.UserID, "error", err)
