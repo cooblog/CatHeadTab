@@ -32,9 +32,15 @@ function useStoreHydrated() {
 }
 
 function App() {
-  const { backgroundImage, jwtToken, serverUrl, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout, setLastSyncResolvedAt } = useConfigStore();
+  const { backgroundImage, jwtToken, logout, setUserProfile, isLocked, setLocked, lockIdleTimeout, setLastSyncResolvedAt } = useConfigStore();
   const { pullLayoutFromCloud, uploadLayoutToCloud, mergeLayoutWithCloud } = useLayoutStore();
   const hydrated = useStoreHydrated();
+
+  // Effective server URL — resolves ENV_API_URL first, then falls back to user-entered serverUrl.
+  // This must be used instead of raw serverUrl so Docker-deployed instances work correctly
+  // (where API URL is injected via env variable, not user input).
+  // We subscribe to serverUrl for reactivity; getEffectiveServerUrl also checks ENV_API_URL.
+  useConfigStore(s => s.serverUrl);
   const [syncing, setSyncing] = useState(false);
   const [resolvedBg, setResolvedBg] = useState('');
 
@@ -151,41 +157,33 @@ function App() {
     }
   }, [pullLayoutFromCloud, uploadLayoutToCloud, mergeLayoutWithCloud, setLastSyncResolvedAt]);
 
-  // DEBUG: Log render values every time App renders (outside effect so always visible)
-  console.log('[App] RENDER:', { hydrated, jwtToken: !!jwtToken, serverUrl: !!serverUrl, tokenVal: jwtToken?.slice(0, 10) });
-
   // Token freshness check + smart sync on page load
-  // Only attempt when both serverUrl and jwtToken are available AND stores are hydrated
+  // Only attempt when both effective URL and jwtToken are available AND stores are hydrated
+  // Subscribe to serverUrl for reactivity; effect uses getEffectiveServerUrl() which also checks ENV_API_URL
+  useConfigStore(s => s.serverUrl);
+
   useEffect(() => {
-    console.log('[App] Effect RUN:', { hydrated, hasJwt: !!jwtToken, hasServerUrl: !!serverUrl });
-    if (hydrated && jwtToken && serverUrl) {
+    const url = useConfigStore.getState().getEffectiveServerUrl();
+    if (hydrated && jwtToken && url) {
       // Skip if we've already handled sync for this token
       if (syncedTokenRef.current === jwtToken) {
-        console.log('[App] SKIP: token already synced');
         return;
       }
       syncedTokenRef.current = jwtToken;
 
       setSyncing(true);
-      console.log('[App] Starting profile fetch...');
       client.get('/api/v1/user/profile')
         .then(async (res: any) => {
-          console.log('[App] Profile success, setting userProfile, about to fetch ai/config');
           setUserProfile(res.data);
 
           // 拉取后端 AI 配置（公开端点，不需要登录但在这里拉取更方便）
           try {
-            console.log('[App] Fetching ai/config...');
             const aiRes = await client.get('/api/v1/ai/config');
-            console.log('[App] ai/config response:', aiRes.data);
             useConfigStore.getState().setServerAIConfig(aiRes.data);
-            console.log('[App] serverAIConfig stored in zustand');
-          } catch (err) {
+          } catch {
             // AI config fetch failed — server AI not available
-            console.warn('[App] ai/config fetch FAILED:', err);
             useConfigStore.getState().setServerAIConfig(null);
           }
-          console.log('[App] About to fetch layout...');
 
           // Fetch cloud layout to compare with local
           const localLayout = useLayoutStore.getState().layout;
@@ -274,8 +272,6 @@ function App() {
             const idsMatch = localIds.size === cloudIds.size && [...localIds].every(id => cloudIds.has(id));
 
             // 3. 决策
-            console.log('[Sync] idsMatch:', idsMatch, '| cloudLatest:', cloudLatest, '| localLatest:', localLatest);
-
             if (idsMatch) {
               // 布局结构一致 — 按时间戳决定方向
               // 允许 5 秒的误差（网络延迟 + 时钟偏移）
@@ -283,23 +279,19 @@ function App() {
 
               if (cloudLatest > localLatest + THRESHOLD_MS) {
                 // 云端更新 — 拉取云端数据（布局 + 偏好 + 壁纸）
-                console.log('[Sync] Cloud is newer, pulling from cloud');
                 await pullLayoutFromCloud();
                 // 更新本地时间戳以与云端对齐，防止下次刷新误判
                 useConfigStore.getState().setLastLocalModifiedAt(cloudLatest);
               } else if (localLatest > cloudLatest + THRESHOLD_MS) {
                 // 本地更新 — 推送到云端
-                console.log('[Sync] Local is newer, uploading to cloud');
                 await uploadLayoutToCloud();
               } else {
                 // 时间戳接近 — 认为一致，跳过
-                console.log('[Sync] Local and cloud are in sync, skipping');
               }
               setSyncing(false);
             } else {
               // 布局结构不同 — 始终弹出冲突对话框让用户选择
               // （即使在冷却期内也弹窗，因为 ID 不同意味着两端数据差异较大，不能自动决策）
-              console.log('[Sync] IDs differ, showing conflict modal');
               setLocalItemCount(localCount);
               setCloudItemCount(cloudCount);
               setSyncing(false);
@@ -323,7 +315,7 @@ function App() {
       setSyncing(false);
       syncedTokenRef.current = null;
     }
-  }, [hydrated, jwtToken, serverUrl, logout, setUserProfile, pullLayoutFromCloud, uploadLayoutToCloud, countItems]);
+  }, [hydrated, jwtToken, logout, setUserProfile, pullLayoutFromCloud, uploadLayoutToCloud, countItems]);
 
   if (!hydrated) return null; // Wait for chrome.storage async hydration
 
