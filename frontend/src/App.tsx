@@ -154,24 +154,35 @@ function App() {
   // Token freshness check + smart sync on page load
   // Only attempt when both serverUrl and jwtToken are available AND stores are hydrated
   useEffect(() => {
+    console.log('[App] Effect check:', { hydrated, hasJwt: !!jwtToken, hasServerUrl: !!serverUrl });
     if (hydrated && jwtToken && serverUrl) {
       // Skip if we've already handled sync for this token
-      if (syncedTokenRef.current === jwtToken) return;
+      if (syncedTokenRef.current === jwtToken) {
+        console.log('[App] SKIP: token already synced');
+        return;
+      }
       syncedTokenRef.current = jwtToken;
 
       setSyncing(true);
+      console.log('[App] Starting profile fetch...');
       client.get('/api/v1/user/profile')
         .then(async (res: any) => {
+          console.log('[App] Profile success, setting userProfile, about to fetch ai/config');
           setUserProfile(res.data);
 
           // 拉取后端 AI 配置（公开端点，不需要登录但在这里拉取更方便）
           try {
+            console.log('[App] Fetching ai/config...');
             const aiRes = await client.get('/api/v1/ai/config');
+            console.log('[App] ai/config response:', aiRes.data);
             useConfigStore.getState().setServerAIConfig(aiRes.data);
-          } catch {
+            console.log('[App] serverAIConfig stored in zustand');
+          } catch (err) {
             // AI config fetch failed — server AI not available
+            console.warn('[App] ai/config fetch FAILED:', err);
             useConfigStore.getState().setServerAIConfig(null);
           }
+          console.log('[App] About to fetch layout...');
 
           // Fetch cloud layout to compare with local
           const localLayout = useLayoutStore.getState().layout;
