@@ -517,7 +517,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
       {/* macOS-style Window */}
       <div
-        className="bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-[640px] sm:h-[600px]"
+        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-[640px] ${isEditMode ? 'sm:h-auto sm:max-h-[600px]' : 'sm:h-[600px]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header — macOS traffic lights */}

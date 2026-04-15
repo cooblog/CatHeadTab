@@ -392,10 +392,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
         </div>
       </div>
 
-      {/* Data source */}
-      <div className="shrink-0 px-2 pb-1 pt-0.5">
-        <span className="text-[9px] text-white/20">{isZh ? '数据来源：Open-Meteo（开放气象）' : 'Data: Open-Meteo'}</span>
-      </div>
+
     </div>
   );
 };
