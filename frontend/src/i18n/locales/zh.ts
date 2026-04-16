@@ -109,6 +109,7 @@ export const zh = {
   'settings.wpNoResults': '未找到匹配的壁纸',
   'settings.wpNoMore': '已经到底了',
   'settings.wpNeedServer': '请先在「系统」标签页中连接后端服务器',
+  'settings.wpNeedLogin': '在线壁纸需要登录才能使用',
 
   // Profile Modal
   'profile.title': '用户资料',

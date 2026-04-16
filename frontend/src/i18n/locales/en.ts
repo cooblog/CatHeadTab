@@ -109,6 +109,7 @@ export const en = {
   'settings.wpNoResults': 'No matching wallpapers found',
   'settings.wpNoMore': 'No more wallpapers',
   'settings.wpNeedServer': 'Please connect a backend server in the System tab first',
+  'settings.wpNeedLogin': 'You need to sign in to browse online wallpapers.',
 
   // Profile Modal
   'profile.title': 'User Profile',

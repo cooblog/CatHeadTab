@@ -154,6 +154,10 @@ services:
       # 留空则前端使用相对路径 /api，由 nginx 反代到后端（推荐同域部署）
       # 跨域部署时设为完整 URL，如 https://api.catheadtab.com
       - VITE_API_URL=${VITE_API_URL:-}
+      # Umami Analytics 上报配置 (可选)
+      # 留空则前端不加载此脚本。VITE_UMAMI_SRC 默认使用官方接口
+      - VITE_UMAMI_WEBSITE_ID=${VITE_UMAMI_WEBSITE_ID:-}
+      - VITE_UMAMI_SRC=${VITE_UMAMI_SRC:-}
     depends_on:
       - catheadtab-backend
     logging:

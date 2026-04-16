@@ -717,9 +717,13 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           contentScrollRef.current.scrollTop = 0;
         }
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setWpError(msg);
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        setWpError(t('settings.wpNeedLogin'));
+      } else {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        setWpError(msg);
+      }
     } finally {
       setWpLoading(false);
       setWpLoadingMore(false);
@@ -767,9 +771,13 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           contentScrollRef.current.scrollTop = 0;
         }
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setCosError(msg);
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        setCosError(t('settings.wpNeedLogin'));
+      } else {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        setCosError(msg);
+      }
     } finally {
       setCosLoading(false);
       setCosLoadingMore(false);
