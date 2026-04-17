@@ -746,6 +746,7 @@ export const Desktop: React.FC = () => {
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
   // Trending modal state
   const [trendingModalType, setTrendingModalType] = useState<'github' | 'bilibili' | 'weibo' | 'xiaohongshu' | 'bbc' | null>(null);
+  const [trendingModalOptions, setTrendingModalOptions] = useState<any>(null);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -935,6 +936,7 @@ export const Desktop: React.FC = () => {
         return;
       } else if (item.widgetType === 'githubTrending') {
         setTrendingModalType('github');
+        setTrendingModalOptions(item.widgetConfig);
         return;
       } else if (item.widgetType === 'bilibiliHot') {
         setTrendingModalType('bilibili');
@@ -2199,7 +2201,7 @@ export const Desktop: React.FC = () => {
       {isItToolsOpen && <ItToolsModal onClose={() => setIsItToolsOpen(false)} />}
       {stickyNoteItem && <StickyNoteModal onClose={() => setStickyNoteItem(null)} item={stickyNoteItem} />}
       {isAiAgentOpen && <AiAgentModal onClose={() => setIsAiAgentOpen(false)} />}
-      {trendingModalType && <TrendingModal type={trendingModalType} onClose={() => setTrendingModalType(null)} />}
+      {trendingModalType && <TrendingModal type={trendingModalType} options={trendingModalOptions} onClose={() => { setTrendingModalType(null); setTrendingModalOptions(null); }} />}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 

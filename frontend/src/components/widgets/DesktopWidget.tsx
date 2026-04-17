@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DesktopItem, WidgetSize, WeatherWidgetConfig, CountdownWidgetConfig, ClockWidgetConfig, StickyNoteWidgetConfig, StockWidgetConfig, ExchangeRateWidgetConfig } from '../../store/layoutStore';
+import type { DesktopItem, WidgetSize, WeatherWidgetConfig, CountdownWidgetConfig, ClockWidgetConfig, StickyNoteWidgetConfig, StockWidgetConfig, ExchangeRateWidgetConfig, GithubTrendingWidgetConfig } from '../../store/layoutStore';
 import { WIDGET_SIZE_MAP } from '../../store/layoutStore';
 import { CalendarWidget } from './CalendarWidget';
 import { WeatherWidget } from './WeatherWidget';
@@ -85,7 +85,7 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
       case 'aiAgent':
         return <AiAgentWidget size={size} />;
       case 'githubTrending':
-        return <GithubTrendingWidget size={size} />;
+        return <GithubTrendingWidget size={size} config={item.widgetConfig as GithubTrendingWidgetConfig} />;
       case 'bilibiliHot':
         return <BilibiliHotWidget size={size} />;
       case 'xiaohongshuHot':

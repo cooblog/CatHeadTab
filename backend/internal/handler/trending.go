@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -117,10 +118,19 @@ func (h *TrendingHandler) getOrFetch(key string, fetchFn func() (interface{}, er
 //
 //	GET /api/v1/trending/github
 func (h *TrendingHandler) GithubTrending(c *gin.Context) {
-	const cacheKey = "github_trending"
+	lang := c.Query("lang")
+	since := c.Query("since")
+
+	cacheKey := "github_trending"
+	if lang != "" {
+		cacheKey += "_lang_" + lang
+	}
+	if since != "" {
+		cacheKey += "_since_" + since
+	}
 
 	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
-		return fetchGithubTrending()
+		return fetchGithubTrending(lang, since)
 	})
 	if err != nil {
 		logger.Error("[trending] github fetch error", "error", err)
@@ -134,15 +144,19 @@ func (h *TrendingHandler) GithubTrending(c *gin.Context) {
 // numberRe 用于从文本中提取带逗号的数字，如 "28,530" 或 "5,733 stars today"
 var numberRe = regexp.MustCompile(`[\d,]+`)
 
-func fetchGithubTrending() ([]GithubTrendingRepo, error) {
+func fetchGithubTrending(lang string, since string) ([]GithubTrendingRepo, error) {
+	if since != "" {
+		return fetchGithubTrendingWithParams(lang, since)
+	}
+
 	// Try daily first; if too few results, fall back to weekly
-	repos, err := fetchGithubTrendingByPeriod("daily")
+	repos, err := fetchGithubTrendingWithParams(lang, "daily")
 	if err == nil && len(repos) >= 15 {
 		return repos, nil
 	}
 	logger.Info("[trending] github daily returned few repos, trying weekly", "count", len(repos))
 
-	weeklyRepos, weeklyErr := fetchGithubTrendingByPeriod("weekly")
+	weeklyRepos, weeklyErr := fetchGithubTrendingWithParams(lang, "weekly")
 	if weeklyErr != nil {
 		// If weekly also fails, return whatever daily gave us (or its error)
 		if err != nil {
@@ -153,14 +167,25 @@ func fetchGithubTrending() ([]GithubTrendingRepo, error) {
 	return weeklyRepos, nil
 }
 
-func fetchGithubTrendingByPeriod(period string) ([]GithubTrendingRepo, error) {
+func fetchGithubTrendingWithParams(lang string, since string) ([]GithubTrendingRepo, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", "https://github.com/trending?since="+period, nil)
+	
+	urlStr := "https://github.com/trending"
+	if lang != "" {
+		urlStr += "/" + url.PathEscape(lang)
+	}
+	if since != "" {
+		urlStr += "?since=" + since
+	}
+	
+	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("github trending request failed: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
-	req.Header.Set("Accept", "text/html")
+	// Use standard browser headers to avoid GitHub Cloudflare / anti-bot blocking (which sometimes returns 200 OK with captcha HTML or 504)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
 	resp, err := client.Do(req)
 	if err != nil {

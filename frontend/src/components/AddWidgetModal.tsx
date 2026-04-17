@@ -346,6 +346,152 @@ const TimezoneDropdown: React.FC<{
   );
 };
 
+const GITHUB_LANGUAGES = [
+  { id: '', label: 'All Languages' },
+  { id: 'c', label: 'C' },
+  { id: 'c++', label: 'C++' },
+  { id: 'c#', label: 'C#' },
+  { id: 'css', label: 'CSS' },
+  { id: 'dart', label: 'Dart' },
+  { id: 'go', label: 'Go' },
+  { id: 'html', label: 'HTML' },
+  { id: 'java', label: 'Java' },
+  { id: 'javascript', label: 'JavaScript' },
+  { id: 'kotlin', label: 'Kotlin' },
+  { id: 'lua', label: 'Lua' },
+  { id: 'php', label: 'PHP' },
+  { id: 'python', label: 'Python' },
+  { id: 'r', label: 'R' },
+  { id: 'ruby', label: 'Ruby' },
+  { id: 'rust', label: 'Rust' },
+  { id: 'scala', label: 'Scala' },
+  { id: 'shell', label: 'Shell' },
+  { id: 'swift', label: 'Swift' },
+  { id: 'typescript', label: 'TypeScript' },
+  { id: 'vue', label: 'Vue' },
+  { id: 'jupyter-notebook', label: 'Jupyter Notebook' },
+];
+
+const LanguageDropdown: React.FC<{
+  languageValue: string;
+  setLanguageValue: (lang: string) => void;
+  langSearch: string;
+  setLangSearch: (s: string) => void;
+  langDropdownOpen: boolean;
+  setLangDropdownOpen: (open: boolean) => void;
+  isZh: boolean;
+  label: string;
+}> = ({ languageValue, setLanguageValue, langSearch, setLangSearch, langDropdownOpen, setLangDropdownOpen, isZh, label }) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (langDropdownOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [langDropdownOpen]);
+
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (
+      dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+      triggerRef.current && !triggerRef.current.contains(e.target as Node)
+    ) {
+      setLangDropdownOpen(false);
+    }
+  }, [setLangDropdownOpen]);
+
+  useEffect(() => {
+    if (langDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [langDropdownOpen, handleClickOutside]);
+
+  const selectLanguage = (tz: string) => {
+    setLanguageValue(tz);
+    setLangDropdownOpen(false);
+    setLangSearch('');
+  };
+
+  const selectedLabel = languageValue
+    ? GITHUB_LANGUAGES.find(tz => tz.id === languageValue)?.label ?? languageValue
+    : (isZh ? '所有语言（默认）' : 'All Languages (default)');
+
+  return (
+    <div>
+      <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{label}</label>
+      <div>
+        <div
+          ref={triggerRef}
+          className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3.5 text-[14px] text-white cursor-pointer flex items-center justify-between transition-all"
+          onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+        >
+          <span className={languageValue ? 'text-white' : 'text-white/40'}>
+            {selectedLabel}
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-white/40 transition-transform ${langDropdownOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+
+        {langDropdownOpen && pos && createPortal(
+          <div
+            ref={dropdownRef}
+            className="bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              width: Math.max(pos.width, 380),
+              zIndex: 10000,
+            }}
+          >
+            {/* Search input */}
+            <div className="p-2 border-b border-white/5">
+              <input
+                type="text"
+                value={langSearch}
+                onChange={(e) => setLangSearch(e.target.value)}
+                placeholder={isZh ? '搜索编程语言...' : 'Search language...'}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder-white/30 focus:outline-none focus:border-[#72d565]/50"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            {/* list */}
+            <div className="max-h-[min(360px,50vh)] overflow-y-auto no-scrollbar">
+              <button
+                className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 ${!languageValue ? 'bg-white/5 text-white' : 'text-white/60'}`}
+                onClick={() => selectLanguage('')}
+              >
+                {isZh ? '所有语言（默认）' : 'All Languages (default)'}
+                {!languageValue && <span className="text-[#72d565]">✓</span>}
+              </button>
+              {GITHUB_LANGUAGES.slice(1) // skip the empty one handled above
+                .filter(tz => {
+                  if (!langSearch) return true;
+                  const q = langSearch.toLowerCase();
+                  return tz.id.toLowerCase().includes(q) || tz.label.toLowerCase().includes(q);
+                })
+                .map(tz => (
+                  <button
+                    key={tz.id}
+                    className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 border-t border-white/[0.03] ${languageValue === tz.id ? 'bg-white/5 text-white' : 'text-white/60'}`}
+                    onClick={() => selectLanguage(tz.id)}
+                  >
+                    <span className="truncate mr-2">{tz.label}</span>
+                    {languageValue === tz.id && <span className="text-[#72d565] shrink-0">✓</span>}
+                  </button>
+                ))}
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageIndex, editItem }) => {
   const { t, language } = useTranslation();
   const isZh = language === 'zh';
@@ -395,6 +541,12 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
   const [clockTimezone, setClockTimezone] = useState(editClock?.timezone ?? '');
   const [tzSearch, setTzSearch] = useState('');
   const [tzDropdownOpen, setTzDropdownOpen] = useState(false);
+  // Github Trending config
+  const editGithub = isEditMode && editItem.widgetConfig?.widgetType === 'githubTrending' ? editItem.widgetConfig : null;
+  const [githubLanguage, setGithubLanguage] = useState(editGithub?.language ?? '');
+  const [githubSince, setGithubSince] = useState(editGithub?.since ?? 'daily');
+  const [langSearch, setLangSearch] = useState('');
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
 
   const selectedOption = WIDGET_OPTIONS.find(w => w.type === selectedType);
 
@@ -462,7 +614,11 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         config = { widgetType: 'aiAgent' };
         break;
       case 'githubTrending':
-        config = { widgetType: 'githubTrending' };
+        config = {
+          widgetType: 'githubTrending',
+          language: githubLanguage || undefined,
+          since: githubSince || undefined,
+        };
         break;
       case 'bilibiliHot':
         config = { widgetType: 'bilibiliHot' };
@@ -517,7 +673,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
       {/* macOS-style Window */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-[640px] ${isEditMode ? 'sm:h-auto sm:max-h-[600px]' : 'sm:h-[600px]'}`}
+        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-[640px] ${selectedType ? 'sm:h-auto sm:max-h-[85vh]' : 'sm:h-[600px]'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header — macOS traffic lights */}
@@ -710,6 +866,37 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                         >
                           °{u} {u === 'C' ? (isZh ? '摄氏度' : 'Celsius') : (isZh ? '华氏度' : 'Fahrenheit')}
                           {weatherUnit === u && <span className="text-[#72d565]">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedType === 'githubTrending' && (
+                <div className="space-y-4">
+                  <LanguageDropdown
+                    languageValue={githubLanguage}
+                    setLanguageValue={setGithubLanguage}
+                    langSearch={langSearch}
+                    setLangSearch={setLangSearch}
+                    langDropdownOpen={langDropdownOpen}
+                    setLangDropdownOpen={setLangDropdownOpen}
+                    isZh={isZh}
+                    label={isZh ? '编程语言' : 'Language'}
+                  />
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{isZh ? '时间范围' : 'Time Range'}</label>
+                    <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden flex divide-x divide-white/5">
+                      {(['daily', 'weekly', 'monthly'] as const).map((s) => (
+                        <button
+                          key={s}
+                          className={`flex-1 py-3 text-[13px] font-medium transition-colors ${
+                            githubSince === s ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white/80'
+                          }`}
+                          onClick={() => setGithubSince(s)}
+                        >
+                          {s === 'daily' ? (isZh ? '今日' : 'Daily') : s === 'weekly' ? (isZh ? '本周' : 'Weekly') : (isZh ? '本月' : 'Monthly')}
                         </button>
                       ))}
                     </div>

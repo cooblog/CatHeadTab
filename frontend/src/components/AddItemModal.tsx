@@ -202,14 +202,14 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
               <div className="bg-black/40 backdrop-blur-xl p-1 rounded-full flex gap-1 border border-white/10">
                 <button 
                   type="button"
-                  className={`px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                  className={`px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all whitespace-nowrap ${mode === 'link' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
                   onClick={() => setMode('link')}
                 >
                   🔗 {t('desktop.addLink')}
                 </button>
                 <button 
                   type="button"
-                  className={`px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
+                  className={`px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all whitespace-nowrap ${mode === 'folder' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:text-white/80'}`}
                   onClick={() => setMode('folder')}
                 >
                   📁 {t('desktop.addFolder')}
@@ -217,7 +217,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
                 {onSwitchToWidget && (
                   <button 
                     type="button"
-                    className="px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all text-white/50 hover:text-white/80"
+                    className="px-4 py-2 rounded-full text-[13px] font-bold tracking-wide transition-all whitespace-nowrap text-white/50 hover:text-white/80"
                     onClick={onSwitchToWidget}
                   >
                     🧩 {t('desktop.addWidget')}

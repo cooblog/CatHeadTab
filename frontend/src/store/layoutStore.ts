@@ -116,6 +116,8 @@ export interface AiAgentWidgetConfig {
 
 export interface GithubTrendingWidgetConfig {
   widgetType: 'githubTrending';
+  language?: string;
+  since?: string;
 }
 
 export interface BilibiliHotWidgetConfig {

@@ -103,10 +103,11 @@ function getModalConfig(type: TrendingType, isZh: boolean) {
 
 interface TrendingModalProps {
   type: TrendingType;
+  options?: any;
   onClose: () => void;
 }
 
-export const TrendingModal: React.FC<TrendingModalProps> = ({ type, onClose }) => {
+export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onClose }) => {
   const { language } = useTranslation();
   const isZh = language === 'zh';
   const serverUrl = useConfigStore(s => s.getEffectiveServerUrl());
@@ -120,7 +121,12 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, onClose }) =
     if (!serverUrl) return;
     setLoading(true);
     try {
-      const resp = await fetch(`${serverUrl}/api/v1/trending/${endpoint}`);
+      const url = new URL(`${serverUrl}/api/v1/trending/${endpoint}`);
+      if (type === 'github' && options) {
+        if (options.language) url.searchParams.set('lang', options.language);
+        if (options.since) url.searchParams.set('since', options.since);
+      }
+      const resp = await fetch(url.toString());
       if (resp.ok) {
         const json = await resp.json();
         setData(json.data || []);
