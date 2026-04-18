@@ -19,8 +19,9 @@ function resolveApiUrl(): string {
     return runtime.API_URL.replace(/\/+$/, '');
   }
   // Build-time injection (Vite inlines import.meta.env.VITE_API_URL at bundle time)
-  return (import.meta.env.VITE_API_URL as string || '').replace(/\/+$/, '');
-
+  const url = (import.meta.env.VITE_API_URL as string || '').replace(/\/+$/, '');
+  console.log('[Config] Resolved API URL from environment:', url || '(empty/fallback)');
+  return url;
 }
 export const ENV_API_URL: string = resolveApiUrl();
 

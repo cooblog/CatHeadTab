@@ -71,11 +71,11 @@ func NewTrendingHandler() *TrendingHandler {
 	}
 }
 
-func (h *TrendingHandler) getCached(key string) (interface{}, bool) {
+func (h *TrendingHandler) getCached(key string, ttl time.Duration) (interface{}, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	entry, ok := h.cache[key]
-	if !ok || time.Since(entry.fetchedAt) > h.ttl {
+	if !ok || time.Since(entry.fetchedAt) > ttl {
 		return nil, false
 	}
 	return entry.data, true
@@ -89,14 +89,14 @@ func (h *TrendingHandler) setCache(key string, data interface{}) {
 
 // getOrFetch 先检查缓存，缓存未命中时通过 singleflight 确保同一 key
 // 只有一个请求在飞，避免对上游数据源造成重复请求压力。
-func (h *TrendingHandler) getOrFetch(key string, fetchFn func() (interface{}, error)) (data interface{}, cached bool, err error) {
-	if d, ok := h.getCached(key); ok {
+func (h *TrendingHandler) getOrFetch(key string, ttl time.Duration, fetchFn func() (interface{}, error)) (data interface{}, cached bool, err error) {
+	if d, ok := h.getCached(key, ttl); ok {
 		return d, true, nil
 	}
 
 	val, err, _ := h.sf.Do(key, func() (interface{}, error) {
 		// 再次检查缓存，可能在等待 singleflight 的过程中已经被其他请求填充
-		if d, ok := h.getCached(key); ok {
+		if d, ok := h.getCached(key, ttl); ok {
 			return d, nil
 		}
 		result, fetchErr := fetchFn()
@@ -129,7 +129,7 @@ func (h *TrendingHandler) GithubTrending(c *gin.Context) {
 		cacheKey += "_since_" + since
 	}
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, h.ttl, func() (interface{}, error) {
 		return fetchGithubTrending(lang, since)
 	})
 	if err != nil {
@@ -290,7 +290,7 @@ func parseFormattedNumber(s string) int {
 func (h *TrendingHandler) BilibiliHot(c *gin.Context) {
 	const cacheKey = "bilibili_hot"
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, h.ttl, func() (interface{}, error) {
 		return fetchBilibiliHot()
 	})
 	if err != nil {
@@ -318,7 +318,7 @@ type XiaohongshuHotItem struct {
 func (h *TrendingHandler) XiaohongshuHot(c *gin.Context) {
 	const cacheKey = "xiaohongshu_hot"
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, h.ttl, func() (interface{}, error) {
 		return fetchXiaohongshuHot()
 	})
 	if err != nil {
@@ -540,7 +540,7 @@ type WeiboHotItem struct {
 func (h *TrendingHandler) WeiboHot(c *gin.Context) {
 	const cacheKey = "weibo_hot"
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, h.ttl, func() (interface{}, error) {
 		return fetchWeiboHot()
 	})
 	if err != nil {
@@ -627,7 +627,7 @@ type BBCNewsItem struct {
 func (h *TrendingHandler) BBCNews(c *gin.Context) {
 	const cacheKey = "bbc_news"
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, h.ttl, func() (interface{}, error) {
 		return fetchBBCNews()
 	})
 	if err != nil {
@@ -844,7 +844,7 @@ func (h *TrendingHandler) ExchangeRate(c *gin.Context) {
 		cacheKey += p.From + "_" + p.To + ","
 	}
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, 2*time.Minute, func() (interface{}, error) {
 		return fetchExchangeRates(req)
 	})
 	if err != nil {
@@ -1055,7 +1055,7 @@ func (h *TrendingHandler) StockQuotes(c *gin.Context) {
 		cacheKey += item.Symbol + ","
 	}
 
-	data, cached, err := h.getOrFetch(cacheKey, func() (interface{}, error) {
+	data, cached, err := h.getOrFetch(cacheKey, 2*time.Minute, func() (interface{}, error) {
 		return fetchStockQuotes(req)
 	})
 	if err != nil {

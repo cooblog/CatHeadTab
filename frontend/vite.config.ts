@@ -7,6 +7,15 @@ import path from 'path'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
+  // --- FORCE OVERRIDE FOR LOCAL DEV ---
+  if (mode === 'development') {
+    env.VITE_API_URL = 'http://localhost:8080';
+    process.env.VITE_API_URL = 'http://localhost:8080';
+  }
+
+  console.log(`[ViteConfig] Mode: ${mode}`);
+  console.log(`[ViteConfig] Final VITE_API_URL used: ${env.VITE_API_URL || '(not set)'}`);
+
   const injectPlugin = () => ({
     name: 'inject-config',
     transformIndexHtml(html: string) {
@@ -41,7 +50,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5174,
+      port: 5173,
     },
     build: {
       outDir: 'dist',
