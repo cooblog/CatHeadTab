@@ -27,15 +27,20 @@ cd "$SCRIPT_DIR"
 
 # Ensure that the build uses the correct API URL from .env file
 export VITE_API_URL=""
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    ENV_URL=$(grep "^[[:space:]]*VITE_API_URL=" "$SCRIPT_DIR/.env" | cut -d '=' -f2- | tr -d '\r' || true)
+TARGET_ENV=".env"
+if [ -f "$SCRIPT_DIR/.env.production" ]; then
+    TARGET_ENV=".env.production"
+fi
+
+if [ -f "$SCRIPT_DIR/$TARGET_ENV" ]; then
+    ENV_URL=$(grep "^[[:space:]]*VITE_API_URL=" "$SCRIPT_DIR/$TARGET_ENV" | cut -d '=' -f2- | tr -d '\r' || true)
     if [ -n "$ENV_URL" ]; then
         export VITE_API_URL="$ENV_URL"
     fi
 fi
 
 if [ -n "$VITE_API_URL" ]; then
-    echo -e "${GRAY}=> Using VITE_API_URL from .env: $VITE_API_URL${NC}"
+    echo -e "${GRAY}=> Using VITE_API_URL from $TARGET_ENV: $VITE_API_URL${NC}"
 else
     echo -e "${GRAY}=> VITE_API_URL is empty, using default configuration.${NC}"
 fi

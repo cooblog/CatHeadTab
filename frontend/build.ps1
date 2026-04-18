@@ -16,16 +16,20 @@ Set-Location $PSScriptRoot
 
 # Ensure that the build uses the correct API URL from .env file
 $env:VITE_API_URL = ""
+$envProdFile = Join-Path $PSScriptRoot ".env.production"
 $envFile = Join-Path $PSScriptRoot ".env"
-if (Test-Path $envFile) {
-    foreach ($line in Get-Content $envFile) {
+
+$targetEnvFile = if (Test-Path $envProdFile) { $envProdFile } else { $envFile }
+
+if (Test-Path $targetEnvFile) {
+    foreach ($line in Get-Content $targetEnvFile) {
         if ($line -match '^\s*VITE_API_URL\s*=\s*(.*)$') {
             $env:VITE_API_URL = $matches[1].Trim()
         }
     }
 }
 if ($env:VITE_API_URL) {
-    Write-Host "=> Using VITE_API_URL from .env: $($env:VITE_API_URL)" -ForegroundColor DarkGray
+    Write-Host "=> Using VITE_API_URL from $(Split-Path $targetEnvFile -Leaf): $($env:VITE_API_URL)" -ForegroundColor DarkGray
 } else {
     Write-Host "=> VITE_API_URL is empty, using default configuration." -ForegroundColor DarkGray
 }
