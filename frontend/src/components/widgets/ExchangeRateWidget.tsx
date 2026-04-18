@@ -118,10 +118,6 @@ function writeRateCache(key: string, data: RateData[]): void {
 
 // --- API fetch ---
 
-/**
- * Fetch exchange rates from backend API (with cache + singleflight).
- * Falls back to direct Frankfurter API call on failure.
- */
 async function fetchExchangeRates(pairs: ExchangeRatePair[]): Promise<RateData[]> {
   if (pairs.length === 0) return [];
 
@@ -136,15 +132,14 @@ async function fetchExchangeRates(pairs: ExchangeRatePair[]): Promise<RateData[]
         console.log('[ExchangeRateWidget] Backend API succeeded');
         return result;
       }
-      console.warn('[ExchangeRateWidget] Backend returned all-zero rates, falling back');
+      return pairs.map(p => ({ from: p.from, to: p.to, rate: 0, change: 0, error: true }));
     } catch (err) {
-      console.warn('[ExchangeRateWidget] Backend API failed, falling back to direct API:', err);
+      console.warn('[ExchangeRateWidget] Backend API failed:', err);
+      return pairs.map(p => ({ from: p.from, to: p.to, rate: 0, change: 0, error: true }));
     }
   }
 
-  // Fallback：直接请求 Frankfurter API
-  console.log('[ExchangeRateWidget] Using direct Frankfurter API');
-  return fetchExchangeRatesDirect(pairs);
+  return pairs.map(p => ({ from: p.from, to: p.to, rate: 0, change: 0, error: true }));
 }
 
 /**
@@ -177,97 +172,6 @@ async function fetchExchangeRatesFromBackend(serverUrl: string, pairs: ExchangeR
   }
 }
 
-/**
- * Fetch exchange rates directly from Frankfurter API (European Central Bank data).
- * Uses latest + previous day to compute daily change.
- */
-async function fetchExchangeRatesDirect(pairs: ExchangeRatePair[]): Promise<RateData[]> {
-  if (pairs.length === 0) return [];
-
-  // Group by base currency to minimize API calls
-  const byBase = new Map<string, string[]>();
-  for (const p of pairs) {
-    const targets = byBase.get(p.from) || [];
-    if (!targets.includes(p.to)) targets.push(p.to);
-    byBase.set(p.from, targets);
-  }
-
-  // Fetch latest and yesterday for each base
-  const allRates = new Map<string, number>();
-  const prevRates = new Map<string, number>();
-
-  const fetches: Promise<void>[] = [];
-
-  for (const [base, targets] of byBase) {
-    const to = targets.join(',');
-
-    // Latest rates
-    fetches.push(
-      (async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        try {
-          const res = await fetch(
-            `https://api.frankfurter.dev/v1/latest?from=${base}&to=${to}`,
-            { signal: controller.signal },
-          );
-          clearTimeout(timeoutId);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const json = await res.json();
-          for (const [code, rate] of Object.entries(json.rates as Record<string, number>)) {
-            allRates.set(`${base}_${code}`, rate);
-          }
-        } catch (err) {
-          clearTimeout(timeoutId);
-          throw err;
-        }
-      })(),
-    );
-
-    // Yesterday's rates (for computing change)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    // Skip weekends
-    if (yesterday.getDay() === 0) yesterday.setDate(yesterday.getDate() - 2);
-    else if (yesterday.getDay() === 6) yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0];
-
-    fetches.push(
-      (async () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        try {
-          const res = await fetch(
-            `https://api.frankfurter.dev/v1/${dateStr}?from=${base}&to=${to}`,
-            { signal: controller.signal },
-          );
-          clearTimeout(timeoutId);
-          if (!res.ok) return; // previous day data is optional
-          const json = await res.json();
-          for (const [code, rate] of Object.entries(json.rates as Record<string, number>)) {
-            prevRates.set(`${base}_${code}`, rate);
-          }
-        } catch {
-          clearTimeout(timeoutId);
-          // silently ignore — previous day is optional
-        }
-      })(),
-    );
-  }
-
-  await Promise.allSettled(fetches);
-
-  return pairs.map(p => {
-    const key = `${p.from}_${p.to}`;
-    const rate = allRates.get(key);
-    if (rate === undefined) {
-      return { from: p.from, to: p.to, rate: 0, change: 0, error: true };
-    }
-    const prev = prevRates.get(key);
-    const change = prev ? ((rate - prev) / prev) * 100 : 0;
-    return { from: p.from, to: p.to, rate, change };
-  });
-}
 
 // --- Helpers ---
 function formatRate(rate: number): string {

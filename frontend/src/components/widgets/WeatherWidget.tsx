@@ -110,19 +110,8 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
   }
   */
 
-  // Fallback: IP-based geolocation
-  try {
-    const ipRes = await fetchWithTimeout('https://ipapi.co/json/', 5000);
-    const ipData = await ipRes.json();
-    return {
-      lat: ipData.latitude,
-      lon: ipData.longitude,
-      cityName: ipData.city || (lang === 'zh' ? '当前位置' : 'Current Location'),
-    };
-  } catch {
-    // Last resort: default to Beijing
-    return { lat: 39.9, lon: 116.4, cityName: lang === 'zh' ? '北京' : 'Beijing' };
-  }
+  // Final resort: default to Beijing (since real geolocation happens server-side now)
+  return { lat: 39.9, lon: 116.4, cityName: lang === 'zh' ? '北京' : 'Beijing' };
 }
 
 /*
