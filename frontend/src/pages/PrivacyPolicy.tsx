@@ -30,8 +30,8 @@ export const PrivacyPolicy: React.FC = () => {
   }, [isZh]);
 
   return (
-    <div className="min-h-screen w-full overflow-y-auto px-4 py-12 flex justify-center bg-black/20 backdrop-blur-[2px]">
-      <div className="w-full max-w-3xl bg-black/40 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 md:p-12 shadow-2xl animate-fadeIn">
+    <div className="h-full w-full overflow-y-auto wp-scrollbar px-4 py-12 flex justify-center bg-transparent">
+      <div className="w-full max-w-3xl bg-black/40 backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 md:p-12 shadow-2xl animate-fadeIn my-auto">
         <Markdown remarkPlugins={[remarkGfm]} components={mdComponents}>
           {content}
         </Markdown>
