@@ -4,9 +4,17 @@
 
 **高颜值、AI 驱动的浏览器新标签页 — 属于你的数字中枢。**
 
+[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
+
+中文 | [English](README_EN.md)
+
+[功能亮点](#功能亮点) | [快速开始](#快速开始) | [自部署](#自部署) | [技术栈](#技术栈) | [许可证](#许可证)
+
 <div align="center">
   <img src=".github/assets/demo2.webp" width="100%" />
   <p><i>智能文件夹整理 — FLIP 动画引擎驱动的丝滑体验</i></p>
+</div>
+
 </div>
 
 ## 界面预览
@@ -27,14 +35,6 @@
 | 移动端适配 1 | 移动端适配 2 |
 | :---: | :---: |
 | ![移动端1](.github/assets/mobile1.webp) | ![移动端2](.github/assets/mobile2.webp) |
-
-[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
-
-中文 | [English](README_EN.md)
-
-[功能亮点](#功能亮点) | [快速开始](#快速开始) | [自部署](#自部署) | [技术栈](#技术栈) | [许可证](#许可证)
-
-</div>
 
 ---
 

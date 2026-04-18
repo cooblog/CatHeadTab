@@ -4,12 +4,24 @@
 
 **A beautiful, AI-powered browser new tab — your personal digital hub.**
 
+[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
+
+[**中文**](README.md) | English
+
+[Features](#features) | [Quick Start](#quick-start) | [Self-Hosting](#self-hosting) | [Tech Stack](#tech-stack) | [License](#license)
+
 <div align="center">
   <img src=".github/assets/demo2.webp" width="100%" />
   <p><i>Smart Folder Organization — Smooth transitions powered by FLIP engine</i></p>
 </div>
 
+</div>
+
 ## Preview
+
+| AI Agent (Chat) | AI Agent (Thinking) | AI Agent (Mobile) |
+| :---: | :---: | :---: |
+| ![AI Agent](.github/assets/aiagent1.webp) | ![AI Agent Thinking](.github/assets/aiagent2.webp) | ![AI Agent Mobile](.github/assets/aiagent3.webp) |
 
 | Lock Screen | Settings Panel |
 | :---: | :---: |
@@ -23,14 +35,6 @@
 | Mobile Adaptation 1 | Mobile Adaptation 2 |
 | :---: | :---: |
 | ![Mobile 1](.github/assets/mobile1.webp) | ![Mobile 2](.github/assets/mobile2.webp) |
-
-[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
-
-[**中文**](README.md) | English
-
-[Features](#features) | [Quick Start](#quick-start) | [Self-Hosting](#self-hosting) | [Tech Stack](#tech-stack) | [License](#license)
-
-</div>
 
 ---
 
