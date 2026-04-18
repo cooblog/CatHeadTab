@@ -40,7 +40,13 @@ Thumbs.db
 # Frontend
 /frontend/.vite/
 /frontend/node_modules/
+/frontend/dist/
+/frontend/dist-ssr/
+/frontend/store_assets/
+/frontend/.env*
 *.tsbuildinfo
+/frontend/release/
+/frontend/*.zip
 
 # Docker - 数据库持久化数据
 data/
@@ -50,3 +56,4 @@ data/
 
 .codebuddy/
 release/
+/猫头

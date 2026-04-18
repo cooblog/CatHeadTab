@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/CatHeadTab/backend/internal/logger"
+	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 )
 
 // ── Data models ──────────────────────────────────────────────────────
@@ -45,6 +46,24 @@ type BilibiliHotVideo struct {
 	URL      string `json:"url"`
 }
 
+// WeatherResp represents the weather data structure returned to the frontend.
+type WeatherResp struct {
+	Temp          int     `json:"temp"`
+	Description   string  `json:"description"`
+	DescriptionEn string  `json:"descriptionEn"`
+	Icon          string  `json:"icon"`
+	City          string  `json:"city"`
+	CityZh        string  `json:"cityZh,omitempty"`
+	CityEn        string  `json:"cityEn,omitempty"`
+	Humidity      int     `json:"humidity"`
+	WindSpeed     int     `json:"windSpeed"`
+	FeelsLike     int     `json:"feelsLike"`
+	High          int     `json:"high"`
+	Low           int     `json:"low"`
+	IsDay         bool    `json:"isDay"`
+	WeatherCode   int     `json:"weatherCode"`
+}
+
 // ── In-memory cache ──────────────────────────────────────────────────
 
 type cacheEntry struct {
@@ -61,14 +80,28 @@ type TrendingHandler struct {
 	cache map[string]*cacheEntry
 	ttl   time.Duration
 	sf    singleflight.Group
+	ipSearcher *xdb.Searcher
 }
 
 // NewTrendingHandler creates a TrendingHandler with default 1-hour TTL.
 func NewTrendingHandler() *TrendingHandler {
-	return &TrendingHandler{
+	h := &TrendingHandler{
 		cache: make(map[string]*cacheEntry),
 		ttl:   1 * time.Hour,
 	}
+
+	// Initialize Ip2region searcher
+	dbPath := "resources/ip2region.xdb"
+	v, _ := xdb.VersionFromName("IPv4")
+	searcher, err := xdb.NewWithFileOnly(v, dbPath)
+	if err != nil {
+		logger.Error("[trending] failed to load ip2region.xdb", "path", dbPath, "error", err)
+	} else {
+		h.ipSearcher = searcher
+		logger.Info("[trending] ip2region.xdb loaded successfully")
+	}
+
+	return h
 }
 
 func (h *TrendingHandler) getCached(key string, ttl time.Duration) (interface{}, bool) {
@@ -1672,4 +1705,179 @@ func fetchBilibiliHot() ([]BilibiliHotVideo, error) {
 	}
 
 	return videos, nil
+}
+
+// ── Weather ──────────────────────────────────────────────────────────
+
+// GetWeather returns the current weather for a city or the client's IP location.
+//	GET /api/v1/weather?city=Shanghai&lang=zh&unit=C
+func (h *TrendingHandler) GetWeather(c *gin.Context) {
+	city := c.Query("city")
+	lang := c.DefaultQuery("lang", "en")
+	unit := c.DefaultQuery("unit", "C")
+
+	// Cache key includes city (or ip), lang, and unit
+	targetCity := city
+	if targetCity == "" {
+		targetCity = "auto_" + c.ClientIP()
+	}
+	cacheKey := fmt.Sprintf("weather_%s_%s_%s", targetCity, lang, unit)
+
+	data, cached, err := h.getOrFetch(cacheKey, 30*time.Minute, func() (interface{}, error) {
+		return h.fetchWeather(c, city, lang, unit)
+	})
+	if err != nil {
+		logger.Error("[trending] weather fetch error", "error", err)
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch weather data"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data, "cached": cached})
+}
+
+func (h *TrendingHandler) fetchWeather(c *gin.Context, city, lang, unit string) (*WeatherResp, error) {
+	var lat, lon float64
+	var cityName string
+
+	if city != "" {
+		// Geocode city via Open-Meteo
+		geoUrl := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=%s&format=json", url.QueryEscape(city), lang)
+		resp, err := http.Get(geoUrl)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var geoResult struct {
+			Results []struct {
+				Latitude  float64 `json:"latitude"`
+				Longitude float64 `json:"longitude"`
+				Name      string  `json:"name"`
+			} `json:"results"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&geoResult); err != nil || len(geoResult.Results) == 0 {
+			return nil, fmt.Errorf("city not found")
+		}
+		lat = geoResult.Results[0].Latitude
+		lon = geoResult.Results[0].Longitude
+		cityName = geoResult.Results[0].Name
+	} else {
+		// Geocode via IP (Ip2region)
+		if h.ipSearcher == nil {
+			return nil, fmt.Errorf("ip searcher not initialized")
+		}
+		ip := c.ClientIP()
+		region, err := h.ipSearcher.Search(ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search ip: %w", err)
+		}
+		
+		// region format: 国家|区域|省份|城市|ISP
+		parts := strings.Split(region, "|")
+		if len(parts) >= 4 && parts[3] != "0" && parts[3] != "" {
+			cityName = parts[3]
+		} else if len(parts) >= 3 && parts[2] != "0" && parts[2] != "" {
+			cityName = parts[2]
+		} else {
+			cityName = "Shanghai" // Default
+		}
+
+		// Geocode the identified city to get lat/lon
+		geoUrl := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=%s&format=json", url.QueryEscape(cityName), lang)
+		resp, err := http.Get(geoUrl)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var geoResult struct {
+			Results []struct {
+				Latitude  float64 `json:"latitude"`
+				Longitude float64 `json:"longitude"`
+			} `json:"results"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&geoResult); err != nil || len(geoResult.Results) == 0 {
+			// Fallback coordinates
+			lat, lon = 31.23, 121.47 // Shanghai
+		} else {
+			lat = geoResult.Results[0].Latitude
+			lon = geoResult.Results[0].Longitude
+		}
+	}
+
+	// Fetch weather from Open-Meteo
+	unitParam := ""
+	if unit == "F" {
+		unitParam = "&temperature_unit=fahrenheit"
+	}
+	apiUrl := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1%s", lat, lon, unitParam)
+	
+	resp, err := http.Get(apiUrl)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var data struct {
+		Current struct {
+			Temp        float64 `json:"temperature_2m"`
+			Humidity    int     `json:"relative_humidity_2m"`
+			Apparent    float64 `json:"apparent_temperature"`
+			WeatherCode int     `json:"weather_code"`
+			WindSpeed   float64 `json:"wind_speed_10m"`
+			IsDay       int     `json:"is_day"`
+		} `json:"current"`
+		Daily struct {
+			Max []float64 `json:"temperature_2m_max"`
+			Min []float64 `json:"temperature_2m_min"`
+		} `json:"daily"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
+	}
+
+	// WMO mapping (simplified for backend)
+	emoji, zh, en := getWmoBackend(data.Current.WeatherCode, data.Current.IsDay == 1)
+
+	result := &WeatherResp{
+		Temp:          int(data.Current.Temp),
+		Description:   zh,
+		DescriptionEn: en,
+		Icon:          emoji,
+		City:          cityName,
+		Humidity:      data.Current.Humidity,
+		WindSpeed:     int(data.Current.WindSpeed),
+		FeelsLike:     int(data.Current.Apparent),
+		High:          int(data.Daily.Max[0]),
+		Low:           int(data.Daily.Min[0]),
+		IsDay:         data.Current.IsDay == 1,
+		WeatherCode:   data.Current.WeatherCode,
+	}
+	if lang == "zh" {
+		result.CityZh = cityName
+	} else {
+		result.CityEn = cityName
+	}
+
+	return result, nil
+}
+
+func getWmoBackend(code int, isDay bool) (emoji, zh, en string) {
+	switch code {
+	case 0: emoji, zh, en = "☀️", "晴", "Clear"
+	case 1: emoji, zh, en = "🌤️", "大部分晴朗", "Mostly Clear"
+	case 2: emoji, zh, en = "⛅", "多云", "Partly Cloudy"
+	case 3: emoji, zh, en = "☁️", "阴", "Overcast"
+	case 45, 48: emoji, zh, en = "🌫️", "雾", "Fog"
+	case 51, 53, 55: emoji, zh, en = "🌦️", "毛毛雨", "Drizzle"
+	case 61, 63, 65: emoji, zh, en = "🌧️", "雨", "Rain"
+	case 71, 73, 75: emoji, zh, en = "❄️", "雪", "Snow"
+	case 80, 81, 82: emoji, zh, en = "🌧️", "阵雨", "Showers"
+	case 95, 96, 99: emoji, zh, en = "⛈️", "雷暴", "Thunderstorm"
+	default: emoji, zh, en = "☀️", "晴", "Clear"
+	}
+	if !isDay && code <= 1 {
+		emoji = "🌙"
+	}
+	return
 }

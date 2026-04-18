@@ -18,10 +18,12 @@ import (
 // Setup configures all API routes and middleware.
 func Setup(cfg *config.Config) *gin.Engine {
 	r := gin.New()
+	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 	r.Use(logger.GinLogger(), logger.GinRecovery())
 
 	// Global middleware
 	r.Use(middleware.CORS())
+	r.Use(middleware.DevIPMiddleware())
 
 	// Health check (no auth required)
 	r.GET("/api/v1/health", func(c *gin.Context) {
@@ -145,6 +147,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	r.GET("/api/v1/trending/bbc", trendingHandler.BBCNews)
 
 	// Public routes (no auth) — Finance data (exchange rates & stock quotes, cached server-side)
+	r.GET("/api/v1/weather", trendingHandler.GetWeather)
 	r.POST("/api/v1/finance/exchange-rate", trendingHandler.ExchangeRate)
 	r.POST("/api/v1/finance/stock-quotes", trendingHandler.StockQuotes)
 

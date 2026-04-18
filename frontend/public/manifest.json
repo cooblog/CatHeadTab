@@ -18,7 +18,6 @@
     "history",
     "favicon",
     "activeTab",
-    "geolocation",
     "system.cpu",
     "system.memory",
     "declarativeNetRequest"

@@ -23,6 +23,7 @@ WORKDIR /app
 # Copy binary and migrations
 COPY --from=builder /server .
 COPY --from=builder /app/migrations ./migrations/
+COPY --from=builder /app/resources ./resources/
 
 EXPOSE 8080
 

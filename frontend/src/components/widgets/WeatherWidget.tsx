@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { WidgetSize, WeatherWidgetConfig } from '../../store/layoutStore';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useConfigStore } from '../../store/configStore';
 
 interface WeatherWidgetProps {
   size: WidgetSize;
@@ -87,7 +88,8 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
     throw new Error('City not found');
   }
 
-  // Try browser Geolocation API
+  // Browser Geolocation API disabled to prevent permission popups
+  /*
   const pos = await new Promise<GeolocationPosition | null>((resolve) => {
     if (!navigator.geolocation) {
       resolve(null);
@@ -106,6 +108,7 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
     const cityName = await reverseGeocode(latitude, longitude, lang);
     return { lat: latitude, lon: longitude, cityName };
   }
+  */
 
   // Fallback: IP-based geolocation
   try {
@@ -122,7 +125,7 @@ async function getCoordinates(city?: string, lang?: string): Promise<{ lat: numb
   }
 }
 
-/** Reverse geocode lat/lon to city name using Open-Meteo geocoding search nearby. */
+/*
 async function reverseGeocode(lat: number, lon: number, lang?: string): Promise<string> {
   try {
     // Use a lightweight reverse geocode service
@@ -133,6 +136,7 @@ async function reverseGeocode(lat: number, lon: number, lang?: string): Promise<
     return lang === 'zh' ? '当前位置' : 'Current Location';
   }
 }
+*/
 
 /** Cache duration: 30 minutes in milliseconds. */
 const WEATHER_CACHE_TTL = 30 * 60 * 1000;
@@ -212,12 +216,25 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
 
     const fetchWeather = async () => {
       try {
-        // Only show spinner if we have absolutely no data to display
-        const hasExistingData = !!cached || weatherRef.current !== null;
-        if (!hasExistingData) {
-          setLoading(true);
+        // Try backend first
+        try {
+          const baseUrl = useConfigStore.getState().getEffectiveServerUrl();
+          const backendUrl = `${baseUrl}/api/v1/weather?city=${encodeURIComponent(config?.city || "")}&lang=${lang}&unit=${config?.unit || "C"}`;
+          const backendRes = await fetchWithTimeout(backendUrl, 6000);
+          if (backendRes.ok) {
+            const { data: backendData } = await backendRes.json();
+            if (backendData) {
+              setWeather(backendData);
+              setError(null);
+              writeWeatherCache(cacheKey, backendData);
+              return; // Success!
+            }
+          }
+        } catch (e) {
+          console.warn('Backend weather fetch failed, falling back to frontend direct fetch:', e);
         }
 
+        // Fallback: Original frontend-only logic
         const { lat, lon, cityName } = await getCoordinates(config?.city, lang);
 
         // Build Open-Meteo API URL
