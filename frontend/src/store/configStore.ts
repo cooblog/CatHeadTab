@@ -18,8 +18,9 @@ function resolveApiUrl(): string {
   if (runtime?.API_URL && !runtime.API_URL.startsWith('__')) {
     return runtime.API_URL.replace(/\/+$/, '');
   }
-  // Build-time injection (Vite)
+  // Build-time injection (Vite inlines import.meta.env.VITE_API_URL at bundle time)
   return (import.meta.env.VITE_API_URL as string || '').replace(/\/+$/, '');
+
 }
 export const ENV_API_URL: string = resolveApiUrl();
 

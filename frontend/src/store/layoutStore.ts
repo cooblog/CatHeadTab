@@ -216,12 +216,12 @@ interface LayoutState {
   mergeLayoutWithCloud: () => Promise<void>;
 }
 
-/** Maximum number of items allowed in the Dock. */
-export const MAX_DOCK_ITEMS = 8;
+export const MAX_DOCK_ITEMS = 15;
 
 const defaultDock: DesktopItem[] = [
   { id: 'app-bookmarks', type: 'app', title: 'Bookmarks', icon: '🔖' },
   { id: 'app-history', type: 'app', title: 'History', icon: '🕐' },
+  { id: 'app-explore', type: 'app', title: 'Explore', icon: '🌍' },
 ];
 
 // --- Default desktop items for first-time users ---
@@ -274,8 +274,16 @@ const defaultDesktopItems: DesktopItem[] = [
     type: 'widget',
     title: 'Weibo Hot',
     widgetType: 'weiboHot',
-    widgetSize: 'tall',
+    widgetSize: 'medium',
     widgetConfig: { widgetType: 'weiboHot' },
+  },
+  {
+    id: 'widget-ai-agent-default',
+    type: 'widget',
+    title: 'AI Assistant',
+    widgetType: 'aiAgent',
+    widgetSize: 'small',
+    widgetConfig: { widgetType: 'aiAgent' },
   },
   // Popular sites — a curated selection of widely-used websites
   { id: 'default-google', type: 'link', title: 'Google', url: 'https://www.google.com', icon: '' },
@@ -861,7 +869,7 @@ export const useLayoutStore = create<LayoutState>()(
       },
 
       moveItemFromDock: (id) => {
-        const layout = { ...get().layout };
+        const layout = { ...get().layout, pages: [...get().layout.pages] };
         const dr = removeItemFromList(layout.dock, id);
         if (dr.removed) {
           layout.dock = dr.result;
@@ -1115,7 +1123,7 @@ export const useLayoutStore = create<LayoutState>()(
         }
         return persisted;
       },
-      version: 2,
+      version: 3,
     }
   )
 );

@@ -110,6 +110,7 @@ export const en = {
   'settings.wpNoMore': 'No more wallpapers',
   'settings.wpNeedServer': 'Please connect a backend server in the System tab first',
   'settings.wpNeedLogin': 'You need to sign in to browse online wallpapers.',
+  'settings.wpWallhavenFailHint': 'Network issues may occur when loading Wallhaven. Please try using Cloud Storage instead.',
 
   // Profile Modal
   'profile.title': 'User Profile',
@@ -355,6 +356,7 @@ export const en = {
   'settings.aiApiKey': 'API Key',
   'settings.aiApiKeyPlaceholder': 'sk-...',
   'settings.aiModel': 'Model',
+  'settings.aiPrivacyNote': 'Local bookmarks and history are only accessible to local AI models. Your browser data is never uploaded to the cloud, so cloud models cannot access this data.',
   'settings.aiModelPlaceholder': 'e.g. gpt-4o-mini, deepseek-chat',
   'settings.aiSave': 'Save AI Config',
   'settings.aiSaved': 'AI configuration saved!',

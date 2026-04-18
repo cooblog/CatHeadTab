@@ -10,9 +10,13 @@ export default defineConfig(({ mode }) => {
   const injectPlugin = () => ({
     name: 'inject-config',
     transformIndexHtml(html: string) {
-      const apiUrl = env.VITE_API_URL || '';
-      let res = html.replace('__VITE_API_URL__', apiUrl);
-      
+      // Always remove the inline runtime-config script: Chrome extensions never
+      // use Docker runtime substitution. configStore.ts reads VITE_API_URL from
+      // import.meta.env (statically inlined by Vite at build time). If empty,
+      // the user fills in their own server URL in the extension settings UI.
+      let res = html.replace(/[ \t]*<!--[^>]*Runtime config[^>]*-->\r?\n?/i, '');
+      res = res.replace(/[ \t]*<script>window\.__RUNTIME_CONFIG__[^<]*<\/script>\r?\n?/, '');
+
       const umamiId = env.VITE_UMAMI_WEBSITE_ID;
       if (umamiId) {
         const umamiSrc = env.VITE_UMAMI_SRC || 'https://analytics.umami.is/script.js';
@@ -31,44 +35,44 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       injectPlugin(),
     ],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  server: {
-    port: 5174,
-  },
-  build: {
-    outDir: 'dist',
-    rollupOptions: {
-      input: {
-        newtab: path.resolve(__dirname, 'index.html'),
-        popup: path.resolve(__dirname, 'popup.html'),
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
-      output: {
-        manualChunks(id: string) {
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
-            return 'vendor-react';
-          }
-          if (id.includes('node_modules/react-router')) {
-            return 'vendor-router';
-          }
-          if (id.includes('node_modules/@dnd-kit')) {
-            return 'vendor-dndkit';
-          }
-          if (id.includes('node_modules/framer-motion')) {
-            return 'vendor-motion';
-          }
-          if (id.includes('node_modules/ai') || id.includes('node_modules/@ai-sdk')) {
-            return 'vendor-ai';
-          }
-          if (id.includes('node_modules/zod')) {
-            return 'vendor-zod';
-          }
+    },
+    server: {
+      port: 5174,
+    },
+    build: {
+      outDir: 'dist',
+      rollupOptions: {
+        input: {
+          newtab: path.resolve(__dirname, 'index.html'),
+          popup: path.resolve(__dirname, 'popup.html'),
+        },
+        output: {
+          manualChunks(id: string) {
+            if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+              return 'vendor-react';
+            }
+            if (id.includes('node_modules/react-router')) {
+              return 'vendor-router';
+            }
+            if (id.includes('node_modules/@dnd-kit')) {
+              return 'vendor-dndkit';
+            }
+            if (id.includes('node_modules/framer-motion')) {
+              return 'vendor-motion';
+            }
+            if (id.includes('node_modules/ai') || id.includes('node_modules/@ai-sdk')) {
+              return 'vendor-ai';
+            }
+            if (id.includes('node_modules/zod')) {
+              return 'vendor-zod';
+            }
+          },
         },
       },
-    },
     },
   };
 });

@@ -7,6 +7,7 @@ import { saveImageBlob, loadImageBlob, compressImageToWebP, generateThumbnail, s
 import client from '../api/client';
 import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 import builtinBgWebp from '../assets/bg.webp';
+import builtinBg2Webp from '../assets/bg2.webp';
 
 type Tab = 'wallpaper' | 'system' | 'ai';
 type WallpaperSubTab = 'current' | 'browse';
@@ -275,7 +276,15 @@ const AISettingsSection: React.FC = () => {
   return (
     <div>
       <h3 className="text-xl font-bold text-white mb-2">{t('settings.aiTitle')}</h3>
-      <p className="text-[13px] text-white/50 mb-4">{t('settings.aiDesc')}</p>
+      <p className="text-[13px] text-white/50 mb-3">{t('settings.aiDesc')}</p>
+      
+      {/* Privacy Note */}
+      <div className="mb-5 p-3 rounded-xl bg-blue-500/[0.06] border border-blue-400/15 flex items-start gap-3">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" className="shrink-0 mt-0.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <p className="text-[11px] text-blue-200/70 leading-relaxed">
+          {t('settings.aiPrivacyNote')}
+        </p>
+      </div>
 
       {/* Server AI / Local AI mode switcher — only for Pro+Admin users when server AI is available */}
       {hasServerAI && (
@@ -722,7 +731,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
         setWpError(t('settings.wpNeedLogin'));
       } else {
         const msg = err instanceof Error ? err.message : 'Unknown error';
-        setWpError(msg);
+        const failHint = t('settings.wpWallhavenFailHint');
+        setWpError(failHint ? `${msg}。${failHint}` : msg);
       }
     } finally {
       setWpLoading(false);
@@ -1597,6 +1607,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                           <div className="flex flex-wrap gap-3">
                             {[
                               { url: builtinBgWebp, title: 'CatHeadTab Default' },
+                              { url: builtinBg2Webp, title: 'CatHeadTab Blue' },
                             ].map(item => (
                               <button
                                 key={item.url}

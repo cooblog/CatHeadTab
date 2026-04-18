@@ -916,6 +916,8 @@ export const Desktop: React.FC = () => {
         setIsBookmarkBrowserOpen(true);
       } else if (item.id === 'app-history') {
         setIsHistoryBrowserOpen(true);
+      } else if (item.id === 'app-explore') {
+        setIsExploreOpen(true);
       }
     } else if (item.type === 'widget') {
       if (item.widgetType === 'itTools') {
@@ -1643,6 +1645,18 @@ export const Desktop: React.FC = () => {
     const minGap = 10;
     const minPx = 14;
 
+    const minNeededWidth = count * minIconSize + (count - 1) * minGap + 2 * minPx;
+    if (minNeededWidth > availableWidth) {
+      return {
+        iconSize: minIconSize,
+        gap: minGap,
+        px: minPx,
+        py: 8,
+        useAdaptive: true,
+        scrollable: true,
+      };
+    }
+
     const scaledIconSize = Math.max(minIconSize, Math.round(baseIconSize * ratio));
     const scaledGap = Math.max(minGap, Math.round(baseGap * ratio));
     const scaledPx = Math.max(minPx, Math.round(basePx * ratio));
@@ -2002,6 +2016,11 @@ export const Desktop: React.FC = () => {
         >
           <div
             className={`flex items-center ${dockAdaptive.scrollable ? 'overflow-x-auto no-scrollbar gap-5 px-5 py-2.5' : !dockAdaptive.useAdaptive ? 'gap-5 md:gap-6 px-5 md:px-7 py-2.5 md:py-3' : ''}`}
+            onWheel={(e) => {
+              if (dockAdaptive.scrollable && e.deltaY !== 0) {
+                e.currentTarget.scrollLeft += e.deltaY;
+              }
+            }}
             style={dockAdaptive.useAdaptive ? {
               gap: dockAdaptive.gap,
               paddingLeft: dockAdaptive.px,

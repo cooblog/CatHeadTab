@@ -110,6 +110,7 @@ export const zh = {
   'settings.wpNoMore': '已经到底了',
   'settings.wpNeedServer': '请先在「系统」标签页中连接后端服务器',
   'settings.wpNeedLogin': '在线壁纸需要登录才能使用',
+  'settings.wpWallhavenFailHint': '国内用户加载 Wallhaven 可能存在网络问题，请优先使用「云端壁纸库」',
 
   // Profile Modal
   'profile.title': '用户资料',
@@ -355,6 +356,7 @@ export const zh = {
   'settings.aiApiKey': 'API Key',
   'settings.aiApiKeyPlaceholder': 'sk-...',
   'settings.aiModel': '模型',
+  'settings.aiPrivacyNote': '本地书签和历史记录，只有使用本地 AI 大模型才可以读取到。你的浏览器数据永远不会上传到云端，所以云端大模型无法直接获取这些数据。',
   'settings.aiModelPlaceholder': '例如：gpt-4o-mini, deepseek-chat',
   'settings.aiSave': '保存 AI 配置',
   'settings.aiSaved': 'AI 配置已保存！',
