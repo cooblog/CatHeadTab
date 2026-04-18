@@ -126,7 +126,7 @@ const ThinkBlock: React.FC<{ content: string; isStreaming: boolean; isZh: boolea
         {!isStreaming && <span className="text-white/15 ml-auto">{isOpen ? '▲' : '▼'}</span>}
       </button>
       {isOpen && (
-        <div className="px-3 pb-2.5 text-[12px] leading-relaxed text-white/30 border-t border-white/[0.04] pt-2 max-h-40 overflow-y-auto no-scrollbar whitespace-pre-wrap">
+        <div className="px-3 pb-2.5 text-[12px] leading-relaxed text-white/30 border-t border-white/[0.04] pt-2 max-h-40 overflow-y-auto wp-scrollbar whitespace-pre-wrap">
           {content.trim() || (isZh ? '...' : '...')}
         </div>
       )}
@@ -411,7 +411,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
         ) : (
           <>
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 no-scrollbar select-text">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 wp-scrollbar select-text">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
                   <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/[0.04]">

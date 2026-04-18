@@ -4,10 +4,31 @@
 
 **高颜值、AI 驱动的浏览器新标签页 — 属于你的数字中枢。**
 
-<!-- TODO: 添加截图 -->
-<!-- ![CatHeadTab 截图](docs/assets/screenshot.png) -->
+<div align="center">
+  <img src=".github/assets/demo2.webp" width="100%" />
+  <p><i>智能文件夹整理 — FLIP 动画引擎驱动的丝滑体验</i></p>
+</div>
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
+## 界面预览
+
+| AI 助手 (对话) | AI 助手 (思考) | AI 助手 (移动端) |
+| :---: | :---: | :---: |
+| ![AI 助手](.github/assets/aiagent1.webp) | ![AI 助手思考](.github/assets/aiagent2.webp) | ![AI 助手移动端](.github/assets/aiagent3.webp) |
+
+| 锁屏界面 | 设置面板 |
+| :---: | :---: |
+| ![锁屏](.github/assets/lockscreen.webp) | ![设置](.github/assets/setting.webp) |
+
+<div align="center">
+  <img src=".github/assets/wallpaper.webp" width="100%" />
+  <p><i>壁纸选择 — 支持 Wallhaven 与云端库</i></p>
+</div>
+
+| 移动端适配 1 | 移动端适配 2 |
+| :---: | :---: |
+| ![移动端1](.github/assets/mobile1.webp) | ![移动端2](.github/assets/mobile2.webp) |
+
+[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
 
 中文 | [English](README_EN.md)
 
