@@ -18,7 +18,12 @@ import (
 // Setup configures all API routes and middleware.
 func Setup(cfg *config.Config) *gin.Engine {
 	r := gin.New()
-	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+	r.SetTrustedProxies([]string{
+		"127.0.0.1", "::1",
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+	})
 	r.Use(logger.GinLogger(), logger.GinRecovery())
 
 	// Global middleware
