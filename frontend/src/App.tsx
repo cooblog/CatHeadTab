@@ -13,6 +13,7 @@ import { useIdleTimer } from './hooks/useIdleTimer'
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback').then(m => ({ default: m.OAuthCallback })));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
 const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 
 // Wait for both Zustand stores to finish hydrating from async chrome.storage
 // before rendering anything. This prevents the race condition where jwtToken is
@@ -356,6 +357,7 @@ function App() {
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/*" element={<Desktop />} />
           </Routes>
         </Suspense>
