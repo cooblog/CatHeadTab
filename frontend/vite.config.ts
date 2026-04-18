@@ -19,12 +19,16 @@ export default defineConfig(({ mode }) => {
   const injectPlugin = () => ({
     name: 'inject-config',
     transformIndexHtml(html: string) {
-      // Always remove the inline runtime-config script: Chrome extensions never
-      // use Docker runtime substitution. configStore.ts reads VITE_API_URL from
-      // import.meta.env (statically inlined by Vite at build time). If empty,
-      // the user fills in their own server URL in the extension settings UI.
-      let res = html.replace(/[ \t]*<!--[^>]*Runtime config[^>]*-->\r?\n?/i, '');
-      res = res.replace(/[ \t]*<script>window\.__RUNTIME_CONFIG__[^<]*<\/script>\r?\n?/, '');
+      let res = html;
+      
+      // For extension builds or production builds where VITE_API_URL is already hardcoded,
+      // we could strip it. But for the core Docker/web build, we MUST keep the script
+      // so docker-entrypoint.sh can inject the runtime URL.
+      // We only strip it if we are sure we don't need runtime injection (e.g. dev mode or if explicitly asked)
+      if (mode === 'development') {
+        res = res.replace(/[ \t]*<!--[^>]*Runtime config[^>]*-->\r?\n?/i, '');
+        res = res.replace(/[ \t]*<script>window\.__RUNTIME_CONFIG__[^<]*<\/script>\r?\n?/, '');
+      }
 
       const umamiId = env.VITE_UMAMI_WEBSITE_ID;
       if (umamiId) {
