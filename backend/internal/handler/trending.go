@@ -1193,8 +1193,9 @@ func fetchStockQuotesSina(items []StockRequestItem) ([]StockQuoteItem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sina request build failed: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
 	req.Header.Set("Referer", "https://finance.sina.com.cn/")
+	req.Header.Set("Accept", "*/*")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1506,7 +1507,11 @@ func fetchSingleYahooChart(item StockRequestItem) StockQuoteItem {
 		if err != nil {
 			continue
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; CatHeadTab/1.0)")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Referer", "https://finance.yahoo.com/")
+		req.Header.Set("Origin", "https://finance.yahoo.com")
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -1515,6 +1520,7 @@ func fetchSingleYahooChart(item StockRequestItem) StockQuoteItem {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
+			logger.Warn("[finance] yahoo fetch returned non-200 status", "symbol", item.Symbol, "status", resp.StatusCode, "host", host)
 			continue
 		}
 
