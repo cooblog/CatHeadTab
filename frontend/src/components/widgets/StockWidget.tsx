@@ -22,6 +22,23 @@ import { useLayoutStore } from '../../store/layoutStore';
 import { useConfigStore } from '../../store/configStore';
 import { useTranslation } from '../../i18n/useTranslation';
 
+/**
+ * Detect whether we are running inside a Chrome extension context
+ * (chrome-extension:// origin with `chrome.runtime.id` available).
+ * In this context, `host_permissions` bypass CORS for cross-origin fetch.
+ * In a plain web page context (dev / hosted web build), CORS applies
+ * and we must proxy requests through our own backend.
+ */
+function isExtensionContext(): boolean {
+  try {
+    return typeof chrome !== 'undefined'
+      && !!chrome.runtime
+      && !!chrome.runtime.id;
+  } catch {
+    return false;
+  }
+}
+
 interface StockWidgetProps {
   size: WidgetSize;
   config?: StockWidgetConfig;
@@ -140,67 +157,403 @@ function makeErrorQuote(item: StockItem): StockQuote {
   };
 }
 
-/**
- * Unified data fetcher: only tries backend API (with cache + singleflight).
- */
-async function fetchStockQuotes(items: StockItem[], language: string): Promise<StockQuote[]> {
-  if (items.length === 0) return [];
+/** Sina index symbol mapping for international indices. */
+const SINA_INDEX_MAP: Record<string, string> = {
+  '^GSPC': 'int_sp500',
+  '^DJI': 'int_dji',
+  '^IXIC': 'int_nasdaq',
+  '^HSI': 'int_hangseng',
+  '^HSCE': 'int_hscei',
+  '^HSTECH': 'int_hstech',
+};
 
-  const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
-  if (!serverUrl) {
-    return items.map(makeErrorQuote);
-  }
-
-  try {
-    const result = await fetchStockQuotesFromBackend(serverUrl, items, language);
-    // Ensure all items are present (even if error)
-    if (result.length === 0) return items.map(makeErrorQuote);
-    return result;
-  } catch (err) {
-    console.warn('[StockWidget] Backend API failed:', err);
-    return items.map(makeErrorQuote);
+/** Get default currency for a market. */
+function defaultCurrencyForMarket(market: StockMarket): string {
+  switch (market) {
+    case 'US': return 'USD';
+    case 'HK': return 'HKD';
+    case 'CN': return 'CNY';
+    default: return 'USD';
   }
 }
 
+/** Convert a standard symbol to Sina finance symbol format. */
+function toSinaSymbol(symbol: string, market: StockMarket): string {
+  if (SINA_INDEX_MAP[symbol]) return SINA_INDEX_MAP[symbol];
+  switch (market) {
+    case 'US':
+      return `gb_${symbol.toLowerCase()}`;
+    case 'HK': {
+      let code = symbol.replace(/\.HK$/i, '');
+      while (code.length < 5) code = `0${code}`;
+      return `hk${code}`;
+    }
+    case 'CN':
+      if (/\.SS$/i.test(symbol)) return `sh${symbol.replace(/\.SS$/i, '')}`;
+      if (/\.SZ$/i.test(symbol)) return `sz${symbol.replace(/\.SZ$/i, '')}`;
+      return symbol;
+    default:
+      return symbol;
+  }
+}
+
+/** Safe float parsing. */
+function safeParseFloat(s: string): number {
+  if (!s) return 0;
+  const n = parseFloat(s.trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Extract fields from a Sina API response line like: var hq_str_xxx="a,b,c,..."; */
+function parseSinaFields(line: string): string[] {
+  const idx = line.indexOf('="');
+  if (idx === -1) return [];
+  let data = line.slice(idx + 2);
+  if (data.endsWith('";')) data = data.slice(0, -2);
+  else if (data.endsWith('"')) data = data.slice(0, -1);
+  if (!data) return [];
+  return data.split(',');
+}
+
+/** Parse Sina international index line. */
+function parseSinaIndex(line: string, item: StockItem): StockQuote | null {
+  const parts = parseSinaFields(line);
+  if (parts.length < 2) return null;
+  const price = safeParseFloat(parts[1]);
+  if (price === 0) return null;
+
+  let change = 0, changePercent = 0, open = 0, high = 0, low = 0, prevClose = 0;
+  if (parts.length >= 9) {
+    change = safeParseFloat(parts[3]);
+    changePercent = safeParseFloat(parts[4]);
+    open = safeParseFloat(parts[5]);
+    high = safeParseFloat(parts[6]);
+    low = safeParseFloat(parts[7]);
+    prevClose = safeParseFloat(parts[8]);
+  } else if (parts.length >= 5) {
+    change = safeParseFloat(parts[3]);
+    changePercent = safeParseFloat(parts[4]);
+    prevClose = price - change;
+  }
+
+  return {
+    symbol: item.symbol, name: item.name, market: item.market,
+    price, change, changePercent, open, high, low, prevClose,
+    volume: 0, marketCap: 0,
+    currency: defaultCurrencyForMarket(item.market),
+  };
+}
+
+/** Parse Sina A-share (CN) line. */
+function parseSinaCN(line: string, item: StockItem): StockQuote | null {
+  const parts = parseSinaFields(line);
+  if (parts.length < 32) return null;
+  const name = parts[0] || item.name;
+  const price = safeParseFloat(parts[3]);
+  const prevClose = safeParseFloat(parts[2]);
+  if (price === 0) return null;
+  const change = price - prevClose;
+  const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+  return {
+    symbol: item.symbol, name, market: 'CN',
+    price, change, changePercent,
+    open: safeParseFloat(parts[1]),
+    high: safeParseFloat(parts[4]),
+    low: safeParseFloat(parts[5]),
+    prevClose,
+    volume: safeParseFloat(parts[8]),
+    marketCap: 0,
+    currency: 'CNY',
+  };
+}
+
+/** Parse Sina HK stock line. */
+function parseSinaHK(line: string, item: StockItem): StockQuote | null {
+  const parts = parseSinaFields(line);
+  if (parts.length < 13) return null;
+  const name = parts[1] || item.name;
+  const price = safeParseFloat(parts[6]);
+  if (price === 0) return null;
+  const prevClose = safeParseFloat(parts[3]);
+  let change = safeParseFloat(parts[7]);
+  if (change === 0) change = price - prevClose;
+  let changePercent = safeParseFloat(parts[8]);
+  if (changePercent === 0 && prevClose > 0) changePercent = (change / prevClose) * 100;
+
+  return {
+    symbol: item.symbol, name, market: 'HK',
+    price, change, changePercent,
+    open: safeParseFloat(parts[2]),
+    high: safeParseFloat(parts[4]),
+    low: safeParseFloat(parts[5]),
+    prevClose,
+    volume: safeParseFloat(parts[12]),
+    marketCap: 0,
+    currency: 'HKD',
+  };
+}
+
+/** Parse Sina US stock line. */
+function parseSinaUS(line: string, item: StockItem): StockQuote | null {
+  const parts = parseSinaFields(line);
+  if (parts.length < 18) return null;
+  const name = parts[0] || item.name;
+  const price = safeParseFloat(parts[1]);
+  if (price === 0) return null;
+
+  return {
+    symbol: item.symbol, name, market: 'US',
+    price,
+    change: safeParseFloat(parts[2]),
+    changePercent: safeParseFloat(parts[4]),
+    open: safeParseFloat(parts[5]),
+    high: safeParseFloat(parts[6]),
+    low: safeParseFloat(parts[7]),
+    prevClose: safeParseFloat(parts[17]),
+    volume: safeParseFloat(parts[10]),
+    marketCap: safeParseFloat(parts[12]),
+    currency: 'USD',
+  };
+}
+
 /**
- * Fetch stock quotes from our backend proxy.
+ * Fetch all quotes via Sina Finance in one batch request.
+ * Response is GBK-encoded, decoded via TextDecoder('gbk').
  */
-async function fetchStockQuotesFromBackend(serverUrl: string, items: StockItem[], language: string): Promise<StockQuote[]> {
+async function fetchStockQuotesSina(items: StockItem[]): Promise<StockQuote[]> {
+  if (items.length === 0) throw new Error('no items');
+
+  const sinaSymbols = items.map(it => toSinaSymbol(it.symbol, it.market));
+  const url = `https://hq.sinajs.cn/list=${sinaSymbols.join(',')}`;
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    // NOTE: `Referer` is a forbidden request header for JS and cannot be set here.
+    // It is injected by a declarativeNetRequest rule (see public/rules/sina_referer.json)
+    // so that Sina does not reject the request with HTTP 403.
+    const res = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error(`sina HTTP ${res.status}`);
+
+    // Decode GBK → UTF-8 via TextDecoder (Chromium supports 'gbk').
+    const buf = await res.arrayBuffer();
+    const text = new TextDecoder('gbk').decode(buf);
+
+    const validLines = text.split('\n').map(s => s.trim()).filter(Boolean);
+
+    const quotes: StockQuote[] = items.map((it, i) => {
+      const fallback = makeErrorQuote(it);
+      if (i >= validLines.length) return fallback;
+      const line = validLines[i];
+      const sinaSym = toSinaSymbol(it.symbol, it.market);
+
+      let parsed: StockQuote | null = null;
+      if (sinaSym.startsWith('int_')) {
+        parsed = parseSinaIndex(line, it);
+      } else if (it.market === 'CN') {
+        parsed = parseSinaCN(line, it);
+      } else if (it.market === 'HK') {
+        parsed = parseSinaHK(line, it);
+      } else if (it.market === 'US') {
+        parsed = parseSinaUS(line, it);
+      }
+      return parsed ?? fallback;
+    });
+
+    if (quotes.every(q => q.error)) throw new Error('all sina requests failed');
+    return quotes;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/** Fetch a single symbol via Yahoo Finance v8 chart API. */
+async function fetchSingleYahooChart(item: StockItem): Promise<StockQuote> {
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+  for (const host of hosts) {
+    const url = `https://${host}/v8/finance/chart/${encodeURIComponent(item.symbol)}?interval=1d&range=1d`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) continue;
+
+      const json = await res.json();
+      const result = json?.chart?.result?.[0];
+      if (!result) continue;
+
+      const meta = result.meta || {};
+      const price = Number(meta.regularMarketPrice) || 0;
+      const prevClose = Number(meta.chartPreviousClose) || Number(meta.previousClose) || 0;
+      const change = price - prevClose;
+      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      const currency = meta.currency || defaultCurrencyForMarket(item.market);
+
+      let open = 0, high = 0, low = 0, volume = 0;
+      const q = result?.indicators?.quote?.[0];
+      if (q) {
+        const toNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+        if (Array.isArray(q.open) && q.open.length > 0) {
+          open = toNum(q.open[q.open.length - 1]);
+        }
+        if (Array.isArray(q.high)) {
+          high = q.high.reduce((acc: number, v: unknown) => Math.max(acc, toNum(v)), 0);
+        }
+        if (Array.isArray(q.low)) {
+          low = q.low.reduce((acc: number, v: unknown) => {
+            const n = toNum(v);
+            if (n <= 0) return acc;
+            return acc === 0 ? n : Math.min(acc, n);
+          }, 0);
+        }
+        if (Array.isArray(q.volume)) {
+          volume = q.volume.reduce((acc: number, v: unknown) => acc + toNum(v), 0);
+        }
+      }
+
+      return {
+        symbol: item.symbol, name: item.name, market: item.market,
+        price, change, changePercent,
+        open, high, low, prevClose, volume, marketCap: 0, currency,
+      };
+    } catch {
+      clearTimeout(timeoutId);
+      // try next host
+    }
+  }
+  return makeErrorQuote(item);
+}
+
+/** Fetch all quotes via Yahoo Finance (one request per symbol, in parallel). */
+async function fetchStockQuotesYahoo(items: StockItem[]): Promise<StockQuote[]> {
+  if (items.length === 0) throw new Error('no items');
+  const results = await Promise.all(items.map(fetchSingleYahooChart));
+  if (results.every(q => q.error)) throw new Error('all yahoo requests failed');
+  return results;
+}
+
+/**
+ * Fetch quotes via our own backend proxy.
+ * Used when running as a plain web page (dev / hosted build) where direct
+ * requests to Sina / Yahoo would be blocked by CORS.
+ */
+async function fetchStockQuotesFromBackend(
+  serverUrl: string,
+  items: StockItem[],
+  language: string,
+): Promise<StockQuote[]> {
+  if (items.length === 0) return [];
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
     const res = await fetch(`${serverUrl}/api/v1/finance/stock-quotes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: items.map(i => ({ symbol: i.symbol, name: i.name, market: i.market })),
+        items: items.map(it => ({
+          symbol: it.symbol,
+          name: it.name,
+          market: it.market,
+        })),
         language,
       }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`backend HTTP ${res.status}`);
+
     const json = await res.json();
-    const data: StockQuote[] = (json.data || []).map((item: StockQuote) => ({
-      symbol: item.symbol,
-      name: item.name,
-      market: item.market as StockMarket,
-      price: item.price || 0,
-      change: item.change || 0,
-      changePercent: item.changePercent || 0,
-      open: item.open || 0,
-      high: item.high || 0,
-      low: item.low || 0,
-      prevClose: item.prevClose || 0,
-      volume: item.volume || 0,
-      marketCap: item.marketCap || 0,
-      currency: item.currency || 'USD',
-      error: item.error || false,
-    }));
-    return data;
+    const list: Array<Partial<StockQuote> & { symbol: string; market: StockMarket }> = json?.data || [];
+
+    // Map backend response back into our local StockQuote shape, preserving
+    // the original watchlist order (backend may or may not preserve order).
+    const byKey = new Map(list.map(q => [q.symbol, q]));
+    return items.map(it => {
+      const q = byKey.get(it.symbol);
+      if (!q || q.error || !q.price || q.price <= 0) return makeErrorQuote(it);
+      return {
+        symbol: it.symbol,
+        name: q.name || it.name,
+        market: it.market,
+        price: q.price || 0,
+        change: q.change || 0,
+        changePercent: q.changePercent || 0,
+        open: q.open || 0,
+        high: q.high || 0,
+        low: q.low || 0,
+        prevClose: q.prevClose || 0,
+        volume: q.volume || 0,
+        marketCap: q.marketCap || 0,
+        currency: q.currency || defaultCurrencyForMarket(it.market),
+      };
+    });
   } catch (err) {
     clearTimeout(timeoutId);
     throw err;
+  }
+}
+
+/**
+ * Unified data fetcher.
+ *
+ * - Extension context (`chrome-extension://` origin): request Sina / Yahoo
+ *   directly — `host_permissions` in the manifest bypasses CORS.
+ *   - Chinese users: Sina primary, Yahoo fallback.
+ *   - English users: Yahoo primary, Sina fallback.
+ * - Web page context (dev / hosted web build): go through our backend
+ *   proxy to avoid CORS errors. If no backend is configured, return
+ *   error placeholders.
+ */
+async function fetchStockQuotes(items: StockItem[], language: string): Promise<StockQuote[]> {
+  if (items.length === 0) return [];
+
+  const inExtension = isExtensionContext();
+
+  // --- Web page context: always go through backend proxy ---
+  if (!inExtension) {
+    const serverUrl = useConfigStore.getState().getEffectiveServerUrl();
+    console.log('[StockWidget] web context, serverUrl:', serverUrl || '(empty)');
+    if (!serverUrl) {
+      console.warn('[StockWidget] no backend serverUrl configured in web context');
+      return items.map(makeErrorQuote);
+    }
+    try {
+      const data = await fetchStockQuotesFromBackend(serverUrl, items, language);
+      if (data.some(d => !d.error && d.price > 0)) return data;
+      throw new Error('backend returned no valid data');
+    } catch (err) {
+      console.warn('[StockWidget] backend proxy failed:', err);
+      return items.map(makeErrorQuote);
+    }
+  }
+
+  // --- Extension context: direct fetch with primary / fallback ---
+  const isZh = language === 'zh';
+  const primary = isZh ? fetchStockQuotesSina : fetchStockQuotesYahoo;
+  const fallback = isZh ? fetchStockQuotesYahoo : fetchStockQuotesSina;
+
+  try {
+    return await primary(items);
+  } catch (errPrimary) {
+    console.warn('[StockWidget] primary source failed, trying fallback:', errPrimary);
+    try {
+      return await fallback(items);
+    } catch (errFallback) {
+      console.warn('[StockWidget] fallback source also failed:', errFallback);
+      return items.map(makeErrorQuote);
+    }
   }
 }
 

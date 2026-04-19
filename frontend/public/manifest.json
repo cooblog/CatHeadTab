@@ -19,8 +19,18 @@
     "favicon",
     "activeTab",
     "system.cpu",
-    "system.memory"
+    "system.memory",
+    "declarativeNetRequest"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "sina_referer",
+        "enabled": true,
+        "path": "rules/sina_referer.json"
+      }
+    ]
+  },
   "host_permissions": [
     "https://catheadtab.cn/*",
     "https://api.openai.com/*",
@@ -30,7 +40,10 @@
     "https://open.bigmodel.cn/*",
     "https://api.moonshot.cn/*",
     "https://api.minimax.chat/*",
-    "https://dashscope.aliyuncs.com/*"
+    "https://dashscope.aliyuncs.com/*",
+    "https://hq.sinajs.cn/*",
+    "https://query1.finance.yahoo.com/*",
+    "https://query2.finance.yahoo.com/*"
   ],
   "optional_host_permissions": [
     "https://*/*"
