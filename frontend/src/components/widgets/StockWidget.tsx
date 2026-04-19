@@ -4,6 +4,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -13,6 +14,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
   arrayMove,
+  sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { WidgetSize, StockWidgetConfig, StockItem, StockMarket } from '../../store/layoutStore';
@@ -255,6 +257,12 @@ export const StockWidget: React.FC<StockWidgetProps> = ({ size, config, itemId }
   const watchlist = config?.watchlist ?? DEFAULT_WATCHLIST;
   const [quotes, setQuotes] = useState<StockQuote[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Derive ordered quotes from watchlist + fetched data to ensure UI matches user's preferred order
+  const orderedQuotes = useMemo(() => {
+    const quoteMap = new Map((quotes || []).map(q => [q.symbol, q]));
+    return watchlist.map(w => quoteMap.get(w.symbol) || makeErrorQuote(w));
+  }, [quotes, watchlist]);
   const [error, setError] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -331,7 +339,7 @@ export const StockWidget: React.FC<StockWidgetProps> = ({ size, config, itemId }
 
   // --- Small (1×2): horizontal compact view — top 2-3 stocks ---
   if (size === 'small') {
-    const displayQuotes = quotes.slice(0, 3);
+    const displayQuotes = orderedQuotes.slice(0, 3);
     return (
       <>
         <div
@@ -401,7 +409,7 @@ export const StockWidget: React.FC<StockWidgetProps> = ({ size, config, itemId }
 
         {/* Stock list — scrollable */}
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-[3px] no-scrollbar">
-          {quotes.map(q => (
+          {orderedQuotes.map(q => (
             <div
               key={q.symbol}
               className="flex items-center justify-between rounded-lg px-2 py-1 bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
@@ -425,7 +433,7 @@ export const StockWidget: React.FC<StockWidgetProps> = ({ size, config, itemId }
 
       {showDetail && (
         <StockDetailModal
-          quotes={quotes}
+          quotes={orderedQuotes}
           watchlist={watchlist}
           itemId={itemId}
           isZh={isZh}
@@ -616,22 +624,16 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
 
   const isInWatchlist = (symbol: string) => watchlist.some(s => s.symbol === symbol);
 
-  // dnd-kit sensors — require 5px movement before starting drag to avoid accidental drags
+  // dnd-kit sensors
   const stockSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
-  // Build display list: use real quotes if available, otherwise placeholder
-  const displayQuotes: StockQuote[] = useMemo(() => {
-    if (quotes.length > 0) return quotes;
-    return watchlist.map(w => ({
-      symbol: w.symbol, name: w.name, market: w.market,
-      price: 0, change: 0, changePercent: 0,
-      open: 0, high: 0, low: 0, prevClose: 0,
-      volume: 0, marketCap: 0, currency: 'USD', error: true,
-    }));
-  }, [quotes, watchlist]);
-
+  // Build display list: directly use quotes from parent (which is already ordered)
+  const displayQuotes = quotes;
   const stockIds = useMemo(() => displayQuotes.map(q => q.symbol), [displayQuotes]);
 
   const handleStockDragEnd = useCallback((event: DragEndEvent) => {
@@ -676,7 +678,9 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
            so we must stop those specific events, not just pointer events. */
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
+        /* We do NOT stop pointerdown propagation here to allow inner DnD (PointerSensor) 
+           to work while still blocking outer Desktop DnD (Mouse/Touch). 
+           Outer Desktop DndContext does not use PointerSensor by default. */
       >
         {/* Window Header — macOS traffic lights */}
         <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
