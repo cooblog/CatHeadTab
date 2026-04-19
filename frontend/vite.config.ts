@@ -62,6 +62,7 @@ export default defineConfig(({ mode }) => {
         input: {
           newtab: path.resolve(__dirname, 'index.html'),
           popup: path.resolve(__dirname, 'popup.html'),
+          privacy: path.resolve(__dirname, 'privacy.html'),
         },
         output: {
           manualChunks(id: string) {

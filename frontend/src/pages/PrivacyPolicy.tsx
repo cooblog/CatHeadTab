@@ -38,7 +38,13 @@ export const PrivacyPolicy: React.FC = () => {
         
         <div className="mt-12 pt-8 border-t border-white/10 flex justify-center">
           <button 
-            onClick={() => window.location.href = '/'}
+            onClick={() => {
+              if (window.location.protocol.includes('chrome-extension')) {
+                window.location.hash = '#/';
+              } else {
+                window.location.href = '/';
+              }
+            }}
             className="px-6 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/70 transition-all text-sm font-medium"
           >
             {isZh ? '返回首页' : 'Back to Home'}
