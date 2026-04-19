@@ -11,35 +11,48 @@ const frontendDir = path.resolve(__dirname, '..');
 const distDir = path.join(frontendDir, 'dist');
 const manifestPath = path.join(frontendDir, 'public', 'manifest.json');
 
-// Read version from public manifest
-const publicManifestPath = path.join(frontendDir, 'public', 'manifest.json');
-const manifest = JSON.parse(fs.readFileSync(publicManifestPath, 'utf8'));
-const version = manifest.version;
+// Read version from package.json
+const packageJsonPath = path.join(frontendDir, 'package.json');
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const version = packageJson.version;
 
 // Auto-inject VITE_API_URL from .env.production.local into dist/manifest.json host_permissions
 const envPath = path.join(frontendDir, '.env.production.local');
 const distManifestPath = path.join(distDir, 'manifest.json');
 
-if (fs.existsSync(envPath) && fs.existsSync(distManifestPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf8');
-  const match = envContent.match(/^VITE_API_URL\s*=\s*(.*)$/m);
-  if (match) {
-    const apiUrl = match[1].trim();
-    try {
-      const u = new URL(apiUrl);
-      const originMatch = `${u.protocol}//${u.host}/*`;
-      const distManifest = JSON.parse(fs.readFileSync(distManifestPath, 'utf8'));
-      
-      distManifest.host_permissions = distManifest.host_permissions || [];
-      if (!distManifest.host_permissions.includes(originMatch)) {
-        distManifest.host_permissions.push(originMatch);
-        fs.writeFileSync(distManifestPath, JSON.stringify(distManifest, null, 2));
-        console.log(`\n=> Injected API host permission into manifest: ${originMatch}`);
+// Sync version and inject VITE_API_URL host_permissions into dist/manifest.json
+if (fs.existsSync(distManifestPath)) {
+  const distManifest = JSON.parse(fs.readFileSync(distManifestPath, 'utf8'));
+  
+  // Always sync version from package.json
+  const oldVersion = distManifest.version;
+  distManifest.version = version;
+  if (oldVersion !== version) {
+    console.log(`\n=> Synced manifest version: ${oldVersion} -> ${version}`);
+  }
+
+  // Inject host permission from env if exists
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const match = envContent.match(/^VITE_API_URL\s*=\s*(.*)$/m);
+    if (match) {
+      const apiUrl = match[1].trim();
+      try {
+        const u = new URL(apiUrl);
+        const originMatch = `${u.protocol}//${u.host}/*`;
+        distManifest.host_permissions = distManifest.host_permissions || [];
+        if (!distManifest.host_permissions.includes(originMatch)) {
+          distManifest.host_permissions.push(originMatch);
+          console.log(`=> Injected API host permission: ${originMatch}`);
+        }
+      } catch (e) {
+        console.warn(`=> Failed to parse VITE_API_URL: ${apiUrl}`);
       }
-    } catch (e) {
-      console.warn(`\n=> Failed to parse VITE_API_URL from env for host_permissions: ${apiUrl}`);
     }
   }
+
+  // Write back the updated manifest
+  fs.writeFileSync(distManifestPath, JSON.stringify(distManifest, null, 2));
 }
 
 // Define output file
