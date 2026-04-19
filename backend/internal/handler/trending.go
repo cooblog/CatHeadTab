@@ -1775,23 +1775,62 @@ func (h *TrendingHandler) fetchWeather(c *gin.Context, city, lang, unit string) 
 		ip := c.ClientIP()
 		region, err := h.ipSearcher.Search(ip)
 		if err != nil {
+			logger.Error("[trending] weather: ip2region search failed", "ip", ip, "error", err)
 			return nil, fmt.Errorf("failed to search ip: %w", err)
 		}
-		
+		logger.Info("[trending] weather: ip2region result", "ip", ip, "region", region)
+
 		// region format: 国家|区域|省份|城市|ISP
+		// Note: the last segment is always ISP (电信/联通/移动 etc.),
+		// so we MUST skip it when picking the city name.
 		parts := strings.Split(region, "|")
-		if len(parts) >= 4 && parts[3] != "0" && parts[3] != "" {
-			cityName = parts[3]
-		} else if len(parts) >= 3 && parts[2] != "0" && parts[2] != "" {
-			cityName = parts[2]
-		} else {
-			cityName = "Shanghai" // Default
+		logger.Info("[trending] weather: region parts", "count", len(parts), "parts", parts)
+
+		isValid := func(s string) bool {
+			return s != "" && s != "0"
+		}
+		// Known ISP keywords that must never be treated as a city/region.
+		isISP := func(s string) bool {
+			keywords := []string{"联通", "电信", "移动", "铁通", "广电", "教育网", "长城", "鹏博士",
+				"Unicom", "Telecom", "Mobile", "CNC", "CERNET"}
+			for _, k := range keywords {
+				if strings.Contains(s, k) {
+					return true
+				}
+			}
+			return false
+		}
+
+		// Prefer city (parts[3]), then province (parts[2]), then area (parts[1]),
+		// skipping any segment that looks like an ISP.
+		pickIdx := []int{3, 2, 1}
+		for _, idx := range pickIdx {
+			if idx < len(parts) && isValid(parts[idx]) && !isISP(parts[idx]) {
+				cityName = parts[idx]
+				logger.Info("[trending] weather: picked city from region", "index", idx, "cityName", cityName)
+				break
+			}
+		}
+		if cityName == "" {
+			cityName = "Shanghai" // Default fallback
+			logger.Warn("[trending] weather: no valid city parsed from region, fallback", "cityName", cityName)
+		}
+
+		// Strip common Chinese administrative suffixes to improve geocoding hit rate
+		trimmed := cityName
+		for _, suffix := range []string{"市", "省", "自治区", "特别行政区"} {
+			trimmed = strings.TrimSuffix(trimmed, suffix)
+		}
+		if trimmed != cityName {
+			logger.Info("[trending] weather: city suffix trimmed", "original", cityName, "trimmed", trimmed)
+			cityName = trimmed
 		}
 
 		// Geocode the identified city to get lat/lon
 		geoUrl := fmt.Sprintf("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=%s&format=json", url.QueryEscape(cityName), lang)
 		resp, err := http.Get(geoUrl)
 		if err != nil {
+			logger.Error("[trending] weather: geocoding request failed", "city", cityName, "error", err)
 			return nil, err
 		}
 		defer resp.Body.Close()
@@ -1805,9 +1844,11 @@ func (h *TrendingHandler) fetchWeather(c *gin.Context, city, lang, unit string) 
 		if err := json.NewDecoder(resp.Body).Decode(&geoResult); err != nil || len(geoResult.Results) == 0 {
 			// Fallback coordinates
 			lat, lon = 31.23, 121.47 // Shanghai
+			logger.Warn("[trending] weather: geocoding empty result, use Shanghai fallback", "city", cityName)
 		} else {
 			lat = geoResult.Results[0].Latitude
 			lon = geoResult.Results[0].Longitude
+			logger.Info("[trending] weather: geocoded", "city", cityName, "lat", lat, "lon", lon)
 		}
 	}
 
