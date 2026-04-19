@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useSyncExternalStore, lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useConfigStore } from './store/configStore'
 import { useLayoutStore, DesktopItem } from './store/layoutStore'
 import client from './api/client'
@@ -357,6 +357,7 @@ function App() {
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy.html" element={<Navigate to="/privacy" replace />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/*" element={<Desktop />} />
           </Routes>

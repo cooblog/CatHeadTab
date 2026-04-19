@@ -1,6 +1,6 @@
 # CatHeadTab Privacy Policy
 
-**Last Updated: April 12, 2026**
+**Last Updated: April 19, 2026**
 
 CatHeadTab is a browser new-tab extension that replaces your default new tab page with a customizable, high-aesthetics desktop interface. This Privacy Policy explains how we handle your data.
 
@@ -47,37 +47,50 @@ CatHeadTab requests the following browser permissions, each used solely for the 
 | `activeTab` | Read the current tab's URL and title when using the "Add to Desktop" popup |
 | `system.cpu` | Display real-time CPU usage in the System Monitor widget |
 | `system.memory` | Display real-time memory usage in the System Monitor widget |
-| `declarativeNetRequest` | Modify the `Referer` header for Sina Finance API requests (required for China A-share stock data) |
+
+### Data Requests & Proxying
+
+To ensure reliability, avoid CORS limitations, and protect user privacy (by shielding your IP from third-party APIs), CatHeadTab uses a backend proxy for financial and trending data.
+
+**Requests made to CatHeadTab servers (`catheadtab.cn` or your self-hosted instance):**
+
+- **Stock & Index data**: Proxied from Yahoo Finance or Sina Finance.
+- **Currency rates**: Proxied from Frankfurter API (European Central Bank).
+- **Trending content**: Aggregated from GitHub, Bilibili, Weibo, Xiaohongshu, and BBC News.
+- **Weather data**: Provided based on an anonymous IP-to-region lookup (your IP is processed temporarily but not stored for tracking).
+
+All such requests are **anonymous** and not linked to your identity unless you explicitly choose to sign in for Cloud Sync.
 
 ### Host Permissions
 
 | Host | Purpose |
 |------|---------|
-| `https://query1.finance.yahoo.com/*` | Fetch US and Hong Kong stock market data |
-| `https://query2.finance.yahoo.com/*` | Fetch US and Hong Kong stock market data |
-| `https://hq.sinajs.cn/*` | Fetch China A-share stock market data |
-| `https://api.frankfurter.dev/*` | Fetch currency exchange rate data (European Central Bank) |
+| `https://catheadtab.cn/*` | Communicate with the official backend for proxying and sync |
+| `https://api.openai.com/*` | Direct access to OpenAI services (when configured) |
+| `https://api.deepseek.com/*` | Direct access to DeepSeek services (when configured) |
+| `https://*.googleapis.com/*` | Direct access to Google AI services (when configured) |
+| `https://api.anthropic.com/*` | Direct access to Anthropic services (when configured) |
+| `https://*.aliyuncs.com/*` | Direct access to Aliyun/Qwen services (when configured) |
 
-These requests are made **directly from your browser** to the respective APIs. CatHeadTab does not proxy, log, or store any of this financial data on our servers.
+Other AI providers (Zhipu, Moonshot, Minimax, etc.) are accessed directly from your browser when configured. CatHeadTab does not proxy, log, or store your AI conversations or API keys on our servers.
 
 ## AI Assistant
 
 The AI Agent feature allows you to interact with large language models (LLMs) to manage your desktop. When using this feature:
 
-- **Your AI API key** is stored locally on your device and sent directly to your chosen AI provider (e.g., OpenAI, DeepSeek, Google). It is **never** sent to CatHeadTab servers.
-- **Chat messages** are sent directly from your browser to the AI provider's API endpoint. CatHeadTab does not intercept, log, or store these messages on any server.
-- **Chat history** is saved locally on your device for convenience and can be cleared at any time.
+- **Your AI API key** is stored locally on your device and sent directly to your chosen AI provider. It is **never** sent to CatHeadTab servers.
+- **Chat messages** are sent directly from your browser to the AI provider's API endpoint. CatHeadTab does not intercept, log, or store these messages (unless you use a self-hosted backend specifically configured to do so).
+- **Chat history** is saved locally for convenience.
 - The AI assistant can read your desktop layout, bookmarks, and browsing history **only when you ask it to** and only to fulfill your request.
 
 ## Third-Party Services
 
 CatHeadTab may interact with the following third-party services based on your usage:
 
-- **AI providers** (OpenAI, DeepSeek, Google, Anthropic, etc.): Only when you configure and use the AI assistant. Subject to each provider's own privacy policy.
-- **Wallhaven** (wallhaven.cc): Only when you browse online wallpapers. Subject to Wallhaven's privacy policy.
-- **Yahoo Finance / Sina Finance**: Only when you use the Stock Tracker widget.
-- **Frankfurter API**: Only when you use the Exchange Rate widget.
-- **GitHub / Google OAuth**: Only when you choose to sign in with these services.
+- **AI providers**: OpenAI, DeepSeek, Google (Gemini), Anthropic (Claude), Aliyun (Qwen), Zhipu (ChatGLM), Moonshot (Kimi), Minimax.
+- **Trending Sources**: GitHub, Bilibili, Weibo, Xiaohongshu, BBC News.
+- **Finance Sources**: Yahoo Finance, Sina Finance, Frankfurter API.
+- **Other**: Wallhaven (wallpapers), GitHub/Google OAuth (sync).
 
 ## Data Sharing
 

@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
       // We only strip it if we are sure we don't need runtime injection (e.g. dev mode or if explicitly asked)
       if (mode === 'development') {
         res = res.replace(/[ \t]*<!--[^>]*Runtime config[^>]*-->\r?\n?/i, '');
-        res = res.replace(/[ \t]*<script>window\.__RUNTIME_CONFIG__[^<]*<\/script>\r?\n?/, '');
+        res = res.replace(/[ \t]*<script src="\/runtime-config\.js"><\/script>\r?\n?/, '');
       }
 
       const umamiId = env.VITE_UMAMI_WEBSITE_ID;
