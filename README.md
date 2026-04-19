@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="frontend/store_icon.png" width="128" />
 
 # CatHeadTab
 
