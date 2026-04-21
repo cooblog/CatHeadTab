@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import type { WidgetSize } from '../../store/layoutStore';
 import { useConfigStore } from '../../store/configStore';
 import { useTranslation } from '../../i18n/useTranslation';
-import { getSmartFaviconUrl, cacheImageFromElement } from '../../utils/favicon';
+import { FaviconImg } from '../FaviconImg';
 
 interface WeiboHotWidgetProps {
   size: WidgetSize;
@@ -66,13 +66,13 @@ export const WeiboHotWidget: React.FC<WeiboHotWidgetProps> = ({ size: _size }) =
       {/* Header */}
       <div className="shrink-0 flex items-center justify-between px-2 pt-2.5 pb-1.5">
         <div className="flex items-center gap-2">
-          <img
-            src={getSmartFaviconUrl('weibo.com', 64)}
+          <FaviconImg
+            url="weibo.com"
+            sz={64}
             alt="Weibo"
             width={18}
             height={18}
             className="rounded"
-            onLoad={(e) => cacheImageFromElement(e.currentTarget, 'weibo.com', 64)}
           />
           <span className="text-[13px] font-semibold text-white/80">{isZh ? '微博热搜' : 'Weibo Hot'}</span>
         </div>

@@ -4,7 +4,7 @@ import client from '../api/client';
 import { useTranslation, TranslationKeys } from '../i18n/useTranslation';
 import { useConfigStore } from '../store/configStore';
 import { DesktopItem, DesktopItemType, useLayoutStore } from '../store/layoutStore';
-import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
+import { FaviconImg } from './FaviconImg';
 
 // ---------------------------------------------------------------------------
 // PagePicker — small dropdown to choose which desktop page to add to
@@ -173,12 +173,12 @@ const SiteRow = memo(function SiteRow({
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
-          <img
-            src={getSmartFaviconUrl(site.url, 64)}
+          <FaviconImg
+            url={site.url}
+            sz={64}
             alt=""
             loading="lazy"
             className="w-4.5 h-4.5 object-contain"
-            onLoad={(e) => cacheImageFromElement(e.currentTarget, site.url, 64)}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
               e.currentTarget.parentElement!.innerHTML = '<span class="text-[10px]">🌐</span>';

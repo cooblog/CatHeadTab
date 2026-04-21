@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useBookmarkStore, ChromeBookmarkTreeNode, getFolderItemCount, getAllBookmarks } from '../../store/bookmarkStore';
 import { useTranslation } from '../../i18n/useTranslation';
-import { getSmartFaviconUrl } from '../../utils/favicon';
+import { FaviconImg } from '../FaviconImg';
 
 export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { bookmarksTree, fetchBookmarks, deleteBookmark } = useBookmarkStore();
@@ -330,9 +330,11 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
                           {item.url ? (
-                            <img 
-                              src={getSmartFaviconUrl(item.url, 64, true)} 
-                              alt="" 
+                            <FaviconImg
+                              url={item.url}
+                              sz={64}
+                              preferChromeFavicon
+                              alt=""
                               className="w-4.5 h-4.5 object-contain"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';

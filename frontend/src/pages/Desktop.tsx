@@ -4,7 +4,7 @@ import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS, WIDGET
 import { useConfigStore } from '../store/configStore';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
-import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
+import { FaviconImg } from '../components/FaviconImg';
 
 // Lazy-loaded modals — only loaded when opened (saves ~300KB from initial bundle)
 const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
@@ -129,6 +129,52 @@ const DesktopIconContent: React.FC<{
     [isFolder, item.children],
   );
 
+  // Track whether the loaded favicon is visually non-square (long SVG logos,
+  // wide banners, etc.). Non-square icons render poorly with object-cover
+  // because their sides get cropped — we switch to a padded "card" layout
+  // (background + object-contain) so the full icon is visible, matching the
+  // style users see in AddItemModal's preview.
+  const [isNonSquareIcon, setIsNonSquareIcon] = useState(false);
+  const handleIconLoaded = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) return;
+
+    // SVGs without an intrinsic size report Chrome's default viewport
+    // (300x150) — a ratio of 2 would falsely flip the tile into
+    // "non-square" mode and attach the white card background. Skip the
+    // ratio check for SVG sources (they render crisply at any size, so
+    // object-cover always does the right thing).
+    const src = img.currentSrc || img.src || '';
+    const isSvg =
+      /\.svg(\?|#|$)/i.test(src) || /^data:image\/svg/i.test(src);
+    if (isSvg) {
+      setIsNonSquareIcon(false);
+      return;
+    }
+
+    // Blob URLs can wrap an SVG blob too — detect those via the image's
+    // naturalWidth/Height matching Chrome's default SVG viewport
+    // (300x150 or very close to 2:1). Treat such results as "unknown
+    // aspect ratio" rather than non-square so we don't falsely draw
+    // the white backdrop card for crisp vector logos.
+    if (src.startsWith('blob:') && w === 300 && h === 150) {
+      setIsNonSquareIcon(false);
+      return;
+    }
+
+    const ratio = w / h;
+    // Tolerate small perspective differences (~15%) before flipping modes
+    setIsNonSquareIcon(ratio > 1.15 || ratio < 0.87);
+  }, []);
+
+  // Reset the non-square flag whenever the underlying URL/icon changes, so
+  // the next icon load is evaluated fresh.
+  useEffect(() => {
+    setIsNonSquareIcon(false);
+  }, [item.url, item.icon]);
+
   // When a custom dockIconSize is provided, use inline styles; otherwise use Tailwind classes
   const iconSize = (isDock && dockIconSize)
     ? '' // will use inline style instead
@@ -138,6 +184,9 @@ const DesktopIconContent: React.FC<{
     : {};
 
   // Check if the icon should use a bare image style (iOS-like, no wrapper background)
+  // Non-square icons also take this branch — they stay bare (no white card),
+  // and rely on the <img>'s object-contain + 78% sizing below to render
+  // intact without being cropped.
   const hasImageIcon = !isFolder && item.type !== 'app' && (
     (item.icon && item.icon.startsWith('http')) || (!item.icon && item.url)
   );
@@ -146,7 +195,7 @@ const DesktopIconContent: React.FC<{
     <div className={`flex select-none flex-col items-center ${isDock ? 'w-auto' : 'w-[80px] md:w-[80px]'} ${isOverlay ? 'opacity-90 scale-110' : ''}`}>
       <div style={{ ...iconSizeStyle, borderRadius: dockIconSize ? Math.round(dockIconSize * 0.3) : undefined, isolation: 'isolate', willChange: 'transform' }} className={`${iconSize} ${!dockIconSize ? 'rounded-[18px]' : ''} overflow-hidden transition-[transform,box-shadow] duration-200 relative ${
         hasImageIcon
-          ? `shadow-lg ${isDraggedOver
+          ? `flex items-center justify-center shadow-lg ${isDraggedOver
               ? 'scale-125 shadow-[0_0_30px_rgba(255,255,255,0.3)]'
               : isOverlay
                 ? 'shadow-[0_16px_50px_rgba(0,0,0,0.4)]'
@@ -164,13 +213,13 @@ const DesktopIconContent: React.FC<{
           <div className="grid grid-cols-3 grid-rows-3 gap-1 p-2.5 w-full h-full">
             {miniIcons.map((url, i) => (
               <div key={`${i}-${url}`} className="rounded-[3px] overflow-hidden bg-white/[0.04] flex items-center justify-center">
-                <img 
-                  src={getSmartFaviconUrl(url, 64)}
+                <FaviconImg
+                  url={url}
+                  sz={64}
                   className="w-[88%] h-[88%] object-contain"
                   alt=""
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
-                  onLoad={(e) => cacheImageFromElement(e.currentTarget, url, 64)}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               </div>
@@ -189,18 +238,27 @@ const DesktopIconContent: React.FC<{
               </div>
             ) : item.icon ? (
               item.icon.startsWith('http') ? (
-                <img src={item.icon} className="w-full h-full object-cover" alt={item.title} draggable={false} onDragStart={(e) => e.preventDefault()} onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }} />
+                <img
+                  src={item.icon}
+                  className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                  alt={item.title}
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  onLoad={handleIconLoaded}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
+                />
               ) : (
                 <div className="flex items-center justify-center w-full h-full text-3xl md:text-4xl">{item.icon}</div>
               )
             ) : item.url ? (
-              <img 
-                src={getSmartFaviconUrl(item.url, 128)}
-                className="w-full h-full object-cover"
+              <FaviconImg
+                url={item.url}
+                sz={128}
+                className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
                 alt={item.title}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
-                onLoad={(e) => cacheImageFromElement(e.currentTarget, item.url!, 128)}
+                onLoad={handleIconLoaded}
                 onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
               />
             ) : null}
@@ -1343,12 +1401,13 @@ export const Desktop: React.FC = () => {
 
   const handleContextMenu = (e: React.MouseEvent, item: DesktopItem, inDock?: boolean) => {
     e.preventDefault();
-    // Skip if any modal/popup is open
+    // Skip if any modal/popup is open (folder overlay is NOT skipped —
+    // users should be able to right-click icons inside an opened folder)
     if (
       isSettingsOpen || isAuthOpen || isProfileOpen ||
       isBookmarkBrowserOpen || isHistoryBrowserOpen ||
       isExploreOpen || isItToolsOpen || isAddWidgetOpen ||
-      isAddModalOpen || !!stickyNoteItem || !!editingWidget || !!openedFolder
+      isAddModalOpen || !!stickyNoteItem || !!editingWidget
     ) return;
     setContextMenu({ x: e.clientX, y: e.clientY, item, inDock });
   };
@@ -1714,7 +1773,7 @@ export const Desktop: React.FC = () => {
           isSettingsOpen || isAuthOpen || isProfileOpen ||
           isBookmarkBrowserOpen || isHistoryBrowserOpen ||
           isExploreOpen || isItToolsOpen || isAddWidgetOpen ||
-          isAddModalOpen || !!stickyNoteItem || !!editingWidget || !!openedFolder
+          isAddModalOpen || !!stickyNoteItem || !!editingWidget
         ) {
           e.preventDefault();
           return;
@@ -1827,8 +1886,10 @@ export const Desktop: React.FC = () => {
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
                             {item.url ? (
-                              <img
-                                src={getSmartFaviconUrl(item.url, 64, true)}
+                              <FaviconImg
+                                url={item.url}
+                                sz={64}
+                                preferChromeFavicon
                                 alt=""
                                 className="w-4.5 h-4.5 object-contain"
                                 onError={(e) => {
@@ -2093,7 +2154,11 @@ export const Desktop: React.FC = () => {
       {/* 7. Folder Overlay */}
       {openedFolder && (
         <FolderDropOutZone onClick={() => { setOpenedFolder(null); setIsEditingFolderName(false); }}>
-          <div className="w-auto max-w-[90vw] flex flex-col items-start pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="w-auto max-w-[90vw] flex flex-col items-start pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          >
             {/* Folder name - outside the rounded container, at top-left */}
             <div className="pl-6 sm:pl-10 pb-5 shrink-0">
               {isEditingFolderName ? (

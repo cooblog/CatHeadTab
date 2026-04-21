@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useConfigStore } from '../store/configStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
+import { FaviconImg } from './FaviconImg';
 
 // ── Shared types ─────────────────────────────────────────────────────
 
@@ -191,13 +191,13 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onC
               </svg>
             )}
             {type === 'weibo' && (
-              <img
-                src={getSmartFaviconUrl('weibo.com', 64)}
+              <FaviconImg
+                url="weibo.com"
+                sz={64}
                 alt="Weibo"
                 width={18}
                 height={18}
                 className="rounded"
-                onLoad={(e) => cacheImageFromElement(e.currentTarget, 'weibo.com', 64)}
               />
             )}
             {type === 'xiaohongshu' && (

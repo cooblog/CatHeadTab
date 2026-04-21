@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -111,6 +112,12 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 
 	sz := c.DefaultQuery("sz", "64")
 
+	// Detect local/LAN hosts (IP addresses, localhost, *.local). For these,
+	// external favicon APIs (Google S2 / DuckDuckGo / Favicone) cannot reach
+	// the origin, and treating fetch failures as "dead site" would wrongly
+	// remove user-added intranet entries from ExploreWorld.
+	isLocal := isLocalNetworkHost(domain)
+
 	// Generate cache key
 	cacheKey := fmt.Sprintf("%x", sha256.Sum256([]byte(domain+"_"+sz)))
 	cachePath := filepath.Join(h.cacheDir, cacheKey)
@@ -131,7 +138,7 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 		if data, contentType, cacheErr := h.readCache(cachePath); cacheErr == nil {
 			return &faviconResult{data: data, contentType: contentType}, nil
 		}
-		data, contentType, fetchErr := h.fetchFavicon(domain, sz)
+		data, contentType, fetchErr := h.fetchFavicon(domain, sz, isLocal)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
@@ -160,7 +167,7 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 
 // fetchFavicon tries multiple sources in priority order to get a favicon for the domain.
 //
-// Source priority:
+// Source priority (for public domains):
 //  1. Google S2 — with size validation (reject if returned image is smaller than desired)
 //  2. DuckDuckGo API — fast response, ico format
 //  3. Favicone (Vercel) — modern API with smart fallback, supports size parameter
@@ -168,34 +175,39 @@ func (h *FaviconHandler) Get(c *gin.Context) {
 //  5. HTML <link rel="icon"> parsing (manual)
 //  6. go-favicon library — comprehensive discovery (HTML + manifest + well-known paths)
 //
-// If all sources fail, we check if the website is reachable at all. If the domain
-// is completely unreachable (DNS failure, connection refused, timeout), we consider
-// the site dead and remove it from the preset_sites (ExploreWorld) database.
-func (h *FaviconHandler) fetchFavicon(domain, sz string) ([]byte, string, error) {
+// When isLocal is true (IP address, localhost, *.local), the first three external
+// API sources are skipped because they cannot reach intranet origins, and the
+// post-failure dead-site cleanup is also skipped to avoid wrongly removing
+// user-added intranet entries from ExploreWorld.
+func (h *FaviconHandler) fetchFavicon(domain, sz string, isLocal bool) ([]byte, string, error) {
 	desiredSize := parseDesiredSize(sz)
 
-	// Source 1: Google S2 — validate returned image dimensions
-	googleURL := fmt.Sprintf(
-		"https://s2.googleusercontent.com/s2/favicons?domain_url=https://%s&sz=%s",
-		url.QueryEscape(domain), sz,
-	)
-	if data, ct, err := h.fetchWithSemaphore(googleURL); err == nil && len(data) > 0 && isValidImage(data) {
-		if isImageLargeEnough(data, desiredSize) {
+	if !isLocal {
+		// Source 1: Google S2 — validate returned image dimensions
+		googleURL := fmt.Sprintf(
+			"https://s2.googleusercontent.com/s2/favicons?domain_url=https://%s&sz=%s",
+			url.QueryEscape(domain), sz,
+		)
+		if data, ct, err := h.fetchWithSemaphore(googleURL); err == nil && len(data) > 0 && isValidImage(data) {
+			if isImageLargeEnough(data, desiredSize) {
+				return data, ct, nil
+			}
+			logger.Info("Google S2 returned small icon, trying fallback sources", "domain", domain, "sz", sz)
+		}
+
+		// Source 2: DuckDuckGo API — fast, returns ico format
+		duckURL := fmt.Sprintf("https://icons.duckduckgo.com/ip3/%s.ico", domain)
+		if data, ct, err := h.fetchWithSemaphore(duckURL); err == nil && len(data) > 0 && isValidImage(data) {
 			return data, ct, nil
 		}
-		logger.Info("Google S2 returned small icon, trying fallback sources", "domain", domain, "sz", sz)
-	}
 
-	// Source 2: DuckDuckGo API — fast, returns ico format
-	duckURL := fmt.Sprintf("https://icons.duckduckgo.com/ip3/%s.ico", domain)
-	if data, ct, err := h.fetchWithSemaphore(duckURL); err == nil && len(data) > 0 && isValidImage(data) {
-		return data, ct, nil
-	}
-
-	// Source 3: Favicone (Vercel) — supports size parameter, smart fallback
-	faviconeURL := fmt.Sprintf("https://favicone.com/%s?s=%s", domain, sz)
-	if data, ct, err := h.fetchWithSemaphore(faviconeURL); err == nil && len(data) > 0 && isValidImage(data) {
-		return data, ct, nil
+		// Source 3: Favicone (Vercel) — supports size parameter, smart fallback
+		faviconeURL := fmt.Sprintf("https://favicone.com/%s?s=%s", domain, sz)
+		if data, ct, err := h.fetchWithSemaphore(faviconeURL); err == nil && len(data) > 0 && isValidImage(data) {
+			return data, ct, nil
+		}
+	} else {
+		logger.Info("Local/LAN host detected, skipping external favicon APIs", "domain", domain)
 	}
 
 	// Source 4: Direct /favicon.ico from the website
@@ -217,9 +229,13 @@ func (h *FaviconHandler) fetchFavicon(domain, sz string) ([]byte, string, error)
 		return data, ct, nil
 	}
 
-	// All sources failed — check if the website is reachable at all.
-	// If the domain is completely unreachable, remove it from ExploreWorld.
-	go h.checkAndRemoveDeadSite(domain)
+	// All sources failed — for public domains, check if the website is reachable
+	// at all and remove dead sites from ExploreWorld. Skip this for local/LAN
+	// hosts because the backend typically cannot reach them, and a failed probe
+	// would wrongly mark a healthy intranet site as dead.
+	if !isLocal {
+		go h.checkAndRemoveDeadSite(domain)
+	}
 
 	return nil, "", fmt.Errorf("all favicon sources failed for %s", domain)
 }
@@ -494,7 +510,8 @@ func (h *FaviconHandler) writeCache(cachePath string, data []byte, contentType s
 	return os.WriteFile(cachePath+".meta", []byte(contentType), 0644)
 }
 
-// normalizeDomain extracts a clean domain from the input string.
+// normalizeDomain extracts a clean host (hostname + port) from the input string.
+// Port is preserved because for IP addresses different ports represent different services.
 func normalizeDomain(input string) string {
 	input = strings.TrimSpace(input)
 
@@ -504,7 +521,7 @@ func normalizeDomain(input string) string {
 		if err != nil {
 			return ""
 		}
-		input = u.Hostname()
+		input = u.Host
 	}
 
 	// Strip trailing slashes, paths
@@ -512,12 +529,42 @@ func normalizeDomain(input string) string {
 		input = input[:idx]
 	}
 
-	// Basic validation
-	if !strings.Contains(input, ".") || len(input) < 3 {
-		return ""
+	// Basic validation: must be non-empty and look like a valid host.
+	// Accept IP addresses (IPv4 / IPv6), localhost, and domains.
+	input = strings.ToLower(input)
+	if input == "" || input == "localhost" {
+		return input
+	}
+	// IPv4 or hostname with optional port
+	if strings.Contains(input, ".") || strings.Contains(input, ":") {
+		return input
 	}
 
-	return strings.ToLower(input)
+	return ""
+}
+
+// isLocalNetworkHost returns true for IP addresses and localhost-like hosts
+// that the backend typically cannot reach.
+func isLocalNetworkHost(host string) bool {
+	// Strip port if present
+	hostPart := host
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		// Handle IPv6 brackets like [::1]:8080
+		if strings.HasPrefix(host, "[") {
+			if end := strings.Index(host, "]"); end != -1 && end < idx {
+				hostPart = host[1:end]
+			}
+		} else {
+			hostPart = host[:idx]
+		}
+	}
+	if hostPart == "localhost" || hostPart == "127.0.0.1" || strings.HasSuffix(hostPart, ".local") {
+		return true
+	}
+	if net.ParseIP(hostPart) != nil {
+		return true
+	}
+	return false
 }
 
 // isValidImage does a simple check to see if the data looks like an image.

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { useBookmarkStore, getAllFolders, getFolderItemCount, findNodeById, ChromeBookmarkTreeNode } from '../store/bookmarkStore';
-import { getSmartFaviconUrl, cacheImageFromElement } from '../utils/favicon';
+import { FaviconImg } from '../components/FaviconImg';
 
 const SearchIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -178,11 +178,11 @@ export const Bookmarks: React.FC = () => {
                     {/* Favicon / Icon */}
                     <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 border border-white/10 overflow-hidden relative">
                       {isLink && item.url ? (
-                        <img 
-                          src={getSmartFaviconUrl(item.url, 64)}
+                        <FaviconImg
+                          url={item.url}
+                          sz={64}
                           className="w-5 h-5 object-contain"
                           alt=""
-                          onLoad={(e) => cacheImageFromElement(e.currentTarget, item.url!, 64)}
                           onError={(e) => {
                             // Fallback if favicon fails
                             e.currentTarget.style.display = 'none';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
-import { getSmartFaviconUrl } from '../../utils/favicon';
+import { FaviconImg } from '../FaviconImg';
 
 // ---------------------------------------------------------------------------
 // HistoryItem — lightweight type for chrome.history.HistoryItem
@@ -336,8 +336,10 @@ export const HistoryBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) =
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
                           {item.url ? (
-                            <img
-                              src={getSmartFaviconUrl(item.url, 64, true)}
+                            <FaviconImg
+                              url={item.url}
+                              sz={64}
+                              preferChromeFavicon
                               alt=""
                               className="w-4.5 h-4.5 object-contain"
                               onError={(e) => {

@@ -395,13 +395,26 @@ function updateItemInList(list: DesktopItem[], id: string, updates: Partial<Desk
 }
 
 // --- Helper: normalise URL for deduplication ---
+
+/** Check whether a host is an IP address (IPv4 or IPv6). */
+function isIPAddress(host: string): boolean {
+  // IPv4
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  // IPv6 (contains colons; valid domains never contain colons)
+  if (host.includes(':')) return true;
+  return false;
+}
+
 function normalizeUrl(url: string): string {
   try {
     const u = new URL(url.startsWith('http') ? url : `https://${url}`);
     // Strip trailing slash, lowercase host, ignore protocol differences
     const host = u.hostname.replace(/^www\./, '').toLowerCase();
     const path = u.pathname.replace(/\/+$/, '') || '';
-    return `${host}${path}${u.search}`;
+    // For IP addresses, different ports represent distinct services,
+    // so preserve the port in the normalised key.
+    const port = isIPAddress(u.hostname) && u.port ? `:${u.port}` : '';
+    return `${host}${port}${path}${u.search}`;
   } catch {
     return url.trim().toLowerCase();
   }

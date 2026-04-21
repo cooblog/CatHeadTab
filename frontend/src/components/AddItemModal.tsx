@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLayoutStore, DesktopItem } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { getSmartFaviconUrl, extractDomain } from '../utils/favicon';
+import { extractDomain } from '../utils/favicon';
+import { FaviconImg } from './FaviconImg';
 
 // Fetch website title from URL (works in Chrome extension context)
 const fetchWebsiteTitle = async (rawUrl: string): Promise<string | null> => {
@@ -47,26 +48,66 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [title, setTitle] = useState(editItem?.title || '');
   const [url, setUrl] = useState(editItem?.url || '');
   const [customIcon, setCustomIcon] = useState(editItem?.icon || '');
-  const [faviconPreview, setFaviconPreview] = useState('');
+  // Domain derived from URL — used to drive the live FaviconImg preview so
+  // that it auto-upgrades when the background HTML scanner discovers a
+  // higher-resolution icon (SVG / PWA manifest icons, etc.).
+  const [previewDomain, setPreviewDomain] = useState<string>('');
   const [isFetchingTitle, setIsFetchingTitle] = useState(false);
   const [titleAutoFilled, setTitleAutoFilled] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const titleFetchAbortRef = useRef<AbortController | null>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
+  // Track whether the loaded preview icon is visually non-square (long SVG
+  // logos, wide banners, etc.). Non-square icons render poorly with
+  // object-cover because their sides get cropped — we switch to a padded
+  // "card" layout (background + object-contain) so the full icon is
+  // visible. Mirrors the logic used by DesktopIconContent so the edit
+  // preview matches the desktop tile.
+  const [isNonSquareIcon, setIsNonSquareIcon] = useState(false);
+  const handlePreviewIconLoaded = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) return;
+
+    // SVGs without an intrinsic size report Chrome's default viewport
+    // (300x150) — skip the ratio check so vector logos don't get the
+    // white-card background by mistake.
+    const src = img.currentSrc || img.src || '';
+    const isSvg =
+      /\.svg(\?|#|$)/i.test(src) || /^data:image\/svg/i.test(src);
+    if (isSvg) {
+      setIsNonSquareIcon(false);
+      return;
+    }
+    if (src.startsWith('blob:') && w === 300 && h === 150) {
+      setIsNonSquareIcon(false);
+      return;
+    }
+
+    const ratio = w / h;
+    // Tolerate small perspective differences (~15%) before flipping modes
+    setIsNonSquareIcon(ratio > 1.15 || ratio < 0.87);
+  }, []);
+
   // Auto-fetch favicon when URL changes
   useEffect(() => {
     if (mode === 'link' && url.trim()) {
       const domain = extractDomain(url.trim());
-      if (domain) {
-        setFaviconPreview(getSmartFaviconUrl(domain, 128));
-      } else {
-        setFaviconPreview('');
-      }
+      setPreviewDomain(domain || '');
     } else {
-      setFaviconPreview('');
+      setPreviewDomain('');
     }
+    // Reset the non-square flag whenever the underlying URL/icon changes,
+    // so the next icon load is evaluated fresh.
+    setIsNonSquareIcon(false);
   }, [url, mode]);
+
+  // Also reset when the custom icon URL changes
+  useEffect(() => {
+    setIsNonSquareIcon(false);
+  }, [editItem?.icon]);
 
   // Auto-fetch website title when URL changes (debounced)
   const fetchTitle = useCallback(async (rawUrl: string) => {
@@ -227,21 +268,55 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
             </div>
           )}
 
-          {/* Live Preview */}
+          {/* Live Preview —— 裸展示图标本身，与桌面渲染保持一致（无毛玻璃外框）。
+              正方形图标走 object-cover 铺满；非正方形（扁长 logo 等）走 object-contain +
+              浅色卡片背景，避免两侧被裁掉。 */}
           <div className="flex flex-col items-center mb-6">
-            <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.15] backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-center overflow-hidden mb-2">
+            <div
+              className={
+                'w-[72px] h-[72px] rounded-2xl overflow-hidden flex items-center justify-center mb-2 ' +
+                (isNonSquareIcon ? 'bg-white/[0.08]' : '')
+              }
+            >
               {customIcon ? (
                 isCustomIconUrl ? (
-                  <img src={customIcon} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  // Custom URL icon: match Desktop.tsx — object-cover for
+                  // square icons, object-contain with padding otherwise.
+                  <img
+                    src={customIcon}
+                    className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                    alt=""
+                    onLoad={handlePreviewIconLoaded}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
                 ) : (
-                  <span className="text-3xl">{customIcon}</span>
+                  // Emoji fallback needs a subtle backdrop so it stays visible
+                  // against the modal background.
+                  <div className="w-full h-full flex items-center justify-center bg-white/[0.08] rounded-2xl">
+                    <span className="text-3xl">{customIcon}</span>
+                  </div>
                 )
               ) : mode === 'folder' ? (
-                <span className="text-3xl">📁</span>
-              ) : faviconPreview ? (
-                <img src={faviconPreview} className="w-11 h-11 object-cover rounded-xl" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                <div className="w-full h-full flex items-center justify-center bg-white/[0.08] rounded-2xl">
+                  <span className="text-3xl">📁</span>
+                </div>
+              ) : previewDomain ? (
+                // Live preview subscribes to the background HTML scanner so the
+                // image upgrades to a hi-res SVG / apple-touch-icon as soon as
+                // one is discovered. Rendered identically to Desktop.tsx so the
+                // edit preview matches the actual desktop tile pixel-for-pixel.
+                <FaviconImg
+                  url={previewDomain}
+                  sz={128}
+                  className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                  alt=""
+                  onLoad={handlePreviewIconLoaded}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
               ) : (
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+                <div className="w-full h-full flex items-center justify-center bg-white/[0.08] rounded-2xl">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/40"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+                </div>
               )}
             </div>
             <span className="text-[12px] text-white/60 font-medium truncate max-w-[150px]">{title || (mode === 'folder' ? 'Folder' : 'Untitled')}</span>
