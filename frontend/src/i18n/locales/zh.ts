@@ -1,7 +1,6 @@
 export const zh = {
   // Desktop
-  'desktop.searchGoogle': '在 Google 上搜索或输入网址',
-  'desktop.searchBing': '在必应上搜索...',
+  'desktop.searchWeb': '在网上搜索或输入网址',
   'desktop.searchBookmarks': '搜索您的书签...',
   'desktop.searchHistory': '搜索近期历史...',
   'desktop.searchDesktop': '过滤桌面应用...',
@@ -34,8 +33,7 @@ export const zh = {
   'desktop.openBookmarks': '书签浏览器',
   'desktop.wallpaperSettings': '壁纸设置',
   // Search Modes
-  'search.google': '谷歌搜索',
-  'search.bing': '必应搜索',
+  'search.web': '网页搜索',
   'search.bookmarks': '书签页面',
   'search.history': '历史记录',
   'search.desktop': '桌面应用',

@@ -20,7 +20,8 @@
     "activeTab",
     "system.cpu",
     "system.memory",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "search"
   ],
   "declarative_net_request": {
     "rule_resources": [

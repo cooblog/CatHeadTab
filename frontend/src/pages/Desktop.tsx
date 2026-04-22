@@ -54,21 +54,6 @@ const GlobeIcon = ({ size = 24 }: { size?: number }) => (
 );
 
 // Search Mode Icons
-const GoogleGIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 48 48">
-    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-  </svg>
-);
-
-const BingIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="#00809D">
-    <path d="M5.25 2.15v18.73l9.46 3.12 4.15-2.26V11.23L9.63 7.73v9.06l4.03-1.66v-2.02l-1.95.84V9.66l6.89 2.58v8.03l-3.37 1.83-8-2.67V2z"/>
-  </svg>
-);
-
 const BookmarkIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
     <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
@@ -593,11 +578,10 @@ const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: Re
 
 
 // === Search Modes ===
-type SearchMode = 'google' | 'bing' | 'bookmarks' | 'history' | 'desktop';
+type SearchMode = 'web' | 'bookmarks' | 'history' | 'desktop';
 
 const SEARCH_MODES = [
-  { id: 'google', icon: <GoogleGIcon /> },
-  { id: 'bing', icon: <BingIcon /> },
+  { id: 'web', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> },
   { id: 'bookmarks', icon: <BookmarkIcon /> },
   { id: 'history', icon: <HistoryIcon /> },
   { id: 'desktop', icon: <DesktopAppIcon /> },
@@ -749,7 +733,7 @@ export const Desktop: React.FC = () => {
   const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<SearchMode>('google');
+  const [searchMode, setSearchMode] = useState<SearchMode>('web');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'wallpaper' | 'system'>('wallpaper');
@@ -907,8 +891,7 @@ export const Desktop: React.FC = () => {
 
   const getSearchModeLabel = (id: SearchMode) => {
     switch (id) {
-      case 'google': return t('search.google');
-      case 'bing': return t('search.bing');
+      case 'web': return t('search.web');
       case 'bookmarks': return t('search.bookmarks');
       case 'history': return t('search.history');
       case 'desktop': return t('search.desktop');
@@ -922,7 +905,7 @@ export const Desktop: React.FC = () => {
   // Live search
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q || searchMode === 'google' || searchMode === 'bing') {
+    if (!q || searchMode === 'web') {
       setSearchResults([]);
       return;
     }
@@ -1436,10 +1419,12 @@ export const Desktop: React.FC = () => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q) return;
-    if (searchMode === 'google') {
-      window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
-    } else if (searchMode === 'bing') {
-      window.open(`https://www.bing.com/search?q=${encodeURIComponent(q)}`, '_blank');
+    if (searchMode === 'web') {
+      if (typeof chrome !== 'undefined' && chrome.search && chrome.search.query) {
+        chrome.search.query({ text: q, disposition: 'NEW_TAB' });
+      } else {
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
+      }
     } else {
       if (searchResults.length > 0 && searchResults[0].url) {
         window.location.href = searchResults[0].url;
@@ -1662,7 +1647,7 @@ export const Desktop: React.FC = () => {
     }
   }, [totalPages, currentPage, scrollToPage]);
 
-  const isLocalSearchActive = (searchMode !== 'google' && searchMode !== 'bing' && searchQuery.trim() !== '');
+  const isLocalSearchActive = (searchMode !== 'web' && searchQuery.trim() !== '');
 
   // IDs for sortable contexts
   const pageItemIds = useMemo(() => displayPages.map(page => page.map(item => item.id)), [displayPages]);
@@ -1831,8 +1816,7 @@ export const Desktop: React.FC = () => {
               ref={searchInputRef}
               type="text" 
               placeholder={
-                searchMode === 'google' ? t('desktop.searchGoogle') :
-                searchMode === 'bing' ? t('desktop.searchBing') :
+                searchMode === 'web' ? t('desktop.searchWeb') :
                 searchMode === 'bookmarks' ? t('desktop.searchBookmarks') :
                 searchMode === 'history' ? t('desktop.searchHistory') :
                 t('desktop.searchDesktop')

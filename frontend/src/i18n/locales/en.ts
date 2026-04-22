@@ -1,7 +1,6 @@
 export const en = {
   // Desktop
-  'desktop.searchGoogle': 'Search Google or type a URL',
-  'desktop.searchBing': 'Search Bing...',
+  'desktop.searchWeb': 'Search the web or type a URL',
   'desktop.searchBookmarks': 'Search your Bookmarks...',
   'desktop.searchHistory': 'Search Recent History...',
   'desktop.searchDesktop': 'Filter Desktop Apps...',
@@ -34,8 +33,7 @@ export const en = {
   'desktop.openBookmarks': 'Bookmark Browser',
   'desktop.wallpaperSettings': 'Wallpaper',
   // Search Modes
-  'search.google': 'Google Search',
-  'search.bing': 'Bing Search',
+  'search.web': 'Web Search',
   'search.bookmarks': 'Bookmarks',
   'search.history': 'History',
   'search.desktop': 'Desktop Apps',
