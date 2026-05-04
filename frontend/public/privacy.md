@@ -97,25 +97,31 @@ CatHeadTab may interact with the following third-party services based on your us
 
 ## Data Collection, Use, and Sharing
 
-To comply with privacy regulations and store policies, we explicitly disclose how your data is handled:
+To comply with privacy regulations and Chrome Web Store policies, we explicitly disclose how your data is collected, used, and shared:
 
 ### 1. What Data We Collect
-- **Local Data**: We store your desktop layout, user preferences, and AI chat history locally on your device using `chrome.storage.local`. We also store custom wallpaper images locally using IndexedDB.
-- **Cloud Sync Data (Optional)**: If you explicitly create an account and enable cloud sync, we collect and store your desktop layout, user preferences, custom wallpaper images, and bookmarks on our servers (or your self-hosted server) for the sole purpose of syncing across your devices.
-- **Authentication Data**: If you use GitHub or Google OAuth to sign in, we collect your email address and basic profile information provided by the OAuth provider to create and manage your account.
+We collect and process the following categories of user data:
+- **Personally Identifiable Information (PII)**: If you explicitly choose to create an account and enable Cloud Sync via GitHub or Google OAuth, we collect your email address and basic profile information.
+- **Authentication Information**: We collect your AI API keys (e.g., for OpenAI, DeepSeek, Google, etc.) to enable the AI Assistant. These are strictly stored locally on your device. We also process OAuth tokens for Cloud Sync authentication.
+- **Location Information**: We temporarily process your IP address for an IP-to-region lookup to provide local weather data.
+- **Website Content & Activity (Local)**: Your desktop layout, user preferences, AI chat history, bookmarks (if sync is enabled), and browsing history are accessed to provide core functionalities. This data is primarily stored locally (`chrome.storage.local` and IndexedDB).
 
 ### 2. How We Use Your Data
-- **Core Functionality**: Your local data is used exclusively to render your customized new tab page and provide the extension's core features.
-- **Cloud Sync**: Your synced data is used solely to restore your layout and preferences across different devices where you log in.
-- **AI Assistant**: If you use the AI assistant, your prompts and relevant context (like bookmarks or history, only when explicitly requested by you) are sent to your configured AI provider to generate responses.
+We use the collected data exclusively to provide and improve the extension's features:
+- **Personally Identifiable Information**: Used solely to create, manage, and authenticate your Cloud Sync account.
+- **Authentication Information**: Your locally stored AI API keys are used to securely authenticate your direct requests to your chosen AI providers. OAuth tokens are used to maintain your Cloud Sync session.
+- **Location Information**: Your IP address is used temporarily to fetch the correct weather forecast for your current region. It is not stored or tracked.
+- **Website Content & Activity**: Local data is used to render your custom new tab page. If Cloud Sync is enabled, this data is synced across your devices to restore your layout. For the AI Assistant, your data (like bookmarks or history) is only processed when you explicitly request the AI to interact with it.
 
-### 3. How We Share Your Data
-- **We do not sell, rent, or trade your personal data to any third parties.**
-- **We do not use your data for advertising or tracking purposes.**
-- **Third-Party Service Providers**: 
-  - **AI Providers**: If you configure and use the AI assistant, your prompts and necessary context are shared directly with your chosen AI provider (e.g., OpenAI, Google, DeepSeek) to generate responses. This data is subject to the respective provider's privacy policy.
-  - **OAuth Providers**: If you sign in using GitHub or Google, we interact with these providers to authenticate you.
-- **Legal Compliance**: We may disclose your data if required by law or in response to valid requests by public authorities.
+### 3. How We Share Your Data and With Whom
+**We do not sell, rent, or trade your personal data to any third parties. We do not use your data for advertising or tracking purposes.**
+
+To provide our core functionalities, we share specific data with the following relevant third parties:
+- **AI Providers (Direct API Access)**: In accordance with our "Privacy First" principle, we require `<all_urls>` host permissions so your browser can send requests directly to the AI provider you configure (e.g., OpenAI, DeepSeek, Google, Anthropic, Aliyun, Zhipu, Moonshot, Minimax, or your self-hosted endpoints). Your prompts, relevant context (such as bookmarks/history if requested), and **Authentication Information** (API keys) are shared directly with these providers, bypassing our servers entirely.
+- **Target Websites (Dynamic Favicon Fetching)**: When you add a custom website shortcut to your desktop, the extension uses `<all_urls>` permissions to directly fetch the favicon from that website. The target website may see your **Location Information** (IP address) as a standard web request.
+- **OAuth Providers**: Your **Personally Identifiable Information** and **Authentication Information** are processed in coordination with GitHub or Google when you use them to sign in.
+- **Weather Service Providers**: Your **Location Information** (IP address) may be temporarily processed by our backend or third-party weather APIs to return localized weather data.
+- **Legal Compliance**: We may disclose your data if strictly required by law or in response to valid legal requests by public authorities.
 
 ## Self-Hosting
 
