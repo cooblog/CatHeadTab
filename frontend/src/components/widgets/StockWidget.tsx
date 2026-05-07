@@ -305,8 +305,8 @@ function parseSinaUS(line: string, item: StockItem): StockQuote | null {
   return {
     symbol: item.symbol, name, market: 'US',
     price,
-    change: safeParseFloat(parts[2]),
-    changePercent: safeParseFloat(parts[4]),
+    change: safeParseFloat(parts[4]),
+    changePercent: safeParseFloat(parts[2]),
     open: safeParseFloat(parts[5]),
     high: safeParseFloat(parts[6]),
     low: safeParseFloat(parts[7]),
