@@ -347,7 +347,7 @@ export const en = {
 
   // AI Settings
   'settings.aiTitle': 'AI Assistant',
-  'settings.aiDesc': 'Configure AI model API connection. Supports OpenAI, DeepSeek, and other compatible APIs. API Key is stored locally only and never synced to the cloud.',
+  'settings.aiDesc': 'Configure AI model API connection. Supports OpenAI, DeepSeek, and other compatible APIs. API keys are stored locally; when local AI is used, they are sent directly to your configured AI provider for authentication and not to CatHeadTab servers.',
   'settings.aiProvider': 'Provider',
   'settings.aiProviderPlaceholder': 'e.g. openai, deepseek',
   'settings.aiBaseUrl': 'API Base URL',
@@ -355,7 +355,7 @@ export const en = {
   'settings.aiApiKey': 'API Key',
   'settings.aiApiKeyPlaceholder': 'sk-...',
   'settings.aiModel': 'Model',
-  'settings.aiPrivacyNote': 'Local bookmarks and history are only accessible to local AI models. Your browser data is never uploaded to the cloud, so cloud models cannot access this data.',
+  'settings.aiPrivacyNote': 'Server AI mode does not read browser bookmarks or history. Local AI mode reads matching results only when you explicitly ask, then sends them directly to your configured AI provider and not to CatHeadTab servers.',
   'settings.aiModelPlaceholder': 'e.g. gpt-4o-mini, deepseek-chat',
   'settings.aiSave': 'Save AI Config',
   'settings.aiSaved': 'AI configuration saved!',

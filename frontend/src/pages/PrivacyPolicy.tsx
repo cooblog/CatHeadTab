@@ -20,7 +20,12 @@ export const PrivacyPolicy: React.FC = () => {
   const isZh = language === 'zh';
 
   useEffect(() => {
-    fetch('/privacy.md')
+    const privacyFile = isZh ? '/privacy_zh.md' : '/privacy.md';
+    fetch(privacyFile)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res;
+      })
       .then(res => res.text())
       .then(text => setContent(text))
       .catch(err => {

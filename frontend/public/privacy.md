@@ -1,137 +1,132 @@
 # CatHeadTab Privacy Policy
 
-**Last Updated: April 19, 2026**
+**Last Updated: May 11, 2026**
 
-CatHeadTab is a browser new-tab extension that replaces your default new tab page with a customizable, high-aesthetics desktop interface. This Privacy Policy explains how we handle your data.
+CatHeadTab is a browser new-tab extension that replaces your default new tab page with a customizable desktop interface, widgets, optional cloud sync, and optional AI features. This Privacy Policy explains what data CatHeadTab handles, when data leaves your device, and which parties may receive it.
 
 ## Summary
 
-**CatHeadTab does not collect, transmit, or sell any personal data.** All your data stays on your device unless you explicitly choose to enable cloud sync.
+Most CatHeadTab data is processed locally on your device by default. Certain optional or network-backed features transmit limited data so they can work, including account login, cloud sync, weather, finance, trending content, favicon fetching, and server-side AI. CatHeadTab does not sell, rent, trade, or use your data for advertising or tracking.
 
-## Data Storage
+## Local Data
 
-### Local Data (stored on your device only)
+CatHeadTab stores the following data locally using `chrome.storage.local`, IndexedDB, or browser local storage:
 
-| Data | Purpose | Storage Location |
-|------|---------|-----------------|
-| Desktop layout (icons, folders, widgets) | Display your customized new tab | `chrome.storage.local` |
-| User preferences (language, wallpaper URL, lock screen timeout) | Persist your settings | `chrome.storage.local` |
-| AI provider configurations & API keys | Connect to your chosen AI service | `chrome.storage.local` |
-| Custom wallpaper images | Display your uploaded wallpaper | IndexedDB |
-| AI chat history | Persist conversations with AI assistant | `chrome.storage.local` |
+| Data | Purpose | Local Storage |
+|------|---------|---------------|
+| Desktop layout, icons, folders, widgets, widget settings, and sticky note content | Render and customize the new tab page | `chrome.storage.local` |
+| User preferences, language, wallpaper settings, lock timeout, and backend server URL | Persist settings | `chrome.storage.local` |
+| AI provider configuration and user-provided AI API keys | Connect to user-selected local AI providers | `chrome.storage.local` |
+| AI chat history | Preserve recent conversations for convenience | `chrome.storage.local` |
+| Custom wallpaper images and favicon cache | Display assets efficiently | IndexedDB |
+| Weather, stock, and exchange-rate cache | Reduce repeated network requests | Browser local storage |
 
-**Important:** AI API keys are stored exclusively on your local device and are **never** transmitted to our servers.
+AI API keys that you enter in the extension are stored locally and are not sent to CatHeadTab servers.
 
-### Optional Cloud Sync (user-initiated only)
+## Optional Account And Cloud Sync
 
-If you choose to create an account and connect to a backend server (either our public service or your own self-hosted instance), the following data may be synced:
+If you choose to create an account, sign in, or connect the extension to a backend server, CatHeadTab may transmit and store the following data on the official CatHeadTab backend or on the self-hosted backend you configure:
 
-- Desktop layout (pages, dock, folders, icons)
-- User preferences (wallpaper URL, lock screen settings)
-- Custom wallpaper image (compressed WebP)
-- Bookmarks (for cloud backup only)
+- Account data, such as email address, username, password hash, email verification status, avatar, and session tokens.
+- OAuth data from GitHub or Google, such as provider ID, email address, username, avatar URL, and OAuth tokens.
+- Desktop layout, widget settings, user preferences, lock timeout, wallpaper URL, and custom wallpaper image.
+- Usage metadata required for server-side AI limits, such as request count and token counts.
 
-Cloud sync is **entirely optional** and **disabled by default**. You are always in control of when and what to sync.
+Cloud sync is optional. Browser bookmarks and browser history are displayed locally through Chrome APIs and are not uploaded by cloud sync in the current extension.
 
 ## Browser API Access
 
-CatHeadTab requests the following browser permissions, each used solely for the stated purpose:
+CatHeadTab requests the following Chrome extension permissions for user-facing features:
 
 | Permission | Purpose |
-|-----------|---------|
-| `storage` | Save your layout, settings, and preferences locally |
-| `unlimitedStorage` | Store wallpaper images without hitting storage limits |
-| `bookmarks` | Display and search your bookmarks in the Bookmark Browser |
-| `history` | Display and search your browsing history in the History Browser |
-| `favicon` | Show website icons next to your desktop shortcuts |
-| `activeTab` | Read the current tab's URL and title when using the "Add to Desktop" popup |
-| `system.cpu` | Display real-time CPU usage in the System Monitor widget |
-| `system.memory` | Display real-time memory usage in the System Monitor widget |
+|------------|---------|
+| `storage` | Save layout, settings, AI configuration, and chat history locally |
+| `unlimitedStorage` | Store wallpaper and favicon assets without hitting normal quota limits |
+| `bookmarks` | Display and search your browser bookmarks inside the Bookmark Browser and local AI mode |
+| `history` | Display and search your browser history inside the History Browser and local AI mode |
+| `favicon` | Show browser-provided website icons next to shortcuts, bookmarks, and history items |
+| `activeTab` | Read the active tab URL and title when you use the "Add to Desktop" popup |
+| `system.cpu` | Display CPU usage in the System Monitor widget |
+| `system.memory` | Display memory usage in the System Monitor widget |
+| `declarativeNetRequest` | Add the required `Referer` header for Sina Finance stock quote requests |
+| `search` | Send a web search through the browser's default search provider when you submit a web search from the new tab page |
 
-### Data Requests & Proxying
+## Host Permissions
 
-To ensure reliability, avoid CORS limitations, and protect user privacy (by shielding your IP from third-party APIs), CatHeadTab uses a backend proxy for financial and trending data.
+CatHeadTab requests host permissions for `http://*/*` and `https://*/*`. These broad host permissions are used only for implemented, user-facing features:
 
-**Requests made to CatHeadTab servers (`catheadtab.cn` or your self-hosted instance):**
+| Scope | Purpose |
+|-------|---------|
+| Websites you add or open through CatHeadTab | Fetch page titles and favicons for desktop shortcuts |
+| User-configured local AI endpoints | Let the extension connect to OpenAI-compatible or self-hosted AI APIs selected by the user |
+| AI provider APIs | Send local AI requests directly to the provider you configure, such as OpenAI, DeepSeek, Google Gemini, Anthropic, Aliyun/Qwen, Zhipu, Moonshot, Minimax, or a self-hosted endpoint |
+| Finance APIs | Fetch stock quotes directly in extension context when needed, including Yahoo Finance and Sina Finance |
+| CatHeadTab or self-hosted backend | Provide account, sync, weather, finance proxy, trending, favicon proxy, wallpaper, and server-side AI features |
 
-- **Stock & Index data**: Proxied from Yahoo Finance or Sina Finance.
-- **Currency rates**: Proxied from Frankfurter API (European Central Bank).
-- **Trending content**: Aggregated from GitHub, Bilibili, Weibo, Xiaohongshu, and BBC News.
-- **Weather data**: Provided based on an anonymous IP-to-region lookup (your IP is processed temporarily but not stored for tracking).
+Local AI requests may be relayed through the extension's background service worker to avoid browser CORS limitations. This relay stays inside the installed extension and does not send your local AI API key or local AI chat content to CatHeadTab servers.
 
-All such requests are **anonymous** and not linked to your identity unless you explicitly choose to sign in for Cloud Sync.
+## Network-Backed Features
 
-### Host Permissions
+CatHeadTab may contact the following services depending on the features you use:
 
-To provide full functionality, CatHeadTab requests host permissions for `<all_urls>` (`http://*/*` and `https://*/*`). This is primarily used for:
-
-| Host / Scope | Purpose |
-|------|---------|
-| **All Websites** (`*://*/*`) | **Fetch Website Icons (Favicon)**: When you add a website shortcut to your desktop, the extension may request the website to fetch its icon, enhancing your visual experience. |
-| `https://catheadtab.cn/*` | Communicate with the official backend for proxying and sync |
-| `https://api.openai.com/*` | Direct access to OpenAI services (when configured) |
-| `https://api.deepseek.com/*` | Direct access to DeepSeek services (when configured) |
-| `https://*.googleapis.com/*` | Direct access to Google AI services (when configured) |
-| `https://api.anthropic.com/*` | Direct access to Anthropic services (when configured) |
-| `https://*.aliyuncs.com/*` | Direct access to Aliyun/Qwen services (when configured) |
-
-Other AI providers (Zhipu, Moonshot, Minimax, etc.) are accessed directly from your browser when configured. CatHeadTab does not proxy, log, or store your AI conversations or API keys on our servers.
+- **CatHeadTab backend or self-hosted backend**: account login, cloud sync, profile/avatar, custom wallpaper sync, server-side AI, weather lookup, finance proxy, trending data, favicon proxy, and wallpaper search.
+- **AI providers**: local AI mode sends your prompts, selected context, and local AI API key directly to the AI provider you configured. Server AI mode sends chat messages to the configured backend, which forwards them to the server-configured AI provider.
+- **GitHub and Google OAuth**: account sign-in and account linking.
+- **Weather and geocoding providers**: weather lookup based on a configured city or backend IP-to-region lookup.
+- **Finance sources**: stock symbols, watchlists, or currency pairs may be sent to Yahoo Finance, Sina Finance, Frankfurter, or the configured backend proxy.
+- **Trending sources**: GitHub, Bilibili, Weibo, Xiaohongshu, and BBC News may be requested through the backend to display hot content.
+- **Favicon sources and target websites**: domains you add as shortcuts may be requested directly or through the backend favicon proxy. The backend may use Google S2, DuckDuckGo icons, Favicone, or the target website to retrieve icons.
+- **Wallhaven and configured wallpaper sources**: wallpaper browsing and search.
 
 ## AI Assistant
 
-The AI Agent feature allows you to interact with large language models (LLMs) to manage your desktop. When using this feature:
+CatHeadTab supports two AI modes:
 
-- **Your AI API key** is stored locally on your device and sent directly to your chosen AI provider. It is **never** sent to CatHeadTab servers.
-- **Chat messages** are sent directly from your browser to the AI provider's API endpoint. CatHeadTab does not intercept, log, or store these messages (unless you use a self-hosted backend specifically configured to do so).
-- **Chat history** is saved locally for convenience.
-- The AI assistant can read your desktop layout, bookmarks, and browsing history **only when you ask it to** and only to fulfill your request. **This is only possible when running a local AI large model; we will absolutely never upload or save your bookmarks and browsing history.**
+- **Local AI mode**: You provide an AI API key and endpoint. Your prompt, local chat context, and any requested local data are sent directly from the extension to your configured AI provider. When you explicitly ask the AI to search bookmarks or history, only the relevant tool results are sent to that AI provider. They are not sent to CatHeadTab servers.
+- **Server AI mode**: If the connected backend has server-side AI configured, your chat messages are sent to that backend and forwarded to the backend's configured AI provider. CatHeadTab records usage metadata such as request counts and token counts for rate limiting. CatHeadTab does not store chat message bodies as AI chat history on the server.
 
-## Third-Party Services
+In server AI mode, CatHeadTab does not provide bookmark or browsing-history tools to the AI assistant. Requests involving browser bookmarks or browsing history require local AI mode.
 
-CatHeadTab may interact with the following third-party services based on your usage:
+## Data Collection, Processing, Storage, And Sharing
 
-- **AI providers**: OpenAI, DeepSeek, Google (Gemini), Anthropic (Claude), Aliyun (Qwen), Zhipu (ChatGLM), Moonshot (Kimi), Minimax.
-- **Trending Sources**: GitHub, Bilibili, Weibo, Xiaohongshu, BBC News.
-- **Finance Sources**: Yahoo Finance, Sina Finance, Frankfurter API.
-- **Other**: Wallhaven (wallpapers), GitHub/Google OAuth (sync).
+### Data Transmitted To CatHeadTab Or A Configured Backend
 
-## Data Collection, Use, and Sharing
+CatHeadTab transmits data to a backend only when needed for enabled features:
 
-To comply with privacy regulations and Chrome Web Store policies, we explicitly disclose how your data is collected, used, and shared:
+- Account and authentication data for login, OAuth, email verification, password reset, and sessions.
+- Cloud sync data for layout, widgets, preferences, avatar, custom wallpaper, and related user-provided content.
+- Weather request data, including city, language, unit, and temporary IP processing by the backend for auto-location.
+- Finance, trending, favicon, and wallpaper request parameters needed to return the requested content.
+- Server AI chat requests and AI usage metadata when server AI mode is used.
 
-### 1. What Data We Collect
-We collect and process the following categories of user data:
-- **Personally Identifiable Information (PII)**: If you explicitly choose to create an account and enable Cloud Sync via GitHub or Google OAuth, we collect your email address and basic profile information.
-- **Authentication Information**: We collect your AI API keys (e.g., for OpenAI, DeepSeek, Google, etc.) to enable the AI Assistant. These are strictly stored locally on your device. We also process OAuth tokens for Cloud Sync authentication.
-- **Location Information**: We temporarily process your IP address for an IP-to-region lookup to provide local weather data.
-- **Website Content & Activity (Local)**: Your desktop layout, user preferences, AI chat history, bookmarks (if sync is enabled), and browsing history are accessed to provide core functionalities. This data is primarily stored locally (`chrome.storage.local` and IndexedDB).
+### Data Shared With Third Parties
 
-### 2. How We Use Your Data
-We use the collected data exclusively to provide and improve the extension's features:
-- **Personally Identifiable Information**: Used solely to create, manage, and authenticate your Cloud Sync account.
-- **Authentication Information**: Your locally stored AI API keys are used to securely authenticate your direct requests to your chosen AI providers. OAuth tokens are used to maintain your Cloud Sync session.
-- **Location Information**: Your IP address is used temporarily to fetch the correct weather forecast for your current region. It is not stored or tracked.
-- **Website Content & Activity**: Local data is used to render your custom new tab page. If Cloud Sync is enabled, this data is synced across your devices to restore your layout. For the AI Assistant, your data (like bookmarks or history) is only processed when you explicitly request the AI to interact with it.
+CatHeadTab shares data only as needed to provide user-facing features, comply with law, or protect security:
 
-### 3. How We Share Your Data and With Whom
-**We do not sell, rent, or trade your personal data to any third parties. We do not use your data for advertising or tracking purposes.**
+- AI prompts and necessary context with the AI provider selected by you or configured by the backend.
+- OAuth login data with GitHub or Google when you use those providers.
+- Domain names, stock symbols, currency pairs, city names, or wallpaper search parameters with the external service needed for the relevant feature.
+- Data required by legal authorities if strictly required by law.
 
-To provide our core functionalities, we share specific data with the following relevant third parties:
-- **AI Providers (Direct API Access)**: In accordance with our "Privacy First" principle, we require `<all_urls>` host permissions so your browser can send requests directly to the AI provider you configure (e.g., OpenAI, DeepSeek, Google, Anthropic, Aliyun, Zhipu, Moonshot, Minimax, or your self-hosted endpoints). Your prompts, relevant context (such as bookmarks/history if requested), and **Authentication Information** (API keys) are shared directly with these providers, bypassing our servers entirely.
-- **Target Websites (Dynamic Favicon Fetching)**: When you add a custom website shortcut to your desktop, the extension uses `<all_urls>` permissions to directly fetch the favicon from that website. The target website may see your **Location Information** (IP address) as a standard web request.
-- **OAuth Providers**: Your **Personally Identifiable Information** and **Authentication Information** are processed in coordination with GitHub or Google when you use them to sign in.
-- **Weather Service Providers**: Your **Location Information** (IP address) may be temporarily processed by our backend or third-party weather APIs to return localized weather data.
-- **Legal Compliance**: We may disclose your data if strictly required by law or in response to valid legal requests by public authorities.
+CatHeadTab does not transfer, sell, rent, or use user data for personalized advertising, retargeting, credit-worthiness, or data broker purposes.
+
+## Chrome Web Store Limited Use Disclosure
+
+CatHeadTab's use of information received from Chrome extension APIs and Chrome permissions adheres to the Chrome Web Store User Data Policy, including the Limited Use requirements. Data obtained from Chrome APIs is used only to provide or improve CatHeadTab's single purpose and user-facing features: new tab customization, bookmarks and history browsing, shortcut creation, widgets, optional sync, and optional AI assistance. CatHeadTab does not use this data for advertising, does not sell it, and does not allow humans to read it except with explicit user consent, for security, for legal compliance, or in aggregated and anonymized internal operations where permitted.
+
+## Security
+
+Data sent over the network is transmitted using HTTPS when the destination supports it. Authentication information is protected and is not publicly disclosed. Local storage security depends on your browser profile and device security.
 
 ## Self-Hosting
 
-CatHeadTab supports full self-hosting. You can deploy the backend server on your own hardware (Homelab, NAS, VPS), keeping all synced data entirely under your control.
+CatHeadTab supports self-hosting. If you configure your own backend, data sent to that backend is controlled by your deployment and its operators.
 
 ## Children's Privacy
 
 CatHeadTab is not directed at children under 13. We do not knowingly collect personal information from children.
 
-## Changes to This Policy
+## Changes To This Policy
 
 We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated "Last Updated" date.
 

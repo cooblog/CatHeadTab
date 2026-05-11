@@ -400,7 +400,11 @@ const AISettingsSection: React.FC = () => {
               )}
             </button>
           </div>
-          <p className="text-[11px] text-white/25 mt-1 ml-1">🔒 API Key 仅保存在本地，不会上传到云端。每个服务商的 Key 独立存储。</p>
+          <p className="text-[11px] text-white/25 mt-1 ml-1">
+            {isZh
+              ? '🔒 API Key 仅保存在本地；使用本地 AI 时会直接发送给所选服务商用于鉴权，不发送给 CatHeadTab 服务器。'
+              : '🔒 API keys are stored locally; local AI sends them directly to the selected provider for authentication, not to CatHeadTab servers.'}
+          </p>
         </div>
 
         {/* Model — combobox with auto-fetched model list */}

@@ -347,7 +347,7 @@ export const zh = {
 
   // AI Settings
   'settings.aiTitle': 'AI 助手',
-  'settings.aiDesc': '配置 AI 模型的 API 连接信息，支持 OpenAI、DeepSeek 等兼容接口。API Key 仅保存在本地，不会上传到云端。',
+  'settings.aiDesc': '配置 AI 模型的 API 连接信息，支持 OpenAI、DeepSeek 等兼容接口。API Key 仅保存在本地；使用本地 AI 时会直接发送给你配置的 AI 服务商用于鉴权，不会发送给 CatHeadTab 服务器。',
   'settings.aiProvider': '服务商',
   'settings.aiProviderPlaceholder': '例如：openai, deepseek',
   'settings.aiBaseUrl': 'API 地址',
@@ -355,7 +355,7 @@ export const zh = {
   'settings.aiApiKey': 'API Key',
   'settings.aiApiKeyPlaceholder': 'sk-...',
   'settings.aiModel': '模型',
-  'settings.aiPrivacyNote': '本地书签和历史记录，只有使用本地 AI 大模型才可以读取到。你的浏览器数据永远不会上传到云端，所以云端大模型无法直接获取这些数据。',
+  'settings.aiPrivacyNote': '服务端 AI 模式不会读取浏览器书签或历史记录。本地 AI 模式仅在你明确请求时读取相关结果，并直接发送给你配置的 AI 服务商处理，不发送给 CatHeadTab 服务器。',
   'settings.aiModelPlaceholder': '例如：gpt-4o-mini, deepseek-chat',
   'settings.aiSave': '保存 AI 配置',
   'settings.aiSaved': 'AI 配置已保存！',
