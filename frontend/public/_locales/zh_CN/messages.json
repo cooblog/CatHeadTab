@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "CatHeadTab - AI 驱动的高颜值新标签页",
+    "description": "The name of the extension"
+  },
+  "appDesc": {
+    "message": "高颜值、高度可定制的浏览器新标签页，内置 AI 管家、丰富桌面小组件，支持云同步与私有化部署。",
+    "description": "The description of the extension"
+  }
+}
