@@ -132,4 +132,4 @@ We may update this Privacy Policy from time to time. Changes will be posted on t
 
 ## Contact
 
-If you have questions about this Privacy Policy, please open an issue on our [GitHub repository](https://github.com/CatHeadTab/CatHeadTab).
+If you have questions about this Privacy Policy, please open an issue on our [GitHub repository](https://github.com/DeaglePC/CatHeadTab).

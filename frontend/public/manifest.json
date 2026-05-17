@@ -3,7 +3,7 @@
   "name": "CatHeadTab - AI New Tab",
   "version": "1.0.0",
   "description": "A beautiful, customizable new tab with AI assistant, widgets, cloud sync and self-hosting support.",
-  "homepage_url": "https://github.com/CatHeadTab/CatHeadTab",
+  "homepage_url": "https://github.com/DeaglePC/CatHeadTab",
   "minimum_chrome_version": "116",
   "background": {
     "service_worker": "background.js"

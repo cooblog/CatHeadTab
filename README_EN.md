@@ -5,7 +5,7 @@
 
 **A beautiful, AI-powered browser new tab — your personal digital hub.**
 
-[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg)](https://www.postgresql.org/)
+[![Official Website](https://img.shields.io/badge/Website-catheadtab.cn-orange.svg?style=flat-square&logo=icloud&logoColor=white)](https://catheadtab.cn/) [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/mccnfbilnkjfnhfglkfdicddpgjceemj.svg?style=flat-square)](https://chromewebstore.google.com/detail/catheadtab-ai-new-tab/mccnfbilnkjfnhfglkfdicddpgjceemj) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=flat-square)](LICENSE) [![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-green.svg?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/) [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg?style=flat-square)](https://go.dev/) [![React](https://img.shields.io/badge/React-18-61DAFB.svg?style=flat-square)](https://react.dev/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17+-336791.svg?style=flat-square)](https://www.postgresql.org/)
 
 [**中文**](README.md) | English
 
