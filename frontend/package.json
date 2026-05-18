@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:ext": "tsc -b --force && vite build && node scripts/zip.mjs",
+    "build:ext": "tsc -b --force && vite build --mode extension && node scripts/zip.mjs",
     "bump": "node scripts/bump.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

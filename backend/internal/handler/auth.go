@@ -237,6 +237,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if user.PasswordHash == "" {
+		recordFailure()
 		logger.Warn("login failed: SSO-only account", "user_id", user.ID, "identifier", input.Identifier)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "This account uses SSO login. Please sign in with GitHub or Google"})
 		return
@@ -253,9 +254,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if !user.EmailVerified {
 		logger.Warn("login failed: email not verified", "user_id", user.ID, "email", user.Email)
 		c.JSON(http.StatusForbidden, gin.H{
-			"error":                "Email not verified. Please check your inbox and verify your email before logging in.",
-			"email_not_verified":   true,
-			"email":                user.Email,
+			"error":              "Email not verified. Please check your inbox and verify your email before logging in.",
+			"email_not_verified": true,
+			"email":              user.Email,
 		})
 		return
 	}

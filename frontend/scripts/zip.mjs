@@ -19,6 +19,11 @@ const version = packageJson.version;
 // Auto-inject VITE_API_URL from .env.production.local into dist/manifest.json host_permissions
 const envPath = path.join(frontendDir, '.env.production.local');
 const distManifestPath = path.join(distDir, 'manifest.json');
+const distAdminPath = path.join(distDir, 'admin.html');
+
+if (fs.existsSync(distAdminPath)) {
+  throw new Error('Refusing to package extension: dist/admin.html exists. Run vite build with --mode extension.');
+}
 
 // Sync version and inject VITE_API_URL host_permissions into dist/manifest.json
 if (fs.existsSync(distManifestPath)) {

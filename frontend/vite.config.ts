@@ -5,7 +5,8 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  const isExtensionBuild = mode === 'extension' || env.BUILD_TARGET === 'extension';
 
   // --- FORCE OVERRIDE FOR LOCAL DEV ---
   if (mode === 'development') {
@@ -14,6 +15,7 @@ export default defineConfig(({ mode }) => {
   }
 
   console.log(`[ViteConfig] Mode: ${mode}`);
+  console.log(`[ViteConfig] Extension build: ${isExtensionBuild ? 'yes' : 'no'}`);
   console.log(`[ViteConfig] Final VITE_API_URL used: ${env.VITE_API_URL || '(not set)'}`);
 
   const injectPlugin = () => ({
@@ -63,6 +65,9 @@ export default defineConfig(({ mode }) => {
           newtab: path.resolve(__dirname, 'index.html'),
           popup: path.resolve(__dirname, 'popup.html'),
           privacy: path.resolve(__dirname, 'privacy.html'),
+          ...(isExtensionBuild ? {} : {
+            admin: path.resolve(__dirname, 'admin.html'),
+          }),
         },
         output: {
           manualChunks(id: string) {

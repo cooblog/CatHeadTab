@@ -113,6 +113,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	trendingHandler := handler.NewTrendingHandler()
 	aiUsageRepo := repository.NewAIUsageRepository(repository.DB)
 	aiHandler := handler.NewAIHandler(cfg, aiUsageRepo)
+	adminHandler := handler.NewAdminHandler(repository.NewAdminDashboardRepository(repository.DB))
 
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
 	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
@@ -128,9 +129,9 @@ func Setup(cfg *config.Config) *gin.Engine {
 	aiRateLimiter := middleware.NewAIRateLimiter(cfg.AIRateLimitRPM, cfg.AIDailyTokenLimit, aiUsageRepo)
 
 	// Public routes (no auth) — Preset sites (available to all users)
-	r.GET("/api/v1/preset-sites", presetHandler.ListAll)                       // Legacy: returns everything
-	r.GET("/api/v1/preset-sites/search", presetHandler.SearchSites)            // New: search sites by keyword
-	r.GET("/api/v1/preset-categories", presetHandler.ListCategories)            // New: categories with site count
+	r.GET("/api/v1/preset-sites", presetHandler.ListAll)                            // Legacy: returns everything
+	r.GET("/api/v1/preset-sites/search", presetHandler.SearchSites)                 // New: search sites by keyword
+	r.GET("/api/v1/preset-categories", presetHandler.ListCategories)                // New: categories with site count
 	r.GET("/api/v1/preset-categories/:id/sites", presetHandler.ListSitesByCategory) // New: sites for one category
 
 	// Public routes (no auth) — Favicon proxy with disk caching
@@ -186,13 +187,13 @@ func Setup(cfg *config.Config) *gin.Engine {
 		// need to see their profile to trigger verification from the UI)
 		user := api.Group("/user")
 		{
-		user.GET("/profile", userHandler.GetProfile)
-		user.GET("/preferences", userHandler.GetPreferences)
-		user.PUT("/preferences", userHandler.UpdatePreferences)
+			user.GET("/profile", userHandler.GetProfile)
+			user.GET("/preferences", userHandler.GetPreferences)
+			user.PUT("/preferences", userHandler.UpdatePreferences)
 
-		// Avatar upload/delete (no email verification required)
-		user.POST("/avatar", userHandler.UploadAvatar)
-		user.DELETE("/avatar", userHandler.DeleteAvatar)
+			// Avatar upload/delete (no email verification required)
+			user.POST("/avatar", userHandler.UploadAvatar)
+			user.DELETE("/avatar", userHandler.DeleteAvatar)
 
 			// Account management (authenticated, no verification required)
 			user.POST("/change-password", authHandler.ChangePassword)
@@ -234,7 +235,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 		admin := api.Group("")
 		admin.Use(middleware.RequireRole(userRepo, model.RoleAdmin))
 		{
-			// Reserved for future admin-only endpoints
+			admin.GET("/admin/dashboard", adminHandler.GetDashboard)
 		}
 
 		// AI routes (JWT + Pro or Admin role required)

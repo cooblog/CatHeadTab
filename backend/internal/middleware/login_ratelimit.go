@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -176,6 +177,10 @@ func (lr *LoginRateLimiter) cleanupLoop() {
 }
 
 // peekIdentifier 从请求体中读取登录标识符（identifier 字段），并还原 Body。
+func normalizeLoginIdentifier(identifier string) string {
+	return strings.ToLower(strings.TrimSpace(identifier))
+}
+
 func peekIdentifier(c *gin.Context) string {
 	if c.Request.Body == nil {
 		return ""
@@ -194,7 +199,7 @@ func peekIdentifier(c *gin.Context) string {
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return ""
 	}
-	return payload.Identifier
+	return normalizeLoginIdentifier(payload.Identifier)
 }
 
 // LoginRateLimit 返回一个 Gin 中间件，用于限制登录接口的请求频率。
