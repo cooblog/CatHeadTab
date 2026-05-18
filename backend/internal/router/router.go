@@ -29,6 +29,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Global middleware
 	r.Use(middleware.CORS())
 	r.Use(middleware.DevIPMiddleware())
+	r.Use(middleware.APIAccessStats(repository.NewAPIAccessStatsRepository(repository.DB)))
 
 	// Health check (no auth required)
 	r.GET("/api/v1/health", func(c *gin.Context) {

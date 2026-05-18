@@ -52,6 +52,13 @@ type TopAIUser struct {
 	TotalTokens  int64  `json:"total_tokens"`
 }
 
+// APIPathCount is a 30-day aggregate for one API route.
+type APIPathCount struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Count  int64  `json:"count"`
+}
+
 // TableSize is a PostgreSQL table size aggregate.
 type TableSize struct {
 	TableName string `json:"table_name"`
@@ -134,6 +141,19 @@ type AdminAIUsageStats struct {
 	TopUsers      []TopAIUser    `json:"top_users"`
 }
 
+// AdminAPIAccessStats summarizes API request counts.
+type AdminAPIAccessStats struct {
+	TotalRequests    int64          `json:"total_requests"`
+	RequestsToday    int64          `json:"requests_today"`
+	Requests7d       int64          `json:"requests_7d"`
+	Requests30d      int64          `json:"requests_30d"`
+	ErrorRequests30d int64          `json:"error_requests_30d"`
+	UniquePaths      int64          `json:"unique_paths"`
+	DailyRequests    []DailyCount   `json:"daily_requests"`
+	TopPaths         []APIPathCount `json:"top_paths"`
+	StatusBreakdown  []NamedCount   `json:"status_breakdown"`
+}
+
 // AdminAuthStats summarizes auth-token and OAuth account data.
 type AdminAuthStats struct {
 	EmailVerificationPending int64        `json:"email_verification_pending"`
@@ -154,6 +174,7 @@ type AdminDashboard struct {
 	Presets        AdminPresetStats         `json:"presets"`
 	WallpaperCache AdminWallpaperCacheStats `json:"wallpaper_cache"`
 	AIUsage        AdminAIUsageStats        `json:"ai_usage"`
+	APIAccess      AdminAPIAccessStats      `json:"api_access"`
 	Auth           AdminAuthStats           `json:"auth"`
 	TableSizes     []TableSize              `json:"table_sizes"`
 }
@@ -196,6 +217,9 @@ func (r *postgresAdminDashboardRepository) GetDashboard(ctx context.Context) (*A
 		return nil, err
 	}
 	if err := r.loadAIUsage(ctx, &dashboard.AIUsage); err != nil {
+		return nil, err
+	}
+	if err := r.loadAPIAccess(ctx, &dashboard.APIAccess); err != nil {
 		return nil, err
 	}
 	if err := r.loadAuth(ctx, &dashboard.Auth); err != nil {
@@ -544,6 +568,108 @@ func (r *postgresAdminDashboardRepository) loadAIUsage(ctx context.Context, stat
 	return rows.Err()
 }
 
+func (r *postgresAdminDashboardRepository) loadAPIAccess(ctx context.Context, stats *AdminAPIAccessStats) error {
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE(SUM(request_count), 0),
+			COALESCE(SUM(request_count) FILTER (WHERE access_date = CURRENT_DATE), 0),
+			COALESCE(SUM(request_count) FILTER (WHERE access_date >= CURRENT_DATE - INTERVAL '6 days'), 0),
+			COALESCE(SUM(request_count) FILTER (WHERE access_date >= CURRENT_DATE - INTERVAL '29 days'), 0),
+			COALESCE(SUM(request_count) FILTER (WHERE status_code >= 400 AND access_date >= CURRENT_DATE - INTERVAL '29 days'), 0),
+			COUNT(DISTINCT path)
+		FROM api_access_stats
+	`).Scan(
+		&stats.TotalRequests,
+		&stats.RequestsToday,
+		&stats.Requests7d,
+		&stats.Requests30d,
+		&stats.ErrorRequests30d,
+		&stats.UniquePaths,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			day::date,
+			COALESCE(SUM(s.request_count), 0)
+		FROM generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day') AS day
+		LEFT JOIN api_access_stats s ON s.access_date = day::date
+		GROUP BY day
+		ORDER BY day
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var day time.Time
+		var count int64
+		if err := rows.Scan(&day, &count); err != nil {
+			return err
+		}
+		stats.DailyRequests = append(stats.DailyRequests, DailyCount{
+			Date:  day.Format("2006-01-02"),
+			Count: count,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	rows, err = r.db.QueryContext(ctx, `
+		SELECT method, path, COALESCE(SUM(request_count), 0)
+		FROM api_access_stats
+		WHERE access_date >= CURRENT_DATE - INTERVAL '29 days'
+		GROUP BY method, path
+		ORDER BY SUM(request_count) DESC, method, path
+		LIMIT 10
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var row APIPathCount
+		if err := rows.Scan(&row.Method, &row.Path, &row.Count); err != nil {
+			return err
+		}
+		stats.TopPaths = append(stats.TopPaths, row)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	rows, err = r.db.QueryContext(ctx, `
+		SELECT
+			CASE
+				WHEN status_code BETWEEN 200 AND 299 THEN '2xx'
+				WHEN status_code BETWEEN 300 AND 399 THEN '3xx'
+				WHEN status_code BETWEEN 400 AND 499 THEN '4xx'
+				WHEN status_code BETWEEN 500 AND 599 THEN '5xx'
+				ELSE 'other'
+			END AS status_group,
+			COALESCE(SUM(request_count), 0)
+		FROM api_access_stats
+		WHERE access_date >= CURRENT_DATE - INTERVAL '29 days'
+		GROUP BY status_group
+		ORDER BY status_group
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var row NamedCount
+		if err := rows.Scan(&row.Name, &row.Count); err != nil {
+			return err
+		}
+		stats.StatusBreakdown = append(stats.StatusBreakdown, row)
+	}
+	return rows.Err()
+}
+
 func (r *postgresAdminDashboardRepository) loadAuth(ctx context.Context, stats *AdminAuthStats) error {
 	if err := r.db.QueryRowContext(ctx, `
 		SELECT
@@ -609,6 +735,7 @@ func (r *postgresAdminDashboardRepository) loadTableSizes(ctx context.Context, s
 				'preset_sites',
 				'wallpaper_cache',
 				'ai_usage',
+				'api_access_stats',
 				'email_verifications',
 				'password_resets',
 				'oauth_accounts'

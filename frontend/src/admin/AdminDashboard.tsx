@@ -43,6 +43,12 @@ interface TopAIUser {
   total_tokens: number;
 }
 
+interface APIPathCount {
+  method: string;
+  path: string;
+  count: number;
+}
+
 interface TableSize {
   table_name: string;
   bytes: number;
@@ -112,6 +118,17 @@ interface AdminDashboard {
     daily_usage: DailyAIUsage[] | null;
     top_users: TopAIUser[] | null;
   };
+  api_access: {
+    total_requests: number;
+    requests_today: number;
+    requests_7d: number;
+    requests_30d: number;
+    error_requests_30d: number;
+    unique_paths: number;
+    daily_requests: DailyCount[] | null;
+    top_paths: APIPathCount[] | null;
+    status_breakdown: NamedCount[] | null;
+  };
   auth: {
     email_verification_pending: number;
     email_verification_expired: number;
@@ -175,6 +192,14 @@ function roleLabel(name: string) {
   return '普通用户';
 }
 
+function statusGroupLabel(name: string) {
+  if (name === '2xx') return '成功 2xx';
+  if (name === '3xx') return '跳转 3xx';
+  if (name === '4xx') return '客户端错误 4xx';
+  if (name === '5xx') return '服务端错误 5xx';
+  return name;
+}
+
 function maxValue(values: number[]) {
   return values.length > 0 ? Math.max(1, ...values) : 1;
 }
@@ -201,6 +226,15 @@ function Section(props: { id?: string; title: string; meta?: string; children: R
   );
 }
 
+function DataPanel(props: { title: string; children: ReactNode }) {
+  return (
+    <div className="data-panel">
+      <h3>{props.title}</h3>
+      {props.children}
+    </div>
+  );
+}
+
 function BarList(props: { rows: { label: string; value: number; suffix?: string }[]; empty: string }) {
   const top = maxValue(props.rows.map((row) => row.value));
   if (props.rows.length === 0) return <div className="empty-row">{props.empty}</div>;
@@ -214,6 +248,28 @@ function BarList(props: { rows: { label: string; value: number; suffix?: string 
             <div className="bar-fill" style={{ width: `${Math.max(4, (row.value / top) * 100)}%` }} />
           </div>
           <span className="bar-value">{formatNumber(row.value)}{row.suffix ?? ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function APIPathList(props: { rows: APIPathCount[]; empty: string }) {
+  const top = maxValue(props.rows.map((row) => row.count));
+  if (props.rows.length === 0) return <div className="empty-row">{props.empty}</div>;
+
+  return (
+    <div className="api-path-list">
+      {props.rows.map((row) => (
+        <div className="api-path-row" key={`${row.method}:${row.path}`}>
+          <div className="api-path-head">
+            <span className={`method-badge method-${row.method.toLowerCase()}`}>{row.method}</span>
+            <code>{row.path}</code>
+            <strong>{formatNumber(row.count)}</strong>
+          </div>
+          <div className="api-path-track">
+            <span style={{ width: `${Math.max(5, (row.count / top) * 100)}%` }} />
+          </div>
         </div>
       ))}
     </div>
@@ -347,6 +403,10 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
   }));
   const tableRows = dashboard.table_sizes ?? [];
   const topAIUsers = dashboard.ai_usage.top_users ?? [];
+  const apiStatusRows = (dashboard.api_access.status_breakdown ?? []).map((row) => ({
+    label: statusGroupLabel(row.name),
+    value: row.count,
+  }));
 
   const mainTiles = useMemo(() => {
     const verifiedRate = dashboard.users.total > 0 ? `${formatDecimal((dashboard.users.verified / dashboard.users.total) * 100, 1)}% 已验证` : '暂无用户';
@@ -356,6 +416,7 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
       { label: '桌面布局', value: formatNumber(dashboard.layouts.total), detail: `${formatNumber(dashboard.layouts.users)} 个用户，平均 ${formatDecimal(dashboard.layouts.avg_items)} 项`, tone: 'amber' as const },
       { label: '背景图存储', value: formatBytes(dashboard.backgrounds.total_bytes), detail: `${formatNumber(dashboard.backgrounds.total)} 张，平均 ${formatBytes(dashboard.backgrounds.avg_bytes)}`, tone: 'cyan' as const },
       { label: 'AI Token', value: formatNumber(dashboard.ai_usage.tokens_30d), detail: `今日 ${formatNumber(dashboard.ai_usage.tokens_today)}，30 天用户 ${formatNumber(dashboard.ai_usage.users_30d)}`, tone: 'violet' as const },
+      { label: 'API 请求', value: formatNumber(dashboard.api_access.requests_30d), detail: `今日 ${formatNumber(dashboard.api_access.requests_today)}，30 天错误 ${formatNumber(dashboard.api_access.error_requests_30d)}`, tone: 'blue' as const },
       { label: '壁纸缓存', value: formatNumber(dashboard.wallpaper_cache.total), detail: `${formatNumber(dashboard.wallpaper_cache.fresh)} 有效 / ${formatNumber(dashboard.wallpaper_cache.expired)} 过期`, tone: 'rose' as const },
     ];
   }, [dashboard]);
@@ -371,6 +432,7 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
           <a href="#overview">总览</a>
           <a href="#users">用户</a>
           <a href="#content">数据内容</a>
+          <a href="#api">API 访问</a>
           <a href="#ai">AI 用量</a>
           <a href="#storage">存储</a>
         </nav>
@@ -417,6 +479,25 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
           <div className="two-column">
             <BarList rows={domainRows} empty="暂无书签域名数据" />
             <BarList rows={categoryRows} empty="暂无预置分类数据" />
+          </div>
+        </Section>
+
+        <Section id="api" title="API 访问" meta={`累计 ${formatNumber(dashboard.api_access.total_requests)} 次，已记录 ${formatNumber(dashboard.api_access.unique_paths)} 个接口`}>
+          <div className="metric-grid">
+            <div className="metric-line"><span>今日请求</span><strong>{formatNumber(dashboard.api_access.requests_today)}</strong></div>
+            <div className="metric-line"><span>7 天请求</span><strong>{formatNumber(dashboard.api_access.requests_7d)}</strong></div>
+            <div className="metric-line"><span>30 天请求</span><strong>{formatNumber(dashboard.api_access.requests_30d)}</strong></div>
+            <div className="metric-line"><span>30 天错误</span><strong>{formatNumber(dashboard.api_access.error_requests_30d)}</strong></div>
+            <div className="metric-line"><span>接口数量</span><strong>{formatNumber(dashboard.api_access.unique_paths)}</strong></div>
+          </div>
+          <TrendBars rows={(dashboard.api_access.daily_requests ?? []).map((row) => ({ date: row.date, value: row.count }))} valueLabel="requests" />
+          <div className="api-breakdown-grid section-stack">
+            <DataPanel title="热门接口">
+              <APIPathList rows={dashboard.api_access.top_paths ?? []} empty="暂无 API 访问数据" />
+            </DataPanel>
+            <DataPanel title="状态码分布">
+              <BarList rows={apiStatusRows} empty="暂无状态码数据" />
+            </DataPanel>
           </div>
         </Section>
 
