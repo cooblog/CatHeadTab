@@ -157,7 +157,7 @@ body {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
   gap: 12px;
   margin-bottom: 34px;
 }
@@ -250,6 +250,17 @@ th {
   align-items: start;
 }
 
+.one-column {
+  max-width: 760px;
+}
+
+.cache-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
 .section-stack {
   margin-top: 18px;
 }
@@ -291,6 +302,43 @@ th {
   color: #ffffff;
   font-size: 24px;
   line-height: 1;
+}
+
+.metric-line small {
+  color: #7f91a8;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.counter-list {
+  display: grid;
+  gap: 2px;
+}
+
+.counter-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.counter-row:last-child {
+  border-bottom: 0;
+}
+
+.counter-row span {
+  color: #8fa2b8;
+  font-size: 13px;
+}
+
+.counter-row strong {
+  min-width: 0;
+  color: #ffffff;
+  font-size: 14px;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .bar-list {
@@ -592,7 +640,7 @@ tbody tr:last-child td {
   }
 
   .admin-sidebar nav {
-    grid-template-columns: repeat(6, minmax(max-content, 1fr));
+    grid-template-columns: repeat(7, minmax(max-content, 1fr));
     overflow-x: auto;
   }
 
@@ -602,6 +650,10 @@ tbody tr:last-child td {
   }
 
   .two-column {
+    grid-template-columns: 1fr;
+  }
+
+  .cache-panel-grid {
     grid-template-columns: 1fr;
   }
 

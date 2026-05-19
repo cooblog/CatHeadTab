@@ -114,7 +114,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 	trendingHandler := handler.NewTrendingHandler()
 	aiUsageRepo := repository.NewAIUsageRepository(repository.DB)
 	aiHandler := handler.NewAIHandler(cfg, aiUsageRepo)
-	adminHandler := handler.NewAdminHandler(repository.NewAdminDashboardRepository(repository.DB))
+	adminHandler := handler.NewAdminHandler(repository.NewAdminDashboardRepository(repository.DB), wallpaperSvc)
 
 	// Rate limiter for email-sending endpoints (1 request per 60 seconds per IP)
 	emailRateLimiter := middleware.NewRateLimiter(60 * time.Second)
@@ -141,7 +141,6 @@ func Setup(cfg *config.Config) *gin.Engine {
 	// Public routes (no auth) — Wallpaper source browsing (config/providers are public for UI adaptation)
 	r.GET("/api/v1/wallpapers/providers", wallpaperHandler.ListProviders)
 	r.GET("/api/v1/wallpapers/config", wallpaperHandler.GetConfig)
-	r.GET("/api/v1/wallpapers/cache/stats", wallpaperHandler.CacheStats)
 	// COS image proxy: generates a fresh pre-signed URL and redirects.
 	// Public because the redirect target (pre-signed URL) is itself authenticated.
 	r.GET("/api/v1/wallpapers/cos/image", wallpaperHandler.COSImage)
@@ -237,6 +236,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 		admin.Use(middleware.RequireRole(userRepo, model.RoleAdmin))
 		{
 			admin.GET("/admin/dashboard", adminHandler.GetDashboard)
+			admin.GET("/wallpapers/cache/stats", wallpaperHandler.CacheStats)
 		}
 
 		// AI routes (JWT + Pro or Admin role required)

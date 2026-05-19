@@ -36,6 +36,35 @@ interface WallpaperCacheBreakdown {
   count: number;
 }
 
+interface WallpaperCacheStats {
+  l1Hits: number;
+  l1Misses: number;
+  l1HitRate: number;
+  l1Entries: number;
+  l1MaxEntries: number;
+  l1Ttl: string;
+  l1SlowTtl: string;
+  l2Hits: number;
+  l2Misses: number;
+  l2HitRate: number;
+  l2Writes: number;
+  l2Entries: number;
+  l2ByType?: Record<string, number> | null;
+  l2Ttl: string;
+  l2Enabled: boolean;
+  l2Refreshes: number;
+  l2Extends: number;
+  shared: number;
+  evictions: number;
+  fetchErrors: number;
+}
+
+interface WallpaperCacheRuntime {
+  enabled: boolean;
+  stats?: WallpaperCacheStats | null;
+  message?: string;
+}
+
 interface TopAIUser {
   user_id: string;
   display_name: string;
@@ -106,6 +135,7 @@ interface AdminDashboard {
     last_created: string;
     breakdown: WallpaperCacheBreakdown[] | null;
   };
+  wallpaper_cache_runtime?: WallpaperCacheRuntime;
   ai_usage: {
     total_requests: number;
     total_tokens: number;
@@ -159,6 +189,10 @@ function formatDecimal(value: number | null | undefined, digits = 1) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(value ?? 0);
+}
+
+function formatPercent(value: number | null | undefined) {
+  return `${formatDecimal(value, 1)}%`;
 }
 
 function formatBytes(value: number | null | undefined) {
@@ -231,6 +265,19 @@ function DataPanel(props: { title: string; children: ReactNode }) {
     <div className="data-panel">
       <h3>{props.title}</h3>
       {props.children}
+    </div>
+  );
+}
+
+function CounterList(props: { rows: { label: string; value: string }[] }) {
+  return (
+    <div className="counter-list">
+      {props.rows.map((row) => (
+        <div className="counter-row" key={row.label}>
+          <span>{row.label}</span>
+          <strong>{row.value}</strong>
+        </div>
+      ))}
     </div>
   );
 }
@@ -401,6 +448,13 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
     label: `${row.provider} / ${row.sorting}`,
     value: row.count,
   }));
+  const cacheRuntime = dashboard.wallpaper_cache_runtime;
+  const cacheStats = cacheRuntime?.enabled ? cacheRuntime.stats ?? null : null;
+  const l2TypeRows = Object.entries(cacheStats?.l2ByType ?? {})
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+  const l1Lookups = (cacheStats?.l1Hits ?? 0) + (cacheStats?.l1Misses ?? 0);
+  const l2Lookups = (cacheStats?.l2Hits ?? 0) + (cacheStats?.l2Misses ?? 0);
   const tableRows = dashboard.table_sizes ?? [];
   const topAIUsers = dashboard.ai_usage.top_users ?? [];
   const apiStatusRows = (dashboard.api_access.status_breakdown ?? []).map((row) => ({
@@ -418,8 +472,9 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
       { label: 'AI Token', value: formatNumber(dashboard.ai_usage.tokens_30d), detail: `今日 ${formatNumber(dashboard.ai_usage.tokens_today)}，30 天用户 ${formatNumber(dashboard.ai_usage.users_30d)}`, tone: 'violet' as const },
       { label: 'API 请求', value: formatNumber(dashboard.api_access.requests_30d), detail: `今日 ${formatNumber(dashboard.api_access.requests_today)}，30 天错误 ${formatNumber(dashboard.api_access.error_requests_30d)}`, tone: 'blue' as const },
       { label: '壁纸缓存', value: formatNumber(dashboard.wallpaper_cache.total), detail: `${formatNumber(dashboard.wallpaper_cache.fresh)} 有效 / ${formatNumber(dashboard.wallpaper_cache.expired)} 过期`, tone: 'rose' as const },
+      { label: '缓存命中率', value: cacheStats ? formatPercent(cacheStats.l1HitRate) : '-', detail: cacheStats ? `L1 ${formatNumber(l1Lookups)} 次查询，L2 ${formatPercent(cacheStats.l2HitRate)}` : (cacheRuntime?.message ?? '运行态缓存未启用'), tone: 'green' as const },
     ];
-  }, [dashboard]);
+  }, [cacheRuntime?.message, cacheStats, dashboard, l1Lookups]);
 
   return (
     <div className="admin-app">
@@ -434,6 +489,7 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
           <a href="#content">数据内容</a>
           <a href="#api">API 访问</a>
           <a href="#ai">AI 用量</a>
+          <a href="#cache">缓存</a>
           <a href="#storage">存储</a>
         </nav>
         <div className="sidebar-footer">
@@ -527,16 +583,52 @@ function DashboardContent(props: { dashboard: AdminDashboard; profile: UserProfi
           </div>
         </Section>
 
-        <Section title="认证与缓存" meta={`OAuth ${formatNumber(oauthRows.reduce((sum, row) => sum + row.value, 0))} 条绑定`}>
+        <Section id="cache" title="缓存" meta={`L2 持久化 ${formatNumber(dashboard.wallpaper_cache.total)} 条，最后写入 ${formatDateTime(dashboard.wallpaper_cache.last_created)}`}>
+          <div className="metric-grid">
+            <div className="metric-line"><span>L1 命中率</span><strong>{cacheStats ? formatPercent(cacheStats.l1HitRate) : '-'}</strong><small>{cacheStats ? `${formatNumber(cacheStats.l1Hits)} 命中 / ${formatNumber(cacheStats.l1Misses)} 未命中` : (cacheRuntime?.message ?? '运行态不可用')}</small></div>
+            <div className="metric-line"><span>L1 条目</span><strong>{formatNumber(cacheStats?.l1Entries)}</strong><small>上限 {formatNumber(cacheStats?.l1MaxEntries)}</small></div>
+            <div className="metric-line"><span>L2 命中率</span><strong>{cacheStats ? formatPercent(cacheStats.l2HitRate) : '-'}</strong><small>{formatNumber(l2Lookups)} 次查询</small></div>
+            <div className="metric-line"><span>L2 条目</span><strong>{formatNumber(dashboard.wallpaper_cache.total)}</strong><small>{formatNumber(dashboard.wallpaper_cache.fresh)} 有效 / {formatNumber(dashboard.wallpaper_cache.expired)} 过期</small></div>
+            <div className="metric-line"><span>Singleflight 共享</span><strong>{formatNumber(cacheStats?.shared)}</strong><small>合并并发回源</small></div>
+            <div className="metric-line"><span>回源异常</span><strong>{formatNumber(cacheStats?.fetchErrors)}</strong><small>缓存未命中后的拉取失败</small></div>
+          </div>
+          <div className="cache-panel-grid">
+            <DataPanel title="持久化维度">
+              <BarList rows={cacheRows} empty="暂无壁纸缓存数据" />
+            </DataPanel>
+            <DataPanel title="L2 类型分布">
+              <BarList rows={l2TypeRows} empty="暂无 L2 类型数据" />
+            </DataPanel>
+          </div>
+          <div className="cache-panel-grid section-stack">
+            <DataPanel title="运行计数">
+              <CounterList rows={[
+                { label: 'L2 写入', value: formatNumber(cacheStats?.l2Writes) },
+                { label: 'L2 刷新', value: formatNumber(cacheStats?.l2Refreshes) },
+                { label: 'L2 延期', value: formatNumber(cacheStats?.l2Extends) },
+                { label: 'L1 驱逐', value: formatNumber(cacheStats?.evictions) },
+              ]} />
+            </DataPanel>
+            <DataPanel title="缓存配置">
+              <CounterList rows={[
+                { label: 'L1 默认 TTL', value: cacheStats?.l1Ttl ?? '-' },
+                { label: 'L1 慢变 TTL', value: cacheStats?.l1SlowTtl ?? '-' },
+                { label: 'L2 刷新间隔', value: cacheStats?.l2Ttl ?? '-' },
+                { label: 'L2 状态', value: cacheStats?.l2Enabled ? '已启用' : '未启用' },
+              ]} />
+            </DataPanel>
+          </div>
+        </Section>
+
+        <Section title="认证" meta={`OAuth ${formatNumber(oauthRows.reduce((sum, row) => sum + row.value, 0))} 条绑定`}>
           <div className="metric-grid">
             <div className="metric-line"><span>邮箱验证待处理</span><strong>{formatNumber(dashboard.auth.email_verification_pending)}</strong></div>
             <div className="metric-line"><span>邮箱验证已过期</span><strong>{formatNumber(dashboard.auth.email_verification_expired)}</strong></div>
             <div className="metric-line"><span>密码重置待处理</span><strong>{formatNumber(dashboard.auth.password_reset_pending)}</strong></div>
             <div className="metric-line"><span>密码重置已使用</span><strong>{formatNumber(dashboard.auth.password_reset_used)}</strong></div>
           </div>
-          <div className="two-column">
+          <div className="one-column">
             <BarList rows={oauthRows} empty="暂无 OAuth 数据" />
-            <BarList rows={cacheRows} empty="暂无壁纸缓存数据" />
           </div>
         </Section>
 
