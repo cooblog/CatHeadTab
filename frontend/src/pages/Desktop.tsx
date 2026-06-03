@@ -1463,6 +1463,26 @@ export const Desktop: React.FC = () => {
     setCurrentPage(clamped);
   }, [containerWidth, totalPages]);
 
+  const getDirectPageIndex = useCallback((itemId: string) => {
+    return layout.pages.findIndex(page => page.some(item => item.id === itemId));
+  }, [layout.pages]);
+
+  const handleMoveToPage = useCallback((item: DesktopItem, pageIdx: number) => {
+    const isSourceInOpenedFolder = openedFolder?.children?.some(child => child.id === item.id);
+
+    moveItemToPage(item.id, pageIdx);
+
+    if (isSourceInOpenedFolder) {
+      const remainingChildren = openedFolder?.children?.filter(child => child.id !== item.id) ?? [];
+      if (remainingChildren.length <= 1) {
+        setOpenedFolder(null);
+      }
+    }
+
+    setContextMenu(null);
+    scrollToPage(pageIdx);
+  }, [moveItemToPage, openedFolder, scrollToPage]);
+
   // --- Touch event handlers ---
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     // Don't interfere with drag-and-drop
@@ -1716,7 +1736,20 @@ export const Desktop: React.FC = () => {
 
   // For the Add (+) icon
   const AddButton: React.FC<{ pageIdx?: number; folderId?: string }> = ({ pageIdx, folderId }) => (
-    <div className="flex flex-col items-center w-[80px] group" data-add-button="true" onClick={() => openAddModal(pageIdx, folderId)}>
+    <div
+      className="flex flex-col items-center w-[80px] group"
+      data-add-button="true"
+      onClick={() => openAddModal(pageIdx, folderId)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!folderId) {
+          setContextMenu(null);
+          setBlankContextMenu({ x: e.clientX, y: e.clientY });
+        }
+      }}
+    >
       <div className="w-[56px] h-[56px] md:w-[60px] md:h-[60px] rounded-[18px] bg-white/[0.06] border-2 border-dashed border-white/15 flex items-center justify-center transition-[transform,background-color,border-color] duration-300 transform group-hover:scale-110 group-active:scale-95 group-hover:bg-white/10 group-hover:border-white/30 cursor-pointer">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 group-hover:text-white/70 transition-colors">
           <path d="M12 5v14M5 12h14" />
@@ -2293,7 +2326,7 @@ export const Desktop: React.FC = () => {
           <div className="fixed inset-0 z-[200]" onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
           <div 
             ref={contextMenuRef}
-            className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[180px] animate-scaleIn"
+            className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[190px] max-h-[70vh] overflow-y-auto no-scrollbar animate-scaleIn"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             {/* Edit button — not for app types */}
@@ -2315,17 +2348,42 @@ export const Desktop: React.FC = () => {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                     {t('desktop.editItem')}
                   </button>
-                  <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
                 </>
               )
             )}
             
+            {/* Move to page */}
+            {displayPages.length > 1 && (
+              <>
+                <div className="h-[1px] bg-white/[0.08] mx-2.5 my-1" />
+                <div className="px-4 pt-1.5 pb-1 text-[11px] uppercase tracking-wide text-white/35">
+                  {t('desktop.moveToPage')}
+                </div>
+                {displayPages.map((_, pageIdx) => {
+                  if (getDirectPageIndex(contextMenu.item.id) === pageIdx) return null;
+                  return (
+                    <button
+                      key={pageIdx}
+                      className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
+                      onClick={() => handleMoveToPage(contextMenu.item, pageIdx)}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="4" width="18" height="16" rx="2" />
+                        <path d="M8 4v16" />
+                      </svg>
+                      <span>{t('desktop.moveToPageNumber', { page: String(pageIdx + 1) })}</span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
             {/* Move to/from Dock — not for widget types */}
             {contextMenu.item.type !== 'widget' && (
               contextMenu.inDock ? (
                 <button 
                   className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"
-                  onClick={() => { moveItemFromDock(contextMenu.item.id); setContextMenu(null); }}
+                  onClick={() => { moveItemFromDock(contextMenu.item.id, currentPage); setContextMenu(null); }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
                   {t('desktop.removeFromDock')}

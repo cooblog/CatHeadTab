@@ -181,7 +181,7 @@ interface LayoutState {
   removeDesktopItem: (id: string) => void;
   updateDesktopItem: (id: string, updates: Partial<DesktopItem>) => void;
   moveItemToDock: (id: string) => void;
-  moveItemFromDock: (id: string) => void;
+  moveItemFromDock: (id: string, pageIndex?: number) => void;
   reorderDesktopItem: (sourceId: string, targetId: string) => void;
   moveItemToFolder: (sourceId: string, folderId: string) => void;
   moveItemToPage: (sourceId: string, pageIndex: number, insertIndex?: number) => void;
@@ -900,14 +900,14 @@ export const useLayoutStore = create<LayoutState>()(
         triggerAutoSync();
       },
 
-      moveItemFromDock: (id) => {
-        const layout = { ...get().layout, pages: [...get().layout.pages] };
+      moveItemFromDock: (id, pageIndex) => {
+        const layout = { ...get().layout, pages: get().layout.pages.map(page => [...page]) };
         const dr = removeItemFromList(layout.dock, id);
         if (dr.removed) {
           layout.dock = dr.result;
-          // Add to last page
-          const lastPage = layout.pages.length - 1;
-          layout.pages[lastPage] = [...layout.pages[lastPage], dr.removed];
+          const targetPage = Math.max(0, pageIndex ?? layout.pages.length - 1);
+          while (layout.pages.length <= targetPage) layout.pages.push([]);
+          layout.pages[targetPage] = [...layout.pages[targetPage], dr.removed];
         }
         set({ layout });
         triggerAutoSync();
