@@ -1243,10 +1243,9 @@ export const Desktop: React.FC = () => {
 
       if (isSourceInFolder && droppedOutOfFolder) {
         moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
-        // If the folder is now empty, delete it
+        // The store collapses folders with fewer than two children.
         const remainingChildren = openedFolder.children?.filter(c => c.id !== sourceId) ?? [];
-        if (remainingChildren.length === 0) {
-          removeDesktopItem(openedFolder.id);
+        if (remainingChildren.length <= 1) {
           setOpenedFolder(null);
         }
         setActiveId(null);
@@ -1334,10 +1333,9 @@ export const Desktop: React.FC = () => {
           reorderInsideFolder(openedFolder.id, sourceId, targetId);
         } else if (isSourceInFolder && !isTargetInFolder) {
           moveItemOutOfFolder(sourceId, openedFolder.id, currentPage);
-          // If the folder is now empty, delete it
+          // The store collapses folders with fewer than two children.
           const remainingChildren = openedFolder.children?.filter(c => c.id !== sourceId) ?? [];
-          if (remainingChildren.length === 0) {
-            removeDesktopItem(openedFolder.id);
+          if (remainingChildren.length <= 1) {
             setOpenedFolder(null);
           }
         }
@@ -1355,7 +1353,7 @@ export const Desktop: React.FC = () => {
     setFolderDropTargetId(null);
     lastFolderOverRef.current = null;
     setIsFolderDropPending(false);
-  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, removeDesktopItem, reorderDesktopItem, currentPage, layout, flipManager]);
+  }, [folderDropTargetId, findItemById, moveItemToFolder, mergeItemsToNewFolder, moveItemToPage, openedFolder, reorderInsideFolder, moveItemOutOfFolder, reorderDesktopItem, currentPage, layout, flipManager]);
 
   const handleDragCancel = useCallback(() => {
     if (folderHoverTimerRef.current) clearTimeout(folderHoverTimerRef.current);
@@ -1736,6 +1734,8 @@ export const Desktop: React.FC = () => {
       const updated = findItemById(openedFolder.id);
       if (updated && updated.type === 'folder') {
         setOpenedFolder(updated);
+      } else {
+        setOpenedFolder(null);
       }
     }
   }, [layout, openedFolder?.id, findItemById]);

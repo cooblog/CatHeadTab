@@ -356,16 +356,35 @@ function migrateLayout(raw: any): DesktopLayout {
 // --- Helper: recursively find & remove item ---
 function removeItemFromList(list: DesktopItem[], id: string): { result: DesktopItem[]; removed: DesktopItem | null } {
   let removed: DesktopItem | null = null;
-  const result = list.filter(i => {
-    if (i.id === id) { removed = i; return false; }
-    return true;
-  }).map(i => {
-    if (i.children && !removed) {
-      const sub = removeItemFromList(i.children, id);
-      if (sub.removed) { removed = sub.removed; return { ...i, children: sub.result }; }
+  const result: DesktopItem[] = [];
+
+  for (const item of list) {
+    if (item.id === id) {
+      removed = item;
+      continue;
     }
-    return i;
-  });
+
+    if (item.children && !removed) {
+      const sub = removeItemFromList(item.children, id);
+      if (sub.removed) {
+        removed = sub.removed;
+
+        if (item.type === 'folder') {
+          if (sub.result.length === 0) continue;
+          if (sub.result.length === 1) {
+            result.push(sub.result[0]);
+            continue;
+          }
+        }
+
+        result.push({ ...item, children: sub.result });
+        continue;
+      }
+    }
+
+    result.push(item);
+  }
+
   return { result, removed };
 }
 
