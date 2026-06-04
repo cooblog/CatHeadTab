@@ -45,7 +45,7 @@ export const en = {
   'settings.wallpaper': '🖼️ Wallpaper',
   'settings.language': '🌍 Language',
   'settings.system': '⚙️ General',
-  'settings.ai': '🤖 AI Agent',
+  'settings.ai': 'AI Agent',
   'settings.privacyPolicy': 'Privacy Policy',
   'settings.bgTooLarge': 'Image file is too large (max 20 MB). Please choose a smaller image.',
   'settings.langTitle': 'Language',

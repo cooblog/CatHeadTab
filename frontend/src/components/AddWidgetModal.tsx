@@ -5,6 +5,7 @@ import type { TranslationKeys } from '../i18n/useTranslation';
 import type { WidgetType, WidgetSize, WidgetConfig } from '../store/layoutStore';
 import { useLayoutStore, WIDGET_SIZE_MAP } from '../store/layoutStore';
 import { useConfigStore } from '../store/configStore';
+import { CatHeadIcon } from './CatHeadIcon';
 import { DatePicker } from './DatePicker';
 
 interface AddWidgetModalProps {
@@ -117,7 +118,7 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
       },
       {
         type: 'aiAgent',
-        icon: '🤖',
+        icon: '',
         labelKey: 'widget.aiAgent',
         descKey: 'widget.aiAgentDesc',
         sizes: ['small'],
@@ -750,7 +751,11 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                     } ${isProLocked ? 'opacity-50' : ''}`}
                     onClick={() => { if (!isProLocked) setSelectedType(opt.type); }}
                   >
-                    <span className="text-2xl shrink-0">{opt.icon}</span>
+                    {opt.type === 'aiAgent' ? (
+                      <CatHeadIcon alt="" className="w-8 h-8 shrink-0 rounded-lg bg-black/25" />
+                    ) : (
+                      <span className="text-2xl shrink-0">{opt.icon}</span>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-[14px] font-medium text-white/90 flex items-center gap-2">
                         {t(opt.labelKey)}
@@ -938,8 +943,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                     ? '🧮 科学计算器支持基本四则运算、三角函数、对数、幂运算、百分比等。小尺寸显示精简计算器，中尺寸显示完整键盘并可展开科学计算功能。使用 math.js 引擎，支持复杂数学表达式。'
                     : '🧮 Scientific calculator supports basic arithmetic, trigonometric functions, logarithms, power, percentage and more. Small size shows a compact calculator, medium shows a full keypad with expandable scientific functions. Powered by math.js engine.')}
                   {selectedType === 'aiAgent' && (isZh
-                    ? '🤖 AI 助手是你的智能桌面管家。它可以帮你整理桌面图标、添加新图标、创建文件夹并自动分类、更换壁纸等；在本地 AI 模式下，也可以按你的明确请求搜索浏览器书签和历史记录。点击小组件后打开聊天窗口，用自然语言告诉它你想做什么。'
-                    : '🤖 AI Agent is your smart desktop assistant. It can organize desktop icons, add shortcuts, create categorized folders, change wallpaper, and more; in local AI mode, it can also search bookmarks and history when you explicitly ask. Click to open the chat window and tell it what you want in natural language.')}
+                    ? 'AI 助手是你的智能桌面管家。它可以帮你整理桌面图标、添加新图标、创建文件夹并自动分类、更换壁纸等；在本地 AI 模式下，也可以按你的明确请求搜索浏览器书签和历史记录。点击小组件后打开聊天窗口，用自然语言告诉它你想做什么。'
+                    : 'AI Agent is your smart desktop assistant. It can organize desktop icons, add shortcuts, create categorized folders, change wallpaper, and more; in local AI mode, it can also search bookmarks and history when you explicitly ask. Click to open the chat window and tell it what you want in natural language.')}
                   {selectedType === 'githubTrending' && (isZh
                     ? '🐙 GitHub Trending 实时展示当日最热门的开源项目。自动每 30 分钟刷新一次，显示项目名称、描述、编程语言、星标数和当日增量。点击任意项目可直接在新标签页打开 GitHub 仓库。'
                     : '🐙 GitHub Trending shows today\'s hottest open-source projects in real-time. Auto-refreshes every 30 minutes, displaying repo name, description, language, stars, and daily growth. Click any repo to open it in a new tab.')}

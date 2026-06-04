@@ -5,6 +5,7 @@ import { useLayoutStore } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { saveImageBlob, loadImageBlob, compressImageToWebP, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
 import client from '../api/client';
+import { CatHeadIcon } from './CatHeadIcon';
 import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 import builtinBgWebp from '../assets/bg.webp';
 import builtinBg2Webp from '../assets/bg2.webp';
@@ -1367,7 +1368,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                 className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${activeTab === 'ai' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
                 onClick={() => setActiveTab('ai')}
               >
-                 {t('settings.ai')}
+                <CatHeadIcon alt="" className="w-5 h-5 shrink-0 rounded-md bg-black/25" />
+                <span>{t('settings.ai')}</span>
               </button>
             </div>
           </div>

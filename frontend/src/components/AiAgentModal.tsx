@@ -7,6 +7,7 @@ import { runAgent } from '../ai/agent';
 import type { AgentMessage } from '../ai/agent';
 import { customStorage, useConfigStore } from '../store/configStore';
 import { useLayoutStore } from '../store/layoutStore';
+import { CatHeadIcon } from './CatHeadIcon';
 
 const CHAT_STORAGE_KEY = 'catheadtab-ai-chat';
 
@@ -338,11 +339,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
 
           {/* Center title */}
           <div className="flex-1 flex items-center justify-center gap-2">
-            <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #06b6d4, #8b5cf6, #ec4899)' }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h-1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
-              </svg>
-            </div>
+            <CatHeadIcon alt="" className="w-6 h-6 rounded-lg bg-black/25" />
             <span className="text-[13px] font-semibold text-white/70">AI {isZh ? '助手' : 'Agent'}</span>
             {activeModel && <span className="text-[11px] text-white/25 font-mono">{activeModel}</span>}
           </div>
@@ -415,11 +412,7 @@ export const AiAgentModal: React.FC<AiAgentModalProps> = ({ onClose }) => {
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 wp-scrollbar select-text">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-white/[0.04]">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.2">
-                      <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h-1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
-                    </svg>
-                  </div>
+                  <CatHeadIcon alt="" className="w-14 h-14 rounded-2xl bg-white/[0.04] opacity-45" />
                   <p className="text-[12px] text-white/20">{isZh ? '试试这些指令' : 'Try these commands'}</p>
                   <div className="flex flex-wrap justify-center gap-2 px-4">
                     {hints.map(h => (
