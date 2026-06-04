@@ -54,6 +54,13 @@ export const en = {
   'settings.sysDesc': 'Connect CatHeadTab to your custom self-hosted Go backend for heavy-lifting cloud sync features.',
   'settings.sysLabel': 'Server URL payload path',
   'settings.sysEnvConfigured': 'Set via environment variable',
+  'settings.openModeTitle': 'Link Opening',
+  'settings.openModeDesc': 'Choose how website shortcuts open from CatHeadTab.',
+  'settings.openModeLabel': 'Open links in',
+  'settings.openModeNewTab': 'New tab',
+  'settings.openModeNewTabDesc': 'Keep CatHeadTab open and launch the website in a new tab.',
+  'settings.openModeCurrent': 'Current page',
+  'settings.openModeCurrentDesc': 'Use the current tab to open the website.',
   'settings.cancel': 'Cancel',
   // Wallpaper sub-tabs
   'settings.wpTabCurrent': 'Current Wallpaper',

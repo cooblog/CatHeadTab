@@ -5,6 +5,7 @@ import { useConfigStore } from '../store/configStore';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
 import { FaviconImg } from '../components/FaviconImg';
+import { openUrl } from '../utils/openUrl';
 
 // Lazy-loaded modals — only loaded when opened (saves ~300KB from initial bundle)
 const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
@@ -729,7 +730,7 @@ function createFolderAwareCollision(
 export const Desktop: React.FC = () => {
   const { fetchBookmarks } = useBookmarkStore();
   const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem, mergeItemsToNewFolder } = useLayoutStore();
-  const { jwtToken, setLocked, language, userProfile } = useConfigStore();
+  const { jwtToken, setLocked, language, userProfile, linkOpenMode } = useConfigStore();
   const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -949,7 +950,7 @@ export const Desktop: React.FC = () => {
   const handleItemClick = (item: DesktopItem) => {
     if (activeId) return;
     if (item.type === 'link' && item.url) {
-      window.open(item.url, '_blank');
+      openUrl(item.url, linkOpenMode);
     } else if (item.type === 'folder') {
       setOpenedFolder(item);
     } else if (item.type === 'app') {
@@ -1419,13 +1420,13 @@ export const Desktop: React.FC = () => {
     if (!q) return;
     if (searchMode === 'web') {
       if (typeof chrome !== 'undefined' && chrome.search && chrome.search.query) {
-        chrome.search.query({ text: q, disposition: 'NEW_TAB' });
+        chrome.search.query({ text: q, disposition: linkOpenMode === 'current' ? 'CURRENT_TAB' : 'NEW_TAB' });
       } else {
-        window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
+        openUrl(`https://www.google.com/search?q=${encodeURIComponent(q)}`, linkOpenMode);
       }
     } else {
       if (searchResults.length > 0 && searchResults[0].url) {
-        window.location.href = searchResults[0].url;
+        openUrl(searchResults[0].url, linkOpenMode);
       }
     }
   };
@@ -2236,7 +2237,7 @@ export const Desktop: React.FC = () => {
                       key={item.id} 
                       item={item} 
                       onClick={(node) => {
-                        if (node.type === 'link' && node.url) window.open(node.url, '_blank');
+                        if (node.type === 'link' && node.url) openUrl(node.url, linkOpenMode);
                         else if (node.type === 'folder') setOpenedFolder(node);
                       }}
                       onContextMenu={(e, i) => handleContextMenu(e, i, false)}

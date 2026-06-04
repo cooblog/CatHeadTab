@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useBookmarkStore, ChromeBookmarkTreeNode, getFolderItemCount, getAllBookmarks } from '../../store/bookmarkStore';
 import { useTranslation } from '../../i18n/useTranslation';
 import { FaviconImg } from '../FaviconImg';
+import { openUrl } from '../../utils/openUrl';
 
 export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { bookmarksTree, fetchBookmarks, deleteBookmark } = useBookmarkStore();
@@ -62,7 +63,7 @@ export const BookmarkBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) 
     if (!node.url) {
       setActiveFolderId(node.id);
     } else {
-      window.open(node.url, '_blank');
+      openUrl(node.url);
     }
   };
 

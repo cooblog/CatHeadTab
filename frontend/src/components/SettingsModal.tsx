@@ -516,7 +516,7 @@ const AISettingsSection: React.FC = () => {
 
 
 export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> = ({ onClose, initialTab = 'wallpaper' }) => {
-  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, jwtToken, userProfile } = useConfigStore();
+  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, linkOpenMode, setLinkOpenMode, jwtToken, userProfile } = useConfigStore();
   const isAdmin = userProfile?.role === 'admin';
   const { t } = useTranslation();
 
@@ -2016,6 +2016,43 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                         >
                           {t(opt.label)}
                           {lockIdleTimeout === opt.ms && <span className="text-[#72d565]">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* Link opening mode section */}
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">{t('settings.openModeTitle')}</h3>
+                    <p className="text-[13px] text-white/50 mb-3">{t('settings.openModeDesc')}</p>
+
+                    <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('settings.openModeLabel')}</label>
+                    <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                      {([
+                        { mode: 'newTab', label: 'settings.openModeNewTab', desc: 'settings.openModeNewTabDesc' },
+                        { mode: 'current', label: 'settings.openModeCurrent', desc: 'settings.openModeCurrentDesc' },
+                      ] as const).map((opt, idx, arr) => (
+                        <button
+                          key={opt.mode}
+                          className={`w-full px-5 py-4 text-[14px] font-medium flex items-center justify-between gap-4 text-left ${idx < arr.length - 1 ? 'border-b border-white/5' : ''} ${linkOpenMode === opt.mode ? 'bg-white/5 text-white/90' : 'text-white/50 hover:bg-white/5 hover:text-white/90'}`}
+                          onClick={() => {
+                            setLinkOpenMode(opt.mode);
+                            useConfigStore.getState().markLocalModified();
+                            if (jwtToken) {
+                              client.put('/api/v1/user/preferences', { linkOpenMode: opt.mode }).catch(err => {
+                                console.error('Failed to sync linkOpenMode to cloud', err);
+                              });
+                            }
+                          }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block">{t(opt.label)}</span>
+                            <span className="block text-[12px] text-white/35 mt-0.5 whitespace-normal">{t(opt.desc)}</span>
+                          </span>
+                          {linkOpenMode === opt.mode && <span className="text-[#72d565] shrink-0">✓</span>}
                         </button>
                       ))}
                     </div>

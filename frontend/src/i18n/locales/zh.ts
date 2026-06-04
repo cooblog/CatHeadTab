@@ -54,6 +54,13 @@ export const zh = {
   'settings.sysDesc': '连接到您自建的 Go 后端，开启强力云端同步功能。',
   'settings.sysLabel': '服务器 API 连接地址',
   'settings.sysEnvConfigured': '已通过环境变量配置',
+  'settings.openModeTitle': '链接打开方式',
+  'settings.openModeDesc': '选择从 CatHeadTab 打开网站快捷方式时的跳转方式。',
+  'settings.openModeLabel': '打开链接',
+  'settings.openModeNewTab': '新建标签页',
+  'settings.openModeNewTabDesc': '保留 CatHeadTab，在新标签页中打开网站。',
+  'settings.openModeCurrent': '当前页面',
+  'settings.openModeCurrentDesc': '直接使用当前标签页打开网站。',
   'settings.cancel': '取消',
   // Wallpaper sub-tabs
   'settings.wpTabCurrent': '当前壁纸',

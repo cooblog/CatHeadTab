@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
 import { FaviconImg } from '../FaviconImg';
+import { openUrl } from '../../utils/openUrl';
 
 // ---------------------------------------------------------------------------
 // HistoryItem — lightweight type for chrome.history.HistoryItem
@@ -331,7 +332,7 @@ export const HistoryBrowser: React.FC<{ onClose: () => void }> = ({ onClose }) =
                     <div
                       key={`${item.id}-${item.url}`}
                       className="bookmark-row flex items-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl hover:bg-white/[0.08] transition-all cursor-pointer border border-transparent hover:border-white/5 active:scale-[0.99]"
-                      onClick={() => item.url && window.open(item.url, '_blank')}
+                      onClick={() => item.url && openUrl(item.url)}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
