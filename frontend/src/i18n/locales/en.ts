@@ -21,6 +21,8 @@ export const en = {
   'desktop.namePlaceholder': 'e.g. YouTube',
   'desktop.urlPlaceholder': 'https://youtube.com',
   'desktop.folderNamePlaceholder': 'e.g. Work Tools',
+  'desktop.moveToPage': 'Move to Page',
+  'desktop.moveToPageNumber': 'Move to Page {page}',
   'desktop.moveToDock': 'Move to Dock',
   'desktop.removeFromDock': 'Remove from Dock',
   'desktop.fetchingTitle': 'Fetching title...',

@@ -181,7 +181,7 @@ interface LayoutState {
   removeDesktopItem: (id: string) => void;
   updateDesktopItem: (id: string, updates: Partial<DesktopItem>) => void;
   moveItemToDock: (id: string) => void;
-  moveItemFromDock: (id: string) => void;
+  moveItemFromDock: (id: string, pageIndex?: number) => void;
   reorderDesktopItem: (sourceId: string, targetId: string) => void;
   moveItemToFolder: (sourceId: string, folderId: string) => void;
   moveItemToPage: (sourceId: string, pageIndex: number, insertIndex?: number) => void;
@@ -356,16 +356,35 @@ function migrateLayout(raw: any): DesktopLayout {
 // --- Helper: recursively find & remove item ---
 function removeItemFromList(list: DesktopItem[], id: string): { result: DesktopItem[]; removed: DesktopItem | null } {
   let removed: DesktopItem | null = null;
-  const result = list.filter(i => {
-    if (i.id === id) { removed = i; return false; }
-    return true;
-  }).map(i => {
-    if (i.children && !removed) {
-      const sub = removeItemFromList(i.children, id);
-      if (sub.removed) { removed = sub.removed; return { ...i, children: sub.result }; }
+  const result: DesktopItem[] = [];
+
+  for (const item of list) {
+    if (item.id === id) {
+      removed = item;
+      continue;
     }
-    return i;
-  });
+
+    if (item.children && !removed) {
+      const sub = removeItemFromList(item.children, id);
+      if (sub.removed) {
+        removed = sub.removed;
+
+        if (item.type === 'folder') {
+          if (sub.result.length === 0) continue;
+          if (sub.result.length === 1) {
+            result.push(sub.result[0]);
+            continue;
+          }
+        }
+
+        result.push({ ...item, children: sub.result });
+        continue;
+      }
+    }
+
+    result.push(item);
+  }
+
   return { result, removed };
 }
 
@@ -881,14 +900,14 @@ export const useLayoutStore = create<LayoutState>()(
         triggerAutoSync();
       },
 
-      moveItemFromDock: (id) => {
-        const layout = { ...get().layout, pages: [...get().layout.pages] };
+      moveItemFromDock: (id, pageIndex) => {
+        const layout = { ...get().layout, pages: get().layout.pages.map(page => [...page]) };
         const dr = removeItemFromList(layout.dock, id);
         if (dr.removed) {
           layout.dock = dr.result;
-          // Add to last page
-          const lastPage = layout.pages.length - 1;
-          layout.pages[lastPage] = [...layout.pages[lastPage], dr.removed];
+          const targetPage = Math.max(0, pageIndex ?? layout.pages.length - 1);
+          while (layout.pages.length <= targetPage) layout.pages.push([]);
+          layout.pages[targetPage] = [...layout.pages[targetPage], dr.removed];
         }
         set({ layout });
         triggerAutoSync();

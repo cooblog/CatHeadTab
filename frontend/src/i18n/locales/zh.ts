@@ -21,6 +21,8 @@ export const zh = {
   'desktop.namePlaceholder': '例如：YouTube',
   'desktop.urlPlaceholder': 'https://youtube.com',
   'desktop.folderNamePlaceholder': '例如：工作工具',
+  'desktop.moveToPage': '移动到页面',
+  'desktop.moveToPageNumber': '移动到第 {page} 页',
   'desktop.moveToDock': '移到 Dock',
   'desktop.removeFromDock': '从 Dock 移出',
   'desktop.fetchingTitle': '正在获取标题...',
