@@ -6,6 +6,7 @@ import { useConfigStore } from '../store/configStore';
 import { DesktopItem, DesktopItemType, useLayoutStore } from '../store/layoutStore';
 import { FaviconImg } from './FaviconImg';
 import { openUrl } from '../utils/openUrl';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 // ---------------------------------------------------------------------------
 // PagePicker — small dropdown to choose which desktop page to add to
@@ -286,6 +287,12 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
 
   const [addedSites, setAddedSites] = useState<Set<string>>(new Set());
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(typeof window === 'undefined' ? 900 : Math.min(900, window.innerWidth - 96), 0.8),
+    isFullscreen: isFullScreen,
+    minHeight: 500,
+    minWidth: 640,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
 
@@ -568,11 +575,16 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
 
       {/* App Window container — same structure as BookmarkBrowser */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${isFullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-[900px] h-[85vh] md:h-[80vh] rounded-[1.5rem] md:rounded-[2rem]'}`}
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border border-white/10 shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${isFullScreen ? 'w-full h-full rounded-none' : `${floatingWindow.windowClassName} rounded-[1.5rem] md:rounded-[2rem]`}`}
+        style={floatingWindow.style}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header — identical to BookmarkBrowser */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none absolute top-0 left-0 right-0 z-20">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none absolute top-0 left-0 right-0 z-20 sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop, hamburger on mobile */}
           <div className="flex items-center gap-2 w-auto md:w-24">
             <button
@@ -595,9 +607,13 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
           </div>
 
           {/* Center: breadcrumb */}
-          <div className="flex-1 flex justify-center drag-region cursor-move opacity-60 hover:opacity-100 transition-opacity min-w-0">
+          <div className="flex-1 flex justify-center drag-region cursor-default opacity-60 hover:opacity-100 transition-opacity min-w-0">
             <div className="flex items-center gap-1.5 text-[12px] md:text-[13px] font-medium text-white/70 truncate max-w-full overflow-hidden">
-              <span className="cursor-pointer hover:text-white transition-colors" onClick={() => { setSearchQuery(''); if (categories.length > 0) setActiveCategoryID(categories[0].id); }}>
+              <span
+                data-floating-window-no-drag
+                className="cursor-pointer hover:text-white transition-colors"
+                onClick={() => { setSearchQuery(''); if (categories.length > 0) setActiveCategoryID(categories[0].id); }}
+              >
                 {t('explore.title')}
               </span>
               {(activeCategory || searchResults) && <span className="text-white/30 text-[10px] shrink-0">▶</span>}
@@ -630,7 +646,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
                 <div className="p-4 pb-2">
                   {renderSearchInput()}
                 </div>
-                <div className="flex-1 overflow-y-auto no-scrollbar pl-4 pr-3 pb-8 pt-3 space-y-1">
+                <div className="flex-1 overflow-y-auto desktop-scrollbar pl-4 pr-3 pb-8 pt-3 space-y-1">
                   <div className="px-3 text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1.5">
                     {t('explore.title')}
                   </div>
@@ -649,7 +665,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
             <div className="p-5 pb-2">
               {renderSearchInput()}
             </div>
-            <div className="flex-1 overflow-y-auto no-scrollbar pl-5 pr-3 pb-8 pt-3 space-y-1">
+            <div className="flex-1 overflow-y-auto desktop-scrollbar pl-5 pr-3 pb-8 pt-3 space-y-1">
               <div className="px-3 text-[11px] font-bold text-white/30 uppercase tracking-widest mb-1.5">
                 {t('explore.title')}
               </div>
@@ -782,6 +798,7 @@ export function ExploreWorld({ onClose }: ExploreWorldProps) {
             </div>
           </div>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

@@ -2335,6 +2335,7 @@ export const Desktop: React.FC = () => {
             ref={contextMenuRef}
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[190px] max-h-[70vh] overflow-y-auto no-scrollbar animate-scaleIn"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             {/* Edit button — not for app types */}
             {contextMenu.item.type !== 'app' && (
@@ -2434,6 +2435,7 @@ export const Desktop: React.FC = () => {
             ref={blankContextMenuRef}
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[200px] animate-scaleIn"
             style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             <button 
               className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"

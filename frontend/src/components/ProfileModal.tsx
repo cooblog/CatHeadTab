@@ -6,6 +6,7 @@ import { compressAvatarToWebP } from '../utils/imageStore';
 import { isPasswordAcceptable } from '../utils/passwordStrength';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
 import client from '../api/client';
+import { useFloatingWindow } from '../hooks/useFloatingWindow';
 
 interface LinkedAccount {
   provider: string;
@@ -21,6 +22,14 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const { t } = useTranslation();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => ({
+      width: 448,
+      height: typeof window === 'undefined' ? 680 : Math.min(720, window.innerHeight - 96),
+    }),
+    minHeight: 420,
+    minWidth: 360,
+  });
 
   // Close on Escape key
   useEffect(() => {
@@ -287,11 +296,16 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
       {/* App Window container */}
       <div 
-        className="w-full max-w-md bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden max-h-[90vh] select-none"
+        ref={floatingWindow.shellRef}
+        className={`relative w-full max-w-md sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)] bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden max-h-[90vh] select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
+        style={floatingWindow.style}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
@@ -327,7 +341,7 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-8 desktop-scrollbar">
           {/* Avatar & Name */}
           <div className="flex flex-col items-center mb-6">
             {/* Avatar with upload overlay */}
@@ -621,6 +635,7 @@ export const ProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             {t('profile.signOut')}
           </button>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

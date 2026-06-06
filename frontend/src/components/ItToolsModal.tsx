@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from '../i18n/useTranslation';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 interface ItToolsModalProps {
   onClose: () => void;
@@ -10,6 +11,15 @@ export const ItToolsModal: React.FC<ItToolsModalProps> = ({ onClose }) => {
   const { t } = useTranslation();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(
+      typeof window === 'undefined' ? 960 : Math.min(1152, Math.max(720, window.innerWidth * 0.9)),
+      0.78,
+    ),
+    isFullscreen,
+    minHeight: 460,
+    minWidth: 640,
+  });
 
   // Close on Escape key
   useEffect(() => {
@@ -31,15 +41,20 @@ export const ItToolsModal: React.FC<ItToolsModalProps> = ({ onClose }) => {
 
       {/* App Window container — reuses SettingsModal style */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none ${
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} select-none ${
           isFullscreen
             ? 'w-full h-full !rounded-none !border-0'
-            : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-6xl sm:h-[80vh] md:h-[78vh]'
+            : floatingWindow.windowClassName
         }`}
+        style={floatingWindow.style}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header — macOS traffic lights */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
@@ -118,6 +133,7 @@ export const ItToolsModal: React.FC<ItToolsModalProps> = ({ onClose }) => {
             onLoad={() => setIsLoading(false)}
           />
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

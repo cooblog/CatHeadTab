@@ -33,6 +33,36 @@ a[aria-disabled="true"],
   cursor: not-allowed;
 }
 
+body.trending-modal-dragging,
+body.trending-modal-dragging * {
+  cursor: default !important;
+}
+
+body.trending-modal-resizing,
+body.trending-modal-resizing * {
+  cursor: nwse-resize !important;
+}
+
+body.ai-agent-modal-dragging,
+body.ai-agent-modal-dragging * {
+  cursor: default !important;
+}
+
+body.ai-agent-modal-resizing,
+body.ai-agent-modal-resizing * {
+  cursor: nwse-resize !important;
+}
+
+body.floating-window-dragging,
+body.floating-window-dragging * {
+  cursor: default !important;
+}
+
+body.floating-window-resizing,
+body.floating-window-resizing * {
+  cursor: nwse-resize !important;
+}
+
 body {
   /* 静态渐变背景，不使用动画以避免持续 CPU 消耗 */
   background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
@@ -225,6 +255,43 @@ body {
 
   .wp-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.25);
+  }
+
+  /* Dialog/window content scrollbars: hidden on mobile, visible on desktop. */
+  .desktop-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .desktop-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  @media (min-width: 640px) {
+    .desktop-scrollbar {
+      -ms-overflow-style: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    }
+
+    .desktop-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .desktop-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .desktop-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+    }
+
+    .desktop-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
   }
 
   /* Hide scrollbar but keep scrolling */

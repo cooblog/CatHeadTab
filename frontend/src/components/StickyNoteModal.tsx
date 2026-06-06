@@ -7,6 +7,7 @@ import {
   useLayoutStore,
 } from '../store/layoutStore';
 import type { StickyNoteWidgetConfig, DesktopItem } from '../store/layoutStore';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 interface StickyNoteModalProps {
   onClose: () => void;
@@ -88,6 +89,11 @@ const COLOR_STYLES: Record<string, {
 export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item }) => {
   const { t } = useTranslation();
   const updateWidgetConfig = useLayoutStore(s => s.updateWidgetConfig);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(520, 0.7),
+    minHeight: 420,
+    minWidth: 420,
+  });
 
   const noteConfig = item.widgetConfig as StickyNoteWidgetConfig | undefined;
   const [content, setContent] = useState(() => clampStickyNoteContent(noteConfig?.content || ''));
@@ -170,13 +176,15 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
 
       {/* Note Window */}
       <div
-        className="backdrop-blur-xl border-0 sm:border border-black/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.35)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-auto sm:h-[70vh] sm:max-w-lg sm:min-w-[440px]"
-        style={{ background: styles.bg }}
+        ref={floatingWindow.shellRef}
+        className={`relative backdrop-blur-xl border-0 sm:border border-black/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.35)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} select-none w-full h-full sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]`}
+        style={{ ...floatingWindow.style, background: styles.bg }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="h-12 md:h-14 flex items-center px-3 md:px-5 shrink-0 select-none"
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 flex items-center px-3 md:px-5 shrink-0 select-none sm:cursor-default"
           style={{
             background: styles.headerBg,
             borderBottom: `1px solid rgba(0,0,0,0.08)`,
@@ -319,6 +327,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
             {t('widget.stickyNoteAutoSave')}
           </span>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

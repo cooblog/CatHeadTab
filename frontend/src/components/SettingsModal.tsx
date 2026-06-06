@@ -9,6 +9,7 @@ import { CatHeadIcon } from './CatHeadIcon';
 import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 import builtinBgWebp from '../assets/bg.webp';
 import builtinBg2Webp from '../assets/bg2.webp';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 type Tab = 'wallpaper' | 'system' | 'ai';
 type WallpaperSubTab = 'current' | 'browse';
@@ -447,7 +448,7 @@ const AISettingsSection: React.FC = () => {
 
           {/* Dropdown list */}
           {modelDropdownOpen && (
-            <div className="absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl no-scrollbar">
+            <div className="absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl desktop-scrollbar">
               {filteredModels.length > 0 ? (
                 filteredModels.map(m => (
                   <button
@@ -531,6 +532,20 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   }, [onClose]);
   const [wpSubTab, setWpSubTab] = useState<WallpaperSubTab>('current');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(typeof window === 'undefined' ? 1152 : Math.min(1152, window.innerWidth * 0.9), 0.68),
+    isFullscreen,
+    minHeight: 500,
+    minWidth: 700,
+  });
+  const importConfirmWindow = useFloatingWindow({
+    defaultSize: () => ({
+      width: 448,
+      height: typeof window === 'undefined' ? 480 : Math.min(540, window.innerHeight - 96),
+    }),
+    minHeight: 360,
+    minWidth: 360,
+  });
   const [url, setUrl] = useState(serverUrl);
   const [bg, setBg] = useState(backgroundImage);
   const [bgPreview, setBgPreview] = useState(''); // Object URL for local file preview
@@ -1302,11 +1317,16 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
 
       {/* App Window container */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-6xl sm:h-[70vh] md:h-[68vh]'}`}
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} select-none ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : floatingWindow.windowClassName}`}
+        style={floatingWindow.style}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop, spacer on mobile */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             {/* Desktop traffic lights */}
@@ -1377,7 +1397,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           {/* Content Area */}
           <div className="flex-1 flex flex-col p-3 sm:p-6 sm:pb-2 md:px-8 md:pt-8 md:pb-2 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
 
-            <div ref={contentScrollRef} className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'wallpaper' && wpSubTab === 'browse' && (wpSource === 'wallhaven' || wpSource === 'cos') ? 'wp-scrollbar' : 'no-scrollbar'}`}>
+            <div ref={contentScrollRef} className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'wallpaper' && wpSubTab === 'browse' && (wpSource === 'wallhaven' || wpSource === 'cos') ? 'wp-scrollbar' : 'desktop-scrollbar'}`}>
 
               {/* ============ WALLPAPER TAB ============ */}
               {activeTab === 'wallpaper' && (
@@ -2185,6 +2205,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
             )}
           </div>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
 
       {/* === Fullscreen wallpaper preview overlay (from Wallhaven) === */}
@@ -2399,18 +2420,26 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           onClick={() => setImportConfirmData(null)}
         >
           <div
-            className="bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 p-6 animate-scaleIn"
+            ref={importConfirmWindow.shellRef}
+            className={`relative bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)] animate-scaleIn flex flex-col overflow-hidden transition-all ${importConfirmWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
+            style={importConfirmWindow.style}
             onClick={e => e.stopPropagation()}
           >
             {/* Title */}
-            <h3 className="text-lg font-bold text-white mb-1">{t('settings.importConfirmTitle')}</h3>
-            <p className="text-[13px] text-white/50 mb-5">
-              {importConfirmData.pages.flat().length + importConfirmData.dock.length} items
-            </p>
+            <div
+              onPointerDown={importConfirmWindow.handleDragPointerDown}
+              className="shrink-0 border-b border-white/10 px-6 py-5 select-none sm:cursor-default"
+            >
+              <h3 className="text-lg font-bold text-white mb-1">{t('settings.importConfirmTitle')}</h3>
+              <p className="text-[13px] text-white/50">
+                {importConfirmData.pages.flat().length + importConfirmData.dock.length} items
+              </p>
+            </div>
 
-            {/* Options */}
-            <div className="space-y-3">
-              {/* Overwrite option */}
+            <div className="flex-1 overflow-y-auto p-6 desktop-scrollbar">
+              {/* Options */}
+              <div className="space-y-3">
+                {/* Overwrite option */}
               <button
                 type="button"
                 onClick={handleImportOverwrite}
@@ -2427,7 +2456,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                 </div>
               </button>
 
-              {/* Merge option */}
+                {/* Merge option */}
               <button
                 type="button"
                 onClick={handleImportMerge}
@@ -2443,16 +2472,18 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                   <span className="block text-[12px] text-white/40 mt-0.5">{t('settings.importMergeDesc')}</span>
                 </div>
               </button>
-            </div>
+              </div>
 
-            {/* Cancel */}
-            <button
-              type="button"
-              onClick={() => setImportConfirmData(null)}
-              className="w-full mt-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 text-[13px] font-medium transition-colors"
-            >
-              {t('settings.cancel')}
-            </button>
+              {/* Cancel */}
+              <button
+                type="button"
+                onClick={() => setImportConfirmData(null)}
+                className="w-full mt-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 text-[13px] font-medium transition-colors"
+              >
+                {t('settings.cancel')}
+              </button>
+            </div>
+            {importConfirmWindow.resizeHandle}
           </div>
         </div>
       )}

@@ -19,6 +19,7 @@ import type { WidgetSize, ExchangeRateWidgetConfig, ExchangeRatePair } from '../
 import { useLayoutStore } from '../../store/layoutStore';
 import { useConfigStore } from '../../store/configStore';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../../hooks/useFloatingWindow';
 
 interface ExchangeRateWidgetProps {
   size: WidgetSize;
@@ -510,6 +511,14 @@ const ExchangeRateDetailModal: React.FC<ExchangeRateDetailModalProps> = ({
   const [search, setSearch] = useState('');
   const [addFrom, setAddFrom] = useState('USD');
   const [addTo, setAddTo] = useState('CNY');
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(
+      typeof window === 'undefined' ? 768 : Math.min(768, window.innerWidth * 0.9),
+      0.68,
+    ),
+    minHeight: 500,
+    minWidth: 640,
+  });
 
   // Close on Escape key
   useEffect(() => {
@@ -610,14 +619,19 @@ const ExchangeRateDetailModal: React.FC<ExchangeRateDetailModalProps> = ({
 
       {/* macOS-style App Window */}
       <div
-        className="bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden select-none w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-3xl sm:h-[70vh] md:h-[68vh]"
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} ${floatingWindow.windowClassName}`}
+        style={floatingWindow.style}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {/* Window Header */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
               <button
@@ -688,7 +702,7 @@ const ExchangeRateDetailModal: React.FC<ExchangeRateDetailModalProps> = ({
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col p-3 sm:p-5 md:px-6 md:pt-6 md:pb-2 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar sm:pr-2 md:pr-3">
+            <div className="flex-1 min-h-0 overflow-y-auto desktop-scrollbar sm:pr-2 md:pr-3">
               {tab === 'list' ? (
                 /* ===== Rate List Tab ===== */
                 <div className="space-y-3 animate-fadeIn">
@@ -893,6 +907,7 @@ const ExchangeRateDetailModal: React.FC<ExchangeRateDetailModalProps> = ({
             </div>
           </div>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
 
       {/* Inline animations */}
