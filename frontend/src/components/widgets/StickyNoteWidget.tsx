@@ -7,51 +7,71 @@ interface StickyNoteWidgetProps {
   config?: StickyNoteWidgetConfig;
 }
 
-/** Color presets matching Apple Notes / iOS sticky note feel. */
-const COLOR_PRESETS: Record<string, { bg: string; headerBg: string; lineColor: string; textColor: string; titleColor: string }> = {
+/** Color presets with a translucent glass tint for desktop widgets. */
+const COLOR_PRESETS: Record<string, { bg: string; headerBg: string; lineColor: string; textColor: string; titleColor: string; headerTextColor: string; dotColor: string }> = {
   yellow: {
-    bg: 'linear-gradient(180deg, #FFF9C4 0%, #FFF59D 100%)',
-    headerBg: '#F9E547',
-    lineColor: 'rgba(200,180,80,0.25)',
-    textColor: '#5D4E37',
-    titleColor: '#8B7355',
+    bg: 'linear-gradient(180deg, rgba(255,249,196,0.22) 0%, rgba(255,245,157,0.09) 100%)',
+    headerBg: 'rgba(249,229,71,0.24)',
+    lineColor: 'rgba(255,255,255,0.16)',
+    textColor: 'rgba(255,255,255,0.84)',
+    titleColor: 'rgba(255,255,255,0.68)',
+    headerTextColor: 'rgba(255,255,255,0.82)',
+    dotColor: 'rgba(255,255,255,0.22)',
   },
   pink: {
-    bg: 'linear-gradient(180deg, #FCE4EC 0%, #F8BBD0 100%)',
-    headerBg: '#F48FB1',
-    lineColor: 'rgba(200,100,130,0.2)',
-    textColor: '#6D3B4F',
-    titleColor: '#AD5D7A',
+    bg: 'linear-gradient(180deg, rgba(252,228,236,0.22) 0%, rgba(248,187,208,0.09) 100%)',
+    headerBg: 'rgba(244,143,177,0.24)',
+    lineColor: 'rgba(255,255,255,0.16)',
+    textColor: 'rgba(255,255,255,0.84)',
+    titleColor: 'rgba(255,255,255,0.68)',
+    headerTextColor: 'rgba(255,255,255,0.82)',
+    dotColor: 'rgba(255,255,255,0.22)',
   },
   green: {
-    bg: 'linear-gradient(180deg, #E8F5E9 0%, #C8E6C9 100%)',
-    headerBg: '#81C784',
-    lineColor: 'rgba(100,160,100,0.2)',
-    textColor: '#3E5F3E',
-    titleColor: '#5A8A5A',
+    bg: 'linear-gradient(180deg, rgba(232,245,233,0.22) 0%, rgba(200,230,201,0.09) 100%)',
+    headerBg: 'rgba(129,199,132,0.24)',
+    lineColor: 'rgba(255,255,255,0.16)',
+    textColor: 'rgba(255,255,255,0.84)',
+    titleColor: 'rgba(255,255,255,0.68)',
+    headerTextColor: 'rgba(255,255,255,0.82)',
+    dotColor: 'rgba(255,255,255,0.22)',
   },
   blue: {
-    bg: 'linear-gradient(180deg, #E3F2FD 0%, #BBDEFB 100%)',
-    headerBg: '#64B5F6',
-    lineColor: 'rgba(80,140,200,0.2)',
-    textColor: '#37586E',
-    titleColor: '#5B8DB8',
+    bg: 'linear-gradient(180deg, rgba(227,242,253,0.22) 0%, rgba(187,222,251,0.09) 100%)',
+    headerBg: 'rgba(100,181,246,0.24)',
+    lineColor: 'rgba(255,255,255,0.16)',
+    textColor: 'rgba(255,255,255,0.84)',
+    titleColor: 'rgba(255,255,255,0.68)',
+    headerTextColor: 'rgba(255,255,255,0.82)',
+    dotColor: 'rgba(255,255,255,0.22)',
   },
   purple: {
-    bg: 'linear-gradient(180deg, #F3E5F5 0%, #E1BEE7 100%)',
-    headerBg: '#BA68C8',
-    lineColor: 'rgba(150,100,170,0.2)',
-    textColor: '#5A3D6A',
-    titleColor: '#8E5FA0',
+    bg: 'linear-gradient(180deg, rgba(243,229,245,0.22) 0%, rgba(225,190,231,0.09) 100%)',
+    headerBg: 'rgba(186,104,200,0.24)',
+    lineColor: 'rgba(255,255,255,0.16)',
+    textColor: 'rgba(255,255,255,0.84)',
+    titleColor: 'rgba(255,255,255,0.68)',
+    headerTextColor: 'rgba(255,255,255,0.82)',
+    dotColor: 'rgba(255,255,255,0.22)',
   },
   orange: {
-    bg: 'linear-gradient(180deg, #FFF3E0 0%, #FFE0B2 100%)',
-    headerBg: '#FFB74D',
-    lineColor: 'rgba(200,150,70,0.2)',
-    textColor: '#6D4C2F',
-    titleColor: '#B87A3D',
+    bg: 'linear-gradient(180deg, rgba(255,243,224,0.22) 0%, rgba(255,224,178,0.09) 100%)',
+    headerBg: 'rgba(255,183,77,0.24)',
+    lineColor: 'rgba(255,255,255,0.16)',
+    textColor: 'rgba(255,255,255,0.84)',
+    titleColor: 'rgba(255,255,255,0.68)',
+    headerTextColor: 'rgba(255,255,255,0.82)',
+    dotColor: 'rgba(255,255,255,0.22)',
   },
 };
+
+const noteGlassStyle = (preset: typeof COLOR_PRESETS.yellow): React.CSSProperties => ({
+  background: preset.bg,
+  borderRadius: 'inherit',
+  backgroundClip: 'padding-box',
+  isolation: 'isolate',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(255,255,255,0.06)',
+});
 
 /** iOS/iPadOS-style sticky note widget for the desktop grid. */
 export const StickyNoteWidget: React.FC<StickyNoteWidgetProps> = ({ size, config }) => {
@@ -70,7 +90,7 @@ export const StickyNoteWidget: React.FC<StickyNoteWidgetProps> = ({ size, config
     return (
       <div
         className="w-full h-full flex flex-col overflow-hidden cursor-pointer select-none"
-        style={{ background: preset.bg, borderRadius: 'inherit' }}
+        style={noteGlassStyle(preset)}
       >
         {/* Tiny colored header strip */}
         <div
@@ -79,7 +99,7 @@ export const StickyNoteWidget: React.FC<StickyNoteWidgetProps> = ({ size, config
         >
           <span
             className="text-[11px] font-bold tracking-wide leading-none"
-            style={{ color: 'rgba(0,0,0,0.5)' }}
+            style={{ color: preset.headerTextColor, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
           >
             📝 Note
           </span>
@@ -128,7 +148,7 @@ export const StickyNoteWidget: React.FC<StickyNoteWidgetProps> = ({ size, config
   return (
     <div
       className="w-full h-full flex flex-col overflow-hidden cursor-pointer select-none"
-      style={{ background: preset.bg, borderRadius: 'inherit' }}
+      style={noteGlassStyle(preset)}
     >
       {/* Header bar */}
       <div
@@ -137,7 +157,7 @@ export const StickyNoteWidget: React.FC<StickyNoteWidgetProps> = ({ size, config
       >
         <span
           className="text-[12px] font-bold tracking-wide leading-none"
-          style={{ color: 'rgba(0,0,0,0.5)' }}
+          style={{ color: preset.headerTextColor, textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}
         >
           📝 Note
         </span>
@@ -147,7 +167,7 @@ export const StickyNoteWidget: React.FC<StickyNoteWidgetProps> = ({ size, config
             style={{
               width: 8,
               height: 8,
-              background: 'rgba(0,0,0,0.12)',
+              background: preset.dotColor,
             }}
           />
         </div>

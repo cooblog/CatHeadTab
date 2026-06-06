@@ -1,6 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from '../i18n/useTranslation';
-import { useLayoutStore } from '../store/layoutStore';
+import {
+  STICKY_NOTE_CONTENT_MAX_LENGTH,
+  clampStickyNoteContent,
+  countTextCharacters,
+  useLayoutStore,
+} from '../store/layoutStore';
 import type { StickyNoteWidgetConfig, DesktopItem } from '../store/layoutStore';
 
 interface StickyNoteModalProps {
@@ -85,7 +90,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   const updateWidgetConfig = useLayoutStore(s => s.updateWidgetConfig);
 
   const noteConfig = item.widgetConfig as StickyNoteWidgetConfig | undefined;
-  const [content, setContent] = useState(noteConfig?.content || '');
+  const [content, setContent] = useState(() => clampStickyNoteContent(noteConfig?.content || ''));
   const [selectedColor, setSelectedColor] = useState<NoteColor>(noteConfig?.color || 'yellow');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -105,10 +110,11 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    const safeContent = clampStickyNoteContent(newContent);
     saveTimeoutRef.current = setTimeout(() => {
       updateWidgetConfig(item.id, {
         widgetType: 'stickyNote',
-        content: newContent,
+        content: safeContent,
         color: newColor,
       });
     }, 400);
@@ -119,9 +125,10 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    const safeContent = clampStickyNoteContent(content);
     updateWidgetConfig(item.id, {
       widgetType: 'stickyNote',
-      content,
+      content: safeContent,
       color: selectedColor,
     });
     onClose();
@@ -135,7 +142,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   }, [onClose]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newContent = e.target.value;
+    const newContent = clampStickyNoteContent(e.target.value);
     setContent(newContent);
     saveNote(newContent, selectedColor);
   };
@@ -147,7 +154,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   };
 
   // Character count
-  const charCount = content.length;
+  const charCount = countTextCharacters(content);
   const lineCount = content.split('\n').length;
 
   return (
@@ -275,6 +282,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
             ref={textareaRef}
             value={content}
             onChange={handleContentChange}
+            maxLength={STICKY_NOTE_CONTENT_MAX_LENGTH}
             placeholder={t('widget.stickyNotePlaceholder')}
             className="absolute inset-0 w-full h-full resize-none border-0 outline-none p-4 leading-[28px]"
             style={{
@@ -302,7 +310,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
             className="text-[11px]"
             style={{ color: 'rgba(0,0,0,0.35)' }}
           >
-            {charCount} {t('widget.stickyNoteChars')} · {lineCount} {t('widget.stickyNoteLines')}
+            {charCount}/{STICKY_NOTE_CONTENT_MAX_LENGTH} {t('widget.stickyNoteChars')} / {lineCount} {t('widget.stickyNoteLines')}
           </span>
           <span
             className="text-[11px]"
