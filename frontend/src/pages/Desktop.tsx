@@ -588,6 +588,16 @@ const SEARCH_MODES = [
   { id: 'desktop', icon: <DesktopAppIcon /> },
 ] as const;
 
+function getDesktopGridMetrics(width: number, height: number) {
+  const isCompactDesktop = width >= 768 && (width < 1280 || height <= 820);
+
+  if (width >= 540 && width < 768) return { cellSize: 64, gap: 28 };
+  if (width < 640) return { cellSize: Math.max(56, (width - 68) / 4), gap: 12 };
+  if (width < 768) return { cellSize: 72, gap: 32 };
+  if (isCompactDesktop) return { cellSize: width < 1024 ? 72 : 76, gap: width < 1024 ? 28 : 32 };
+  return { cellSize: 80, gap: width >= 1280 ? 44 : width >= 1024 ? 40 : 36 };
+}
+
 
 // === Custom collision detection: debounce reordering so icons don't swap too eagerly ===
 //
@@ -1812,7 +1822,7 @@ export const Desktop: React.FC = () => {
     >
       
       {/* 1. Search Bar */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-16 md:pt-20 px-6 pointer-events-none">
+      <div className="desktop-search-layer absolute top-0 left-0 right-0 z-30 flex justify-center pt-16 md:pt-20 px-6 pointer-events-none">
         <div className="w-full max-w-[580px] pointer-events-auto">
           <form onSubmit={handleSearchSubmit} className="relative group flex items-center">
             {isDropdownOpen && (
@@ -1880,7 +1890,7 @@ export const Desktop: React.FC = () => {
 
       {/* 2. Pages Area */}
       <div 
-        className="flex-1 overflow-hidden pt-36 md:pt-56 pb-28 md:pb-32"
+        className="desktop-pages-area flex-1 overflow-hidden pt-36 md:pt-56 pb-28 md:pb-32"
         onDoubleClick={(e) => {
           // Only trigger on blank area (the container itself or the page wrapper)
           const target = e.target as HTMLElement;
@@ -2077,7 +2087,7 @@ export const Desktop: React.FC = () => {
 
       {/* 3. Page Indicator Dots */}
       {!isLocalSearchActive && displayPages.length > 1 && (
-        <div className="absolute bottom-[108px] md:bottom-[118px] left-0 right-0 z-20 flex justify-center gap-2">
+        <div className="desktop-page-dots absolute bottom-[108px] md:bottom-[118px] left-0 right-0 z-20 flex justify-center gap-2">
           {displayPages.map((_, i) => (
             <button
               key={i}
@@ -2089,7 +2099,7 @@ export const Desktop: React.FC = () => {
       )}
 
       {/* 4. Dock Bar */}
-      <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
+      <div className="desktop-dock-bar absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
         <div
           className="bg-[#f5f5f5]/[0.12] backdrop-blur-xl border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-[padding,gap] duration-300"
         >
@@ -2271,12 +2281,8 @@ export const Desktop: React.FC = () => {
               const overlaySize = (activeItem.widgetSize && activeItem.widgetSize in WIDGET_SIZE_MAP)
                 ? activeItem.widgetSize : 'small';
               const { cols: oCols, rows: oRows } = WIDGET_SIZE_MAP[overlaySize];
-              // Match actual CSS grid cell sizes for the current viewport
-              // cellW = cellH = 80px (72px on sm), gap is uniform per breakpoint
-              const isSm = typeof window !== 'undefined' && window.innerWidth >= 640;
-              const isMd = typeof window !== 'undefined' && window.innerWidth >= 768;
-              const cellSize = (!isSm) ? 80 : (!isMd) ? 72 : 80;
-              const gap = (!isSm) ? 28 : (!isMd) ? 32 : (window.innerWidth >= 1280 ? 44 : window.innerWidth >= 1024 ? 40 : 36);
+              // Match the CSS grid metrics for the current viewport, including compact mode.
+              const { cellSize, gap } = getDesktopGridMetrics(window.innerWidth, window.innerHeight);
               return (
                 <div style={{
                   width: oCols * cellSize + (oCols - 1) * gap,
