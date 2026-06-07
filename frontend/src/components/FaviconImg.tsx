@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ImgHTMLAttributes } from 'react';
-import { cacheImageFromElement, useFaviconUrl } from '../utils/favicon';
+import { cacheImageFromElement, evictCachedFavicon, getIconPixelStats, looksLikeMissingFaviconPlaceholder, useFaviconUrl } from '../utils/favicon';
 
 export const ICON_FALLBACK_COLORS = [
   '#6d5bd0',
@@ -40,8 +40,15 @@ export function isGeneratedFaviconSource(src: string): boolean {
   );
 }
 
+function shouldInspectMissingFaviconPlaceholder(src: string): boolean {
+  return (
+    src.startsWith('blob:')
+    || /\/_favicon\/|\b_favicon\b|s2\.googleusercontent\.com\/s2\/favicons/i.test(src)
+  );
+}
+
 export function getIconCrossOrigin(src: string): 'anonymous' | undefined {
-  return isGeneratedFaviconSource(src) && !src.startsWith('blob:') ? 'anonymous' : undefined;
+  return shouldInspectMissingFaviconPlaceholder(src) && !src.startsWith('blob:') ? 'anonymous' : undefined;
 }
 
 export function shouldUseLetterFallback(img: HTMLImageElement): boolean {
@@ -50,7 +57,7 @@ export function shouldUseLetterFallback(img: HTMLImageElement): boolean {
   const height = img.naturalHeight;
   if (!src || width <= 1 || height <= 1) return true;
 
-  if (!isGeneratedFaviconSource(src)) return false;
+  if (!shouldInspectMissingFaviconPlaceholder(src)) return false;
 
   try {
     const canvas = document.createElement('canvas');
@@ -62,39 +69,8 @@ export function shouldUseLetterFallback(img: HTMLImageElement): boolean {
 
     ctx.clearRect(0, 0, sampleSize, sampleSize);
     ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
-    const { data } = ctx.getImageData(0, 0, sampleSize, sampleSize);
-    const total = sampleSize * sampleSize;
-    let opaque = 0;
-    let colorful = 0;
-    let bright = 0;
-    let dark = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3];
-      if (alpha < 24) continue;
-      opaque += 1;
-
-      const red = data[i];
-      const green = data[i + 1];
-      const blue = data[i + 2];
-      const max = Math.max(red, green, blue);
-      const min = Math.min(red, green, blue);
-      const saturation = max === 0 ? 0 : (max - min) / max;
-      const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-
-      if (saturation > 0.12) colorful += 1;
-      if (luminance > 218) bright += 1;
-      if (luminance < 92) dark += 1;
-    }
-
-    if (opaque / total < 0.08) return true;
-    if (!opaque) return true;
-
-    const colorfulRatio = colorful / opaque;
-    const brightRatio = bright / opaque;
-    const darkRatio = dark / opaque;
-
-    return colorfulRatio < 0.05 && brightRatio > 0.35 && darkRatio > 0.03 && darkRatio < 0.22;
+    const stats = getIconPixelStats(ctx.getImageData(0, 0, sampleSize, sampleSize).data, sampleSize * sampleSize);
+    return looksLikeMissingFaviconPlaceholder(stats);
   } catch {
     return false;
   }
@@ -184,7 +160,8 @@ export function FaviconImg({
   style,
   ...rest
 }: FaviconImgProps) {
-  const src = useFaviconUrl(url, sz, preferChromeFavicon);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const src = useFaviconUrl(url, sz, preferChromeFavicon, refreshToken);
   const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
@@ -195,7 +172,16 @@ export function FaviconImg({
   // listeners on <img>.
   const handleLoad = useMemo(() => {
     return (e: React.SyntheticEvent<HTMLImageElement>) => {
-      if (fallbackText && shouldUseLetterFallback(e.currentTarget)) {
+      const shouldFallback = fallbackText ? shouldUseLetterFallback(e.currentTarget) : false;
+      if (fallbackText && shouldFallback) {
+        const loadedSrc = e.currentTarget.currentSrc || e.currentTarget.src || '';
+        if (loadedSrc.startsWith('blob:')) {
+          void evictCachedFavicon(url, sz).finally(() => {
+            setShowFallback(false);
+            setRefreshToken(v => v + 1);
+          });
+          return;
+        }
         setShowFallback(true);
         return;
       }

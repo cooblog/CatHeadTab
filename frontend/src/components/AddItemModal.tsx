@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { useLayoutStore, DesktopItem } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { extractDomain } from '../utils/favicon';
+import { extractDomain, listFaviconOptions, type FaviconOption } from '../utils/favicon';
 import { FaviconImg, ICON_FALLBACK_COLORS, IconFallback, getIconCrossOrigin, shouldUseLetterFallback } from './FaviconImg';
 import { useFloatingWindow } from '../hooks/useFloatingWindow';
 
@@ -40,12 +40,18 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const floatingWindow = useFloatingWindow({
     defaultSize: () => ({
       width: 560,
-      height: typeof window === 'undefined' ? 620 : Math.min(680, window.innerHeight - 96),
+      height: typeof window === 'undefined' ? 720 : Math.min(760, window.innerHeight - 32),
     }),
     minHeight: 420,
     minWidth: 440,
     resizable: false,
+    viewportMargin: 32,
   });
+  const windowHeaderRef = useRef<HTMLDivElement>(null);
+  const contentViewportRef = useRef<HTMLDivElement>(null);
+  const contentInnerRef = useRef<HTMLDivElement>(null);
+  const floatingShellRef = floatingWindow.shellRef;
+  const setFloatingWindowSize = floatingWindow.setWindowSize;
 
   // Close on Escape key
   useEffect(() => {
@@ -67,8 +73,64 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [titleAutoFilled, setTitleAutoFilled] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [customIconLoadFailed, setCustomIconLoadFailed] = useState(false);
+  const [faviconOptions, setFaviconOptions] = useState<FaviconOption[]>([]);
+  const [isLoadingFaviconOptions, setIsLoadingFaviconOptions] = useState(false);
   const titleFetchAbortRef = useRef<AbortController | null>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const fitWindowToContent = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const header = windowHeaderRef.current;
+    const viewport = contentViewportRef.current;
+    const content = contentInnerRef.current;
+    if (!header || !viewport || !content) return;
+
+    const shell = floatingShellRef.current;
+    const shellStyle = shell ? window.getComputedStyle(shell) : null;
+    const borderY = shellStyle
+      ? parseFloat(shellStyle.borderTopWidth || '0') + parseFloat(shellStyle.borderBottomWidth || '0')
+      : 0;
+    const viewportStyle = window.getComputedStyle(viewport);
+    const contentPaddingY =
+      parseFloat(viewportStyle.paddingTop || '0') + parseFloat(viewportStyle.paddingBottom || '0');
+    const desiredHeight = Math.ceil(header.offsetHeight + content.scrollHeight + contentPaddingY + borderY);
+    const maxHeight = Math.max(420, window.innerHeight - 32);
+
+    setFloatingWindowSize(current => ({
+      width: current.width,
+      height: Math.min(desiredHeight, maxHeight),
+    }));
+  }, [floatingShellRef, setFloatingWindowSize]);
+
+  useLayoutEffect(() => {
+    fitWindowToContent();
+  }, [
+    fitWindowToContent,
+    mode,
+    duplicateWarning,
+    faviconOptions.length,
+    isLoadingFaviconOptions,
+    customIcon,
+    iconColor,
+    title,
+    url,
+  ]);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const content = contentInnerRef.current;
+    if (!content) return undefined;
+
+    const observer = new ResizeObserver(() => {
+      fitWindowToContent();
+    });
+    observer.observe(content);
+    window.addEventListener('resize', fitWindowToContent);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fitWindowToContent);
+    };
+  }, [fitWindowToContent]);
 
   // Track whether the loaded preview icon is visually non-square (long SVG
   // logos, wide banners, etc.). Non-square icons render poorly with
@@ -162,6 +224,34 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
     return () => clearTimeout(timer);
   }, [url, mode, isEditing, fetchTitle, titleAutoFilled, title]);
 
+  useEffect(() => {
+    if (mode !== 'link' || !url.trim()) {
+      setFaviconOptions([]);
+      setIsLoadingFaviconOptions(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setIsLoadingFaviconOptions(true);
+      listFaviconOptions(url.trim())
+        .then(options => {
+          if (!cancelled) setFaviconOptions(options);
+        })
+        .catch(() => {
+          if (!cancelled) setFaviconOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingFaviconOptions(false);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [mode, url]);
+
   const doAdd = (skipDupCheck: boolean) => {
     const finalTitle = title.trim() || (mode === 'folder' ? 'New Folder' : 'Untitled');
     const finalUrl = mode === 'link' ? (url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`) : undefined;
@@ -220,12 +310,13 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
       {/* App Window container */}
       <div 
         ref={floatingWindow.shellRef}
-        className={`relative w-full max-w-md sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)] bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
+        className={`relative w-full max-w-md sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-2rem)] sm:max-h-[calc(100vh-2rem)] bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
         style={floatingWindow.style}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
         <div
+          ref={windowHeaderRef}
           onPointerDown={floatingWindow.handleDragPointerDown}
           className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
         >
@@ -258,7 +349,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 desktop-scrollbar">
+        <div ref={contentViewportRef} className="flex-1 overflow-y-auto no-scrollbar p-6 sm:p-8">
+          <div ref={contentInnerRef}>
           {/* Mode Toggle (only for new items) */}
           {!isEditing && (
             <div className="flex justify-center mb-6">
@@ -412,6 +504,87 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
 
             {mode === 'link' && (
               <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 ml-1">Detected icons</label>
+                  {isLoadingFaviconOptions && (
+                    <span className="text-[11px] text-white/35 font-semibold">Scanning...</span>
+                  )}
+                </div>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomIcon('');
+                      setCustomIconLoadFailed(false);
+                      setIsNonSquareIcon(false);
+                    }}
+                    className={`shrink-0 w-[72px] rounded-xl border p-2 transition-colors ${
+                      !customIcon
+                        ? 'border-[#72d565]/70 bg-[#72d565]/10'
+                        : 'border-white/10 bg-black/25 hover:border-white/25'
+                    }`}
+                    title="Use automatic best icon"
+                  >
+                    <div className="mx-auto h-9 w-9 rounded-lg overflow-hidden bg-white/[0.08] flex items-center justify-center">
+                      {previewDomain ? (
+                        <FaviconImg
+                          url={previewDomain}
+                          sz={64}
+                          className="h-full w-full object-contain text-[14px]"
+                          fallbackColor={iconColor || undefined}
+                          fallbackText={previewFallbackText}
+                          fallbackSeed={previewFallbackSeed}
+                          alt=""
+                        />
+                      ) : (
+                        <IconFallback
+                          className="h-full w-full text-[14px]"
+                          color={iconColor || undefined}
+                          seed={previewFallbackSeed}
+                          text={previewFallbackText}
+                        />
+                      )}
+                    </div>
+                    <div className="mt-1 truncate text-center text-[10px] font-semibold text-white/55">Auto</div>
+                  </button>
+
+                  {faviconOptions.map(option => {
+                    const selected = customIcon === option.href;
+                    return (
+                      <button
+                        key={option.href}
+                        type="button"
+                        onClick={() => {
+                          setCustomIcon(option.href);
+                          setCustomIconLoadFailed(false);
+                          setIsNonSquareIcon(false);
+                        }}
+                        className={`shrink-0 w-[72px] rounded-xl border p-2 transition-colors ${
+                          selected
+                            ? 'border-[#72d565]/70 bg-[#72d565]/10'
+                            : 'border-white/10 bg-black/25 hover:border-white/25'
+                        }`}
+                        title={option.href}
+                      >
+                        <div className="mx-auto h-9 w-9 rounded-lg overflow-hidden bg-white/[0.08] flex items-center justify-center">
+                          <img
+                            src={option.href}
+                            className="h-[86%] w-[86%] object-contain"
+                            crossOrigin={getIconCrossOrigin(option.href)}
+                            alt=""
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        </div>
+                        <div className="mt-1 truncate text-center text-[10px] font-semibold text-white/55">{option.label}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {mode === 'link' && (
+              <div>
                 <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">Fallback color</label>
                 <div className="flex items-center gap-2">
                   <button
@@ -479,6 +652,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
             >
               {duplicateWarning ? t('desktop.save') : t('desktop.save')}
             </button>
+          </div>
           </div>
         </div>
         {floatingWindow.resizeHandle}

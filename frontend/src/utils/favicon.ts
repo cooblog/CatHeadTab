@@ -108,20 +108,108 @@ async function setCachedFavicon(key: string, blob: Blob): Promise<void> {
   await idbPut(key, blob);
 }
 
+export async function evictCachedFavicon(urlOrDomain: string, sz: number = 64): Promise<void> {
+  const domain = urlOrDomain.includes('://') ? extractDomain(urlOrDomain) : urlOrDomain;
+  if (!domain) return;
+
+  const key = cacheKey(domain, sz);
+  const blobUrl = blobURLCache.get(key);
+  if (blobUrl) {
+    URL.revokeObjectURL(blobUrl);
+  }
+  blobURLCache.delete(key);
+  await idbDelete(key);
+}
+
 /**
  * Decode a Blob with a temporary <img> and return its natural dimensions.
  * Returns null if decoding fails (e.g. corrupted or non-image Blob).
  * SVG blobs report either 0x0 or a 1-pixel viewport in some browsers, so
  * callers should treat naturalWidth=0 specially.
  */
-async function getBlobIntrinsicSize(blob: Blob): Promise<{ w: number; h: number; isSvg: boolean } | null> {
+export interface IconPixelStats {
+  opaqueRatio: number;
+  colorfulRatio: number;
+  brightRatio: number;
+  darkRatio: number;
+}
+
+export function getIconPixelStats(data: Uint8ClampedArray, total: number): IconPixelStats {
+  let opaque = 0;
+  let colorful = 0;
+  let bright = 0;
+  let dark = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3];
+    if (alpha < 24) continue;
+    opaque += 1;
+
+    const red = data[i];
+    const green = data[i + 1];
+    const blue = data[i + 2];
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    const saturation = max === 0 ? 0 : (max - min) / max;
+    const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+
+    if (saturation > 0.12) colorful += 1;
+    if (luminance > 218) bright += 1;
+    if (luminance < 92) dark += 1;
+  }
+
+  return {
+    opaqueRatio: opaque / total,
+    colorfulRatio: opaque ? colorful / opaque : 0,
+    brightRatio: opaque ? bright / opaque : 0,
+    darkRatio: opaque ? dark / opaque : 0,
+  };
+}
+
+export function looksLikeMissingFaviconPlaceholder(stats: IconPixelStats): boolean {
+  return (
+    stats.opaqueRatio < 0.08
+    || (
+      stats.colorfulRatio < 0.05
+      && stats.brightRatio > 0.35
+      && stats.darkRatio > 0.03
+      && stats.darkRatio < 0.22
+    )
+  );
+}
+
+async function getBlobIntrinsicSize(blob: Blob): Promise<{ w: number; h: number; isSvg: boolean; placeholder: boolean } | null> {
   const type = (blob.type || '').toLowerCase();
   const isSvg = type.includes('svg');
   const url = URL.createObjectURL(blob);
   try {
     return await new Promise((resolve) => {
       const probe = new Image();
-      probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight, isSvg });
+      probe.onload = () => {
+        const w = probe.naturalWidth;
+        const h = probe.naturalHeight;
+        let placeholder = false;
+
+        if (!isSvg && w > 1 && h > 1) {
+          try {
+            const sampleSize = 32;
+            const canvas = document.createElement('canvas');
+            canvas.width = sampleSize;
+            canvas.height = sampleSize;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (ctx) {
+              ctx.clearRect(0, 0, sampleSize, sampleSize);
+              ctx.drawImage(probe, 0, 0, sampleSize, sampleSize);
+              const stats = getIconPixelStats(ctx.getImageData(0, 0, sampleSize, sampleSize).data, sampleSize * sampleSize);
+              placeholder = looksLikeMissingFaviconPlaceholder(stats);
+            }
+          } catch {
+            placeholder = false;
+          }
+        }
+
+        resolve({ w, h, isSvg, placeholder });
+      };
       probe.onerror = () => resolve(null);
       probe.src = url;
     });
@@ -143,6 +231,7 @@ async function isBlobHighResEnough(blob: Blob, sz: number): Promise<boolean> {
   const dims = await getBlobIntrinsicSize(blob);
   if (!dims) return false;
   if (dims.isSvg) return true;
+  if (dims.placeholder) return false;
   const longest = Math.max(dims.w, dims.h);
   if (longest <= 0) return false;
   return longest >= minAcceptableNaturalSize(sz);
@@ -550,6 +639,14 @@ interface IconCandidate {
   vector?: boolean;
 }
 
+export interface FaviconOption {
+  href: string;
+  label: string;
+  size: number;
+  source: 'html' | 'manifest' | 'fallback';
+  vector?: boolean;
+}
+
 const ICON_REL_PATTERNS: Array<{ pattern: RegExp; rank: number }> = [
   // apple-touch-icon is usually the highest-res dedicated asset
   { pattern: /apple-touch-icon/i, rank: 100 },
@@ -775,6 +872,67 @@ function findManifestUrl(html: string, baseUrl: string): string {
   return resolveHref(raw, baseUrl);
 }
 
+function sortIconCandidates<T extends IconCandidate>(candidates: T[]): T[] {
+  const effectiveSize = (c: IconCandidate) => (c.vector ? Math.max(c.size, 1024) : c.size);
+  return [...candidates].sort((a, b) => {
+    const ds = effectiveSize(b) - effectiveSize(a);
+    if (ds !== 0) return ds;
+    return b.rank - a.rank;
+  });
+}
+
+function faviconOptionLabel(candidate: IconCandidate): string {
+  if (candidate.vector) return 'SVG';
+  if (candidate.size > 0) return `${candidate.size}px`;
+  return 'ICO';
+}
+
+/**
+ * Return favicon candidates discovered from the target page. The first item
+ * follows the same ranking preference used by scanBestFavicon, while callers
+ * can still show every option and let the user override the automatic choice.
+ */
+export async function listFaviconOptions(urlOrDomain: string): Promise<FaviconOption[]> {
+  const pageUrl = toFetchUrl(urlOrDomain);
+  const htmlResp = await fetchWithTimeout(pageUrl, 5000);
+  if (!htmlResp || !htmlResp.ok) return [];
+
+  const html = await htmlResp.text();
+  const finalUrl = htmlResp.url || pageUrl;
+  const candidates: Array<IconCandidate & { source?: FaviconOption['source'] }> = [
+    ...extractIconCandidates(html, finalUrl).map(candidate => ({ ...candidate, source: 'html' as const })),
+  ];
+
+  const manifestUrl = findManifestUrl(html, finalUrl);
+  if (manifestUrl) {
+    const manifestIcons = await fetchManifestIcons(manifestUrl);
+    candidates.push(...manifestIcons.map(candidate => ({ ...candidate, source: 'manifest' as const })));
+  }
+
+  candidates.push({
+    href: resolveHref('/favicon.ico', finalUrl),
+    rank: 5,
+    size: 0,
+    source: 'fallback',
+  });
+
+  const seen = new Set<string>();
+  return sortIconCandidates(candidates)
+    .filter(candidate => {
+      if (!candidate.href || seen.has(candidate.href)) return false;
+      seen.add(candidate.href);
+      return true;
+    })
+    .slice(0, 16)
+    .map(candidate => ({
+      href: candidate.href,
+      label: faviconOptionLabel(candidate),
+      size: candidate.size,
+      source: candidate.source ?? 'html',
+      vector: candidate.vector,
+    }));
+}
+
 /**
  * Normalise a target URL or domain to a full http(s):// base URL suitable
  * for fetch(). Prefers https when the input had no protocol.
@@ -901,12 +1059,7 @@ export async function scanBestFavicon(urlOrDomain: string, sz: number = 64): Pro
 
     // 4. Sort by effective size (vectors count as 1024 because they scale
     // losslessly), then by rank.
-    const effectiveSize = (c: IconCandidate) => (c.vector ? Math.max(c.size, 1024) : c.size);
-    const ordered = [...candidates].sort((a, b) => {
-      const ds = effectiveSize(b) - effectiveSize(a);
-      if (ds !== 0) return ds;
-      return b.rank - a.rank;
-    });
+    const ordered = sortIconCandidates(candidates);
 
     // Minimum resolution required for the scanner to accept a candidate
     // as the canonical high-res icon. Without this guard, a site that
@@ -1046,7 +1199,8 @@ export function getSmartFaviconUrl(urlOrDomain: string, sz: number = 64, preferC
 export function useFaviconUrl(
   urlOrDomain: string,
   sz: number = 64,
-  preferChromeFavicon: boolean = false
+  preferChromeFavicon: boolean = false,
+  refreshToken: number = 0
 ): string {
   const [src, setSrc] = useState<string>(() => getSmartFaviconUrl(urlOrDomain, sz, preferChromeFavicon));
 
@@ -1074,7 +1228,7 @@ export function useFaviconUrl(
     return () => {
       faviconEvents.removeEventListener('favicon-updated', handler);
     };
-  }, [urlOrDomain, sz, preferChromeFavicon]);
+  }, [urlOrDomain, sz, preferChromeFavicon, refreshToken]);
 
   return src;
 }
