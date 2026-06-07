@@ -16,6 +16,7 @@ interface UseFloatingWindowOptions {
   isFullscreen?: boolean;
   minHeight?: number;
   minWidth?: number;
+  resizable?: boolean;
   resizeHandleAriaLabel?: string;
   resizeHandleTitle?: string;
   viewportMargin?: number;
@@ -111,6 +112,7 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
   const viewportMargin = getOptionNumber(options.viewportMargin, DEFAULT_VIEWPORT_MARGIN);
   const disabled = !!options.disabled;
   const isFullscreen = !!options.isFullscreen;
+  const resizable = options.resizable ?? true;
 
   const initialSizeRef = useRef<FloatingWindowSize | null>(null);
   if (initialSizeRef.current === null) {
@@ -244,7 +246,7 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
   }, [disabled, isFullscreen, minHeight, minWidth, viewportMargin]);
 
   const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    if (disabled || isFullscreen) return;
+    if (disabled || isFullscreen || !resizable) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -306,7 +308,7 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', stopResize);
     window.addEventListener('pointercancel', stopResize);
-  }, [disabled, isFullscreen, minHeight, minWidth, viewportMargin]);
+  }, [disabled, isFullscreen, minHeight, minWidth, resizable, viewportMargin]);
 
   const style = !disabled && !isFullscreen ? ({
     '--floating-window-left': `${positionRef.current.left}px`,
@@ -319,7 +321,7 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
     ? 'w-full h-full !rounded-none !border-0'
     : 'w-full h-full sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]';
 
-  const resizeHandle = !disabled && !isFullscreen ? (
+  const resizeHandle = !disabled && !isFullscreen && resizable ? (
     <button
       type="button"
       onPointerDown={handleResizePointerDown}

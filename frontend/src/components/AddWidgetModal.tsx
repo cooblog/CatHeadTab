@@ -509,6 +509,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
     }),
     minHeight: 360,
     minWidth: 520,
+    resizable: false,
   });
 
   // Close on Escape key
@@ -767,7 +768,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         </div>
 
         {/* Content Area */}
-        <div ref={contentRef} className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 bg-gradient-to-br from-white/[0.02] to-transparent desktop-scrollbar">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 bg-gradient-to-br from-white/[0.02] to-transparent no-scrollbar">
           {!selectedType ? (
             /* Step 1: Choose widget type — Side-tab category layout */
             <div className="space-y-4 fade-in">
