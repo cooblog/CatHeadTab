@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLayoutStore, DesktopItem } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { extractDomain } from '../utils/favicon';
-import { FaviconImg } from './FaviconImg';
+import { FaviconImg, ICON_FALLBACK_COLORS, IconFallback, getIconCrossOrigin, shouldUseLetterFallback } from './FaviconImg';
 import { useFloatingWindow } from '../hooks/useFloatingWindow';
 
 // Fetch website title from URL (works in Chrome extension context)
@@ -39,11 +39,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const isEditing = !!editItem;
   const floatingWindow = useFloatingWindow({
     defaultSize: () => ({
-      width: 448,
+      width: 560,
       height: typeof window === 'undefined' ? 620 : Math.min(680, window.innerHeight - 96),
     }),
     minHeight: 420,
-    minWidth: 360,
+    minWidth: 440,
+    resizable: false,
   });
 
   // Close on Escape key
@@ -57,6 +58,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [title, setTitle] = useState(editItem?.title || '');
   const [url, setUrl] = useState(editItem?.url || '');
   const [customIcon, setCustomIcon] = useState(editItem?.icon || '');
+  const [iconColor, setIconColor] = useState(editItem?.iconColor || '');
   // Domain derived from URL — used to drive the live FaviconImg preview so
   // that it auto-upgrades when the background HTML scanner discovers a
   // higher-resolution icon (SVG / PWA manifest icons, etc.).
@@ -64,6 +66,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [isFetchingTitle, setIsFetchingTitle] = useState(false);
   const [titleAutoFilled, setTitleAutoFilled] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [customIconLoadFailed, setCustomIconLoadFailed] = useState(false);
   const titleFetchAbortRef = useRef<AbortController | null>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
@@ -116,7 +119,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   // Also reset when the custom icon URL changes
   useEffect(() => {
     setIsNonSquareIcon(false);
-  }, [editItem?.icon]);
+    setCustomIconLoadFailed(false);
+  }, [customIcon, editItem?.icon]);
 
   // Auto-fetch website title when URL changes (debounced)
   const fetchTitle = useCallback(async (rawUrl: string) => {
@@ -167,6 +171,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
         title: finalTitle,
         url: finalUrl,
         icon: customIcon.trim() || undefined,
+        iconColor: iconColor || undefined,
       });
       onClose();
       return;
@@ -190,6 +195,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
       title: finalTitle,
       url: finalUrl,
       icon: customIcon.trim() || undefined,
+      iconColor: iconColor || undefined,
       children: mode === 'folder' ? [] : undefined,
     };
     addDesktopItem(newItem, pageIndex, parentFolderId);
@@ -200,6 +206,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const handleForceAdd = () => doAdd(true);
 
   const isCustomIconUrl = customIcon.startsWith('http');
+  const previewFallbackText = title.trim() || previewDomain || url.trim() || (mode === 'folder' ? 'Folder' : 'Untitled');
+  const previewFallbackSeed = url.trim() || previewDomain || previewFallbackText;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
@@ -296,13 +304,29 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
                 isCustomIconUrl ? (
                   // Custom URL icon: match Desktop.tsx — object-cover for
                   // square icons, object-contain with padding otherwise.
-                  <img
-                    src={customIcon}
-                    className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
-                    alt=""
-                    onLoad={handlePreviewIconLoaded}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
+                  customIconLoadFailed ? (
+                    <IconFallback
+                      className="w-full h-full text-3xl"
+                      color={iconColor || undefined}
+                      seed={previewFallbackSeed}
+                      text={previewFallbackText}
+                    />
+                  ) : (
+                    <img
+                      src={customIcon}
+                      className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                      alt=""
+                      crossOrigin={getIconCrossOrigin(customIcon)}
+                      onLoad={(e) => {
+                        if (shouldUseLetterFallback(e.currentTarget)) {
+                          setCustomIconLoadFailed(true);
+                          return;
+                        }
+                        handlePreviewIconLoaded(e);
+                      }}
+                      onError={() => setCustomIconLoadFailed(true)}
+                    />
+                  )
                 ) : (
                   // Emoji fallback needs a subtle backdrop so it stays visible
                   // against the modal background.
@@ -322,10 +346,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
                 <FaviconImg
                   url={previewDomain}
                   sz={128}
-                  className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                  className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain text-3xl' : 'w-full h-full object-cover text-3xl'}
+                  fallbackColor={iconColor || undefined}
+                  fallbackText={previewFallbackText}
+                  fallbackSeed={previewFallbackSeed}
                   alt=""
                   onLoad={handlePreviewIconLoaded}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-white/[0.08] rounded-2xl">
@@ -383,6 +409,47 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
                 className="w-full bg-black/40 border border-white/10 hover:border-white/30 rounded-xl px-4 py-3 text-[14px] text-white focus:outline-none focus:border-[#72d565]/50 transition-all shadow-inner placeholder-white/30"
               />
             </div>
+
+            {mode === 'link' && (
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">Fallback color</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIconColor('')}
+                    className={`h-8 px-3 rounded-lg border text-[12px] font-semibold transition-colors ${
+                      !iconColor
+                        ? 'border-white/40 bg-white/15 text-white'
+                        : 'border-white/10 bg-black/30 text-white/50 hover:text-white/80 hover:border-white/25'
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {ICON_FALLBACK_COLORS.map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setIconColor(color)}
+                        className={`h-8 w-8 rounded-lg border transition-transform hover:scale-105 ${
+                          iconColor === color ? 'border-white ring-2 ring-white/35' : 'border-white/20'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={color}
+                        aria-label={`Use ${color}`}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    type="color"
+                    value={iconColor || ICON_FALLBACK_COLORS[0]}
+                    onChange={e => setIconColor(e.target.value)}
+                    className="h-8 w-8 shrink-0 rounded-lg border border-white/20 bg-transparent p-0"
+                    aria-label="Custom fallback color"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Duplicate Warning */}

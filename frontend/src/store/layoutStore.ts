@@ -156,6 +156,7 @@ export interface DesktopItem {
   title: string;
   url?: string;
   icon?: string;
+  iconColor?: string;
   children?: DesktopItem[];
   /** Widget-specific fields (only present when type === 'widget'). */
   widgetType?: WidgetType;

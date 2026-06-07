@@ -4,7 +4,7 @@ import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS, WIDGET
 import { useConfigStore } from '../store/configStore';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
-import { FaviconImg } from '../components/FaviconImg';
+import { FaviconImg, IconFallback, getIconCrossOrigin, shouldUseLetterFallback } from '../components/FaviconImg';
 import { openUrl } from '../utils/openUrl';
 
 // Lazy-loaded modals — only loaded when opened (saves ~300KB from initial bundle)
@@ -154,11 +154,13 @@ const DesktopIconContent: React.FC<{
     // Tolerate small perspective differences (~15%) before flipping modes
     setIsNonSquareIcon(ratio > 1.15 || ratio < 0.87);
   }, []);
+  const [iconLoadFailed, setIconLoadFailed] = useState(false);
 
   // Reset the non-square flag whenever the underlying URL/icon changes, so
   // the next icon load is evaluated fresh.
   useEffect(() => {
     setIsNonSquareIcon(false);
+    setIconLoadFailed(false);
   }, [item.url, item.icon]);
 
   // When a custom dockIconSize is provided, use inline styles; otherwise use Tailwind classes
@@ -224,15 +226,31 @@ const DesktopIconContent: React.FC<{
               </div>
             ) : item.icon ? (
               item.icon.startsWith('http') ? (
-                <img
-                  src={item.icon}
-                  className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
-                  alt={item.title}
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                  onLoad={handleIconLoaded}
-                  onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
-                />
+                iconLoadFailed ? (
+                  <IconFallback
+                    className="w-full h-full text-2xl md:text-3xl"
+                    color={item.iconColor}
+                    seed={item.url || item.icon || item.title}
+                    text={item.title || item.url || 'Untitled'}
+                  />
+                ) : (
+                  <img
+                    src={item.icon}
+                    className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                    alt={item.title}
+                    crossOrigin={getIconCrossOrigin(item.icon)}
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    onLoad={(e) => {
+                      if (shouldUseLetterFallback(e.currentTarget)) {
+                        setIconLoadFailed(true);
+                        return;
+                      }
+                      handleIconLoaded(e);
+                    }}
+                    onError={() => setIconLoadFailed(true)}
+                  />
+                )
               ) : (
                 <div className="flex items-center justify-center w-full h-full text-3xl md:text-4xl">{item.icon}</div>
               )
@@ -240,12 +258,14 @@ const DesktopIconContent: React.FC<{
               <FaviconImg
                 url={item.url}
                 sz={128}
-                className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain text-2xl md:text-3xl' : 'w-full h-full object-cover text-2xl md:text-3xl'}
+                fallbackColor={item.iconColor}
+                fallbackText={item.title || item.url || 'Untitled'}
+                fallbackSeed={item.url || item.title}
                 alt={item.title}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 onLoad={handleIconLoaded}
-                onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
               />
             ) : null}
             <div className="absolute inset-0 items-center justify-center hidden z-0">
@@ -278,6 +298,7 @@ const DesktopIconContent: React.FC<{
   if (a.type !== b.type) return false;
   if (a.title !== b.title) return false;
   if (a.icon !== b.icon) return false;
+  if (a.iconColor !== b.iconColor) return false;
   if (a.url !== b.url) return false;
   // For folders: compare children by length and ids
   if (a.type === 'folder') {

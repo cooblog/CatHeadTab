@@ -200,15 +200,13 @@ function scanMarkerKey(domain: string, sz: number): string {
 
 /**
  * Extract a clean domain from a URL string.
- * For IP addresses, the port is preserved (joined with a colon) because
- * different ports on the same IP typically represent distinct services.
+ * Non-default ports are preserved because they commonly represent distinct
+ * services with their own favicon.
  */
 export function extractDomain(urlStr: string): string {
   try {
     const u = new URL(urlStr.startsWith('http') ? urlStr : `https://${urlStr}`);
-    // Preserve port for IP addresses (e.g. "192.168.1.100:8080").
-    // For regular domains the port is dropped to maximise cache hits.
-    if (u.port && isIPHost(u.hostname)) {
+    if (u.port && u.port !== '80' && u.port !== '443') {
       return `${u.hostname}:${u.port}`;
     }
     return u.hostname;
