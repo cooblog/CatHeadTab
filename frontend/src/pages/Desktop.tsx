@@ -35,6 +35,7 @@ const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => (
 const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
 const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
 const TrendingModal = lazy(() => import('../components/TrendingModal').then(m => ({ default: m.TrendingModal })));
+const CalendarDetailModal = lazy(() => import('../components/CalendarDetailModal').then(m => ({ default: m.CalendarDetailModal })));
 
 // Disable all layout-change animations for desktop grid items.
 // We use a FLIP animation manager instead, and dnd-kit's internal
@@ -827,6 +828,7 @@ export const Desktop: React.FC = () => {
   // Trending modal state
   const [trendingModalType, setTrendingModalType] = useState<'github' | 'bilibili' | 'weibo' | 'xiaohongshu' | 'bbc' | null>(null);
   const [trendingModalOptions, setTrendingModalOptions] = useState<any>(null);
+  const [calendarDetailItem, setCalendarDetailItem] = useState<DesktopItem | null>(null);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -1004,6 +1006,9 @@ export const Desktop: React.FC = () => {
     } else if (item.type === 'widget') {
       if (item.widgetType === 'itTools') {
         setIsItToolsOpen(true);
+      } else if (item.widgetType === 'calendar') {
+        setCalendarDetailItem(item);
+        return;
       } else if (item.widgetType === 'stickyNote') {
         setStickyNoteItem(item);
       } else if (item.widgetType === 'stock') {
@@ -1872,7 +1877,7 @@ export const Desktop: React.FC = () => {
           isSettingsOpen || isAuthOpen || isProfileOpen ||
           isBookmarkBrowserOpen || isHistoryBrowserOpen ||
           isExploreOpen || isItToolsOpen || isAddWidgetOpen ||
-          isAddModalOpen || !!stickyNoteItem || !!editingWidget
+          isAddModalOpen || !!stickyNoteItem || !!editingWidget || !!calendarDetailItem
         ) {
           e.preventDefault();
           return;
@@ -2378,6 +2383,15 @@ export const Desktop: React.FC = () => {
       {stickyNoteItem && <StickyNoteModal onClose={() => setStickyNoteItem(null)} item={stickyNoteItem} />}
       {isAiAgentOpen && <AiAgentModal onClose={() => setIsAiAgentOpen(false)} />}
       {trendingModalType && <TrendingModal type={trendingModalType} options={trendingModalOptions} onClose={() => { setTrendingModalType(null); setTrendingModalOptions(null); }} />}
+      {calendarDetailItem && (
+        <CalendarDetailModal
+          onClose={() => setCalendarDetailItem(null)}
+          onEdit={() => {
+            if (calendarDetailItem) setEditingWidget(calendarDetailItem);
+            setCalendarDetailItem(null);
+          }}
+        />
+      )}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 
