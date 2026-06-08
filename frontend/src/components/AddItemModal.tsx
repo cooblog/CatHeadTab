@@ -77,6 +77,12 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
   const [isLoadingFaviconOptions, setIsLoadingFaviconOptions] = useState(false);
   const titleFetchAbortRef = useRef<AbortController | null>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const iconOptionsScrollRef = useRef<HTMLDivElement>(null);
+  const [iconOptionsScrollState, setIconOptionsScrollState] = useState({
+    canScroll: false,
+    atStart: true,
+    atEnd: true,
+  });
 
   const fitWindowToContent = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -131,6 +137,66 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
       window.removeEventListener('resize', fitWindowToContent);
     };
   }, [fitWindowToContent]);
+
+  const updateIconOptionsScrollState = useCallback(() => {
+    const el = iconOptionsScrollRef.current;
+    if (!el) return;
+
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    const next = {
+      canScroll: maxScrollLeft > 2,
+      atStart: el.scrollLeft <= 2,
+      atEnd: el.scrollLeft >= maxScrollLeft - 2,
+    };
+
+    setIconOptionsScrollState(prev => (
+      prev.canScroll === next.canScroll &&
+      prev.atStart === next.atStart &&
+      prev.atEnd === next.atEnd
+        ? prev
+        : next
+    ));
+  }, []);
+
+  useEffect(() => {
+    const el = iconOptionsScrollRef.current;
+    if (!el) return undefined;
+
+    updateIconOptionsScrollState();
+    const raf = requestAnimationFrame(updateIconOptionsScrollState);
+    el.addEventListener('scroll', updateIconOptionsScrollState, { passive: true });
+
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(updateIconOptionsScrollState);
+    resizeObserver?.observe(el);
+
+    window.addEventListener('resize', updateIconOptionsScrollState);
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener('scroll', updateIconOptionsScrollState);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateIconOptionsScrollState);
+    };
+  }, [faviconOptions.length, mode, updateIconOptionsScrollState]);
+
+  const scrollIconOptions = useCallback((direction: -1 | 1) => {
+    const el = iconOptionsScrollRef.current;
+    if (!el) return;
+
+    el.scrollBy({
+      left: direction * Math.max(168, el.clientWidth * 0.72),
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const handleIconOptionsWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+
+    e.preventDefault();
+    el.scrollLeft += e.deltaY;
+  }, []);
 
   // Track whether the loaded preview icon is visually non-square (long SVG
   // logos, wide banners, etc.). Non-square icons render poorly with
@@ -510,75 +576,116 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ onClose, editItem, p
                     <span className="text-[11px] text-white/35 font-semibold">Scanning...</span>
                   )}
                 </div>
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomIcon('');
-                      setCustomIconLoadFailed(false);
-                      setIsNonSquareIcon(false);
-                    }}
-                    className={`shrink-0 w-[72px] rounded-xl border p-2 transition-colors ${
-                      !customIcon
-                        ? 'border-[#72d565]/70 bg-[#72d565]/10'
-                        : 'border-white/10 bg-black/25 hover:border-white/25'
-                    }`}
-                    title="Use automatic best icon"
-                  >
-                    <div className="mx-auto h-9 w-9 rounded-lg overflow-hidden bg-white/[0.08] flex items-center justify-center">
-                      {previewDomain ? (
-                        <FaviconImg
-                          url={previewDomain}
-                          sz={64}
-                          className="h-full w-full object-contain text-[14px]"
-                          fallbackColor={iconColor || undefined}
-                          fallbackText={previewFallbackText}
-                          fallbackSeed={previewFallbackSeed}
-                          alt=""
-                        />
-                      ) : (
-                        <IconFallback
-                          className="h-full w-full text-[14px]"
-                          color={iconColor || undefined}
-                          seed={previewFallbackSeed}
-                          text={previewFallbackText}
-                        />
-                      )}
-                    </div>
-                    <div className="mt-1 truncate text-center text-[10px] font-semibold text-white/55">Auto</div>
-                  </button>
+                <div className="relative">
+                  {iconOptionsScrollState.canScroll && !iconOptionsScrollState.atStart && (
+                    <button
+                      type="button"
+                      onClick={() => scrollIconOptions(-1)}
+                      className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/70 shadow-lg backdrop-blur-xl transition-colors hover:bg-white/15 hover:text-white"
+                      aria-label="Scroll detected icons left"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </button>
+                  )}
 
-                  {faviconOptions.map(option => {
-                    const selected = customIcon === option.href;
-                    return (
-                      <button
-                        key={option.href}
-                        type="button"
-                        onClick={() => {
-                          setCustomIcon(option.href);
-                          setCustomIconLoadFailed(false);
-                          setIsNonSquareIcon(false);
-                        }}
-                        className={`shrink-0 w-[72px] rounded-xl border p-2 transition-colors ${
-                          selected
-                            ? 'border-[#72d565]/70 bg-[#72d565]/10'
-                            : 'border-white/10 bg-black/25 hover:border-white/25'
-                        }`}
-                        title={option.href}
-                      >
-                        <div className="mx-auto h-9 w-9 rounded-lg overflow-hidden bg-white/[0.08] flex items-center justify-center">
-                          <img
-                            src={option.href}
-                            className="h-[86%] w-[86%] object-contain"
-                            crossOrigin={getIconCrossOrigin(option.href)}
+                  <div
+                    ref={iconOptionsScrollRef}
+                    className="icon-options-scroll flex gap-2 overflow-x-auto no-scrollbar pb-1"
+                    onWheel={handleIconOptionsWheel}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomIcon('');
+                        setCustomIconLoadFailed(false);
+                        setIsNonSquareIcon(false);
+                      }}
+                      className={`shrink-0 snap-start w-[72px] rounded-xl border p-2 transition-colors ${
+                        !customIcon
+                          ? 'border-[#72d565]/70 bg-[#72d565]/10'
+                          : 'border-white/10 bg-black/25 hover:border-white/25'
+                      }`}
+                      title="Use automatic best icon"
+                    >
+                      <div className="mx-auto h-9 w-9 rounded-lg overflow-hidden bg-white/[0.08] flex items-center justify-center">
+                        {previewDomain ? (
+                          <FaviconImg
+                            url={previewDomain}
+                            sz={64}
+                            className="h-full w-full object-contain text-[14px]"
+                            fallbackColor={iconColor || undefined}
+                            fallbackText={previewFallbackText}
+                            fallbackSeed={previewFallbackSeed}
                             alt=""
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
-                        </div>
-                        <div className="mt-1 truncate text-center text-[10px] font-semibold text-white/55">{option.label}</div>
-                      </button>
-                    );
-                  })}
+                        ) : (
+                          <IconFallback
+                            className="h-full w-full text-[14px]"
+                            color={iconColor || undefined}
+                            seed={previewFallbackSeed}
+                            text={previewFallbackText}
+                          />
+                        )}
+                      </div>
+                      <div className="mt-1 truncate text-center text-[10px] font-semibold text-white/55">Auto</div>
+                    </button>
+
+                    {faviconOptions.map(option => {
+                      const selected = customIcon === option.href;
+                      return (
+                        <button
+                          key={option.href}
+                          type="button"
+                          onClick={() => {
+                            setCustomIcon(option.href);
+                            setCustomIconLoadFailed(false);
+                            setIsNonSquareIcon(false);
+                          }}
+                          className={`shrink-0 snap-start w-[72px] rounded-xl border p-2 transition-colors ${
+                            selected
+                              ? 'border-[#72d565]/70 bg-[#72d565]/10'
+                              : 'border-white/10 bg-black/25 hover:border-white/25'
+                          }`}
+                          title={option.href}
+                        >
+                          <div className="mx-auto h-9 w-9 rounded-lg overflow-hidden bg-white/[0.08] flex items-center justify-center">
+                            <img
+                              src={option.href}
+                              className="h-[86%] w-[86%] object-contain"
+                              crossOrigin={getIconCrossOrigin(option.href)}
+                              alt=""
+                              decoding="async"
+                              loading="lazy"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          </div>
+                          <div className="mt-1 truncate text-center text-[10px] font-semibold text-white/55">{option.label}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {iconOptionsScrollState.canScroll && (
+                    <>
+                      <div className={`pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#1b111b] to-transparent transition-opacity ${iconOptionsScrollState.atStart ? 'opacity-0' : 'opacity-100'}`} />
+                      <div className={`pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#1b111b] to-transparent transition-opacity ${iconOptionsScrollState.atEnd ? 'opacity-0' : 'opacity-100'}`} />
+                    </>
+                  )}
+
+                  {iconOptionsScrollState.canScroll && !iconOptionsScrollState.atEnd && (
+                    <button
+                      type="button"
+                      onClick={() => scrollIconOptions(1)}
+                      className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/70 shadow-lg backdrop-blur-xl transition-colors hover:bg-white/15 hover:text-white"
+                      aria-label="Scroll detected icons right"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             )}

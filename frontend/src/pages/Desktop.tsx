@@ -206,6 +206,8 @@ const DesktopIconContent: React.FC<{
                   sz={64}
                   className="w-[88%] h-[88%] object-contain"
                   alt=""
+                  decoding="async"
+                  loading="lazy"
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -239,6 +241,8 @@ const DesktopIconContent: React.FC<{
                     className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
                     alt={item.title}
                     crossOrigin={getIconCrossOrigin(item.icon)}
+                    decoding="async"
+                    loading={isDock ? 'eager' : 'lazy'}
                     draggable={false}
                     onDragStart={(e) => e.preventDefault()}
                     onLoad={(e) => {
@@ -263,6 +267,8 @@ const DesktopIconContent: React.FC<{
                 fallbackText={item.title || item.url || 'Untitled'}
                 fallbackSeed={item.url || item.title}
                 alt={item.title}
+                decoding="async"
+                loading={isDock ? 'eager' : 'lazy'}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 onLoad={handleIconLoaded}
@@ -586,8 +592,8 @@ const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: Re
   // Each page must be exactly 1/totalPages of the flex container (= 1 viewport width)
   const pageWidthPercent = 100 / totalPages;
   return (
-    <div ref={setNodeRef} className="flex-shrink-0 h-full pt-4 flex flex-col items-center" style={{ width: `${pageWidthPercent}%` }}>
-      <div className="w-full h-full overflow-y-auto no-scrollbar pt-4">
+    <div ref={setNodeRef} className="desktop-page flex-shrink-0 h-full pt-4 flex flex-col items-center" style={{ width: `${pageWidthPercent}%` }}>
+      <div className="desktop-page-scroll w-full h-full overflow-y-auto no-scrollbar pt-4">
         {children}
         {/* Bottom padding to prevent last row being hidden behind Dock */}
         <div className="h-8 md:h-12 shrink-0" />
@@ -835,10 +841,9 @@ export const Desktop: React.FC = () => {
   // Pagination — iOS-style swipe gesture
   const [currentPage, setCurrentPage] = useState(0);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
-  // translateX offset applied to the pages track (px, negative = left)
-  const [pageOffset, setPageOffset] = useState(0);
-  // Whether a CSS transition should be active (false during finger-tracking)
-  const [pageTransition, setPageTransition] = useState(false);
+  const pagesTrackRef = useRef<HTMLDivElement>(null);
+  const pageOffsetRef = useRef(0);
+  const pageOffsetRAFRef = useRef<number | null>(null);
   // Container width (recalculated on resize)
   const [containerWidth, setContainerWidth] = useState(0);
   // Touch/mouse gesture tracking refs (not state, to avoid re-render on every move)
@@ -855,6 +860,10 @@ export const Desktop: React.FC = () => {
 
   // FLIP animation manager for desktop grid reorder animations
   const flipManager = useGridFlipManager();
+  const setPagesTrackNode = useCallback((node: HTMLDivElement | null) => {
+    pagesTrackRef.current = node;
+    flipManager.containerRef.current = node;
+  }, [flipManager.containerRef]);
 
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -1475,6 +1484,41 @@ export const Desktop: React.FC = () => {
   }, [layout.pages]);
   const totalPages = displayPages.length;
 
+  const setPagesTrackTransition = useCallback((enabled: boolean) => {
+    const el = pagesTrackRef.current;
+    if (!el) return;
+    el.style.transition = enabled ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+  }, []);
+
+  const writePageOffset = useCallback((offset: number) => {
+    pageOffsetRef.current = offset;
+    const el = pagesTrackRef.current;
+    if (!el) return;
+    el.style.setProperty('--desktop-page-offset', `${offset}px`);
+  }, []);
+
+  const schedulePageOffset = useCallback((offset: number) => {
+    pageOffsetRef.current = offset;
+    if (pageOffsetRAFRef.current != null) return;
+
+    pageOffsetRAFRef.current = requestAnimationFrame(() => {
+      pageOffsetRAFRef.current = null;
+      const el = pagesTrackRef.current;
+      if (!el) return;
+      el.style.setProperty('--desktop-page-offset', `${pageOffsetRef.current}px`);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pageOffsetRAFRef.current != null) {
+        cancelAnimationFrame(pageOffsetRAFRef.current);
+        pageOffsetRAFRef.current = null;
+      }
+      document.body.classList.remove('desktop-page-swiping');
+    };
+  }, []);
+
   // Measure container width on mount and resize
   useLayoutEffect(() => {
     const measure = () => {
@@ -1490,10 +1534,11 @@ export const Desktop: React.FC = () => {
   // Animate to a specific page index
   const scrollToPage = useCallback((pageIdx: number) => {
     const clamped = Math.max(0, Math.min(pageIdx, totalPages - 1));
-    setPageTransition(true);
-    setPageOffset(-clamped * containerWidth);
+    document.body.classList.remove('desktop-page-swiping');
+    setPagesTrackTransition(true);
+    writePageOffset(-clamped * containerWidth);
     setCurrentPage(clamped);
-  }, [containerWidth, totalPages]);
+  }, [containerWidth, totalPages, setPagesTrackTransition, writePageOffset]);
 
   const getDirectPageIndex = useCallback((itemId: string) => {
     return layout.pages.findIndex(page => page.some(item => item.id === itemId));
@@ -1531,8 +1576,9 @@ export const Desktop: React.FC = () => {
       isDragging: true,
       isHorizontal: null,
     };
-    setPageTransition(false);
-  }, [activeId]);
+    document.body.classList.add('desktop-page-swiping');
+    setPagesTrackTransition(false);
+  }, [activeId, setPagesTrackTransition]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const s = swipeRef.current;
@@ -1563,8 +1609,8 @@ export const Desktop: React.FC = () => {
       delta = delta * 0.3; // damping factor
     }
 
-    setPageOffset(baseOffset + delta);
-  }, [activeId, currentPage, containerWidth, totalPages]);
+    schedulePageOffset(baseOffset + delta);
+  }, [activeId, currentPage, containerWidth, totalPages, schedulePageOffset]);
 
   const handleTouchEnd = useCallback(() => {
     const s = swipeRef.current;
@@ -1574,8 +1620,9 @@ export const Desktop: React.FC = () => {
     // If no horizontal swipe was detected (tap or vertical scroll),
     // just snap back and let the browser fire the native click event.
     if (!s.isHorizontal) {
-      setPageTransition(true);
-      setPageOffset(-currentPage * containerWidth);
+      document.body.classList.remove('desktop-page-swiping');
+      setPagesTrackTransition(true);
+      writePageOffset(-currentPage * containerWidth);
       return;
     }
 
@@ -1597,7 +1644,7 @@ export const Desktop: React.FC = () => {
     }
 
     scrollToPage(targetPage);
-  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage]);
+  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage, setPagesTrackTransition, writePageOffset]);
 
   // --- Mouse event handlers (for desktop trackpad / mouse drag) ---
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1619,8 +1666,9 @@ export const Desktop: React.FC = () => {
       isDragging: true,
       isHorizontal: null,
     };
-    setPageTransition(false);
-  }, [activeId]);
+    document.body.classList.add('desktop-page-swiping');
+    setPagesTrackTransition(false);
+  }, [activeId, setPagesTrackTransition]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const s = swipeRef.current;
@@ -1651,8 +1699,8 @@ export const Desktop: React.FC = () => {
       delta = delta * 0.3;
     }
 
-    setPageOffset(baseOffset + delta);
-  }, [activeId, currentPage, containerWidth, totalPages]);
+    schedulePageOffset(baseOffset + delta);
+  }, [activeId, currentPage, containerWidth, totalPages, schedulePageOffset]);
 
   const handleMouseUp = useCallback(() => {
     const s = swipeRef.current;
@@ -1660,8 +1708,9 @@ export const Desktop: React.FC = () => {
     s.isDragging = false;
 
     if (!s.isHorizontal) {
-      setPageTransition(true);
-      setPageOffset(-currentPage * containerWidth);
+      document.body.classList.remove('desktop-page-swiping');
+      setPagesTrackTransition(true);
+      writePageOffset(-currentPage * containerWidth);
       return;
     }
 
@@ -1682,13 +1731,13 @@ export const Desktop: React.FC = () => {
     }
 
     scrollToPage(targetPage);
-  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage]);
+  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage, setPagesTrackTransition, writePageOffset]);
 
   // Sync offset when currentPage or containerWidth changes (e.g. on resize)
   useEffect(() => {
-    setPageTransition(true);
-    setPageOffset(-currentPage * containerWidth);
-  }, [containerWidth]);
+    setPagesTrackTransition(true);
+    writePageOffset(-currentPage * containerWidth);
+  }, [containerWidth, currentPage, setPagesTrackTransition, writePageOffset]);
 
   // Clamp currentPage when total pages shrink
   useEffect(() => {
@@ -2024,14 +2073,12 @@ export const Desktop: React.FC = () => {
             onMouseLeave={handleMouseUp}
           >
             <div
-              ref={flipManager.containerRef}
-              className="h-full flex"
+              ref={setPagesTrackNode}
+              className="desktop-pages-track h-full flex"
               style={{
                 width: `${totalPages * 100}%`,
-                transform: `translateX(${pageOffset}px)`,
-                transition: pageTransition ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none',
-                willChange: swipeRef.current.isDragging ? 'transform' : 'auto',
-              }}
+                '--desktop-page-offset': `${-currentPage * containerWidth}px`,
+              } as React.CSSProperties}
             >
             {displayPages.map((page, pageIdx) => (
               <PageDropZone key={pageIdx} pageIdx={pageIdx} totalPages={totalPages}>

@@ -352,7 +352,37 @@ body.floating-window-resizing .wallpaper-grid-card {
   transition: none !important;
 }
 
+.desktop-pages-track {
+  transform: translate3d(var(--desktop-page-offset, 0px), 0, 0);
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: layout paint style;
+}
+
+.desktop-page {
+  contain: layout style;
+}
+
+.desktop-page-scroll {
+  overscroll-behavior: contain;
+}
+
+.icon-options-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 0.25rem;
+  scroll-snap-type: x proximity;
+}
+
+body.desktop-page-swiping .desktop-icon-grid *,
+body.desktop-page-swiping .widget-container {
+  transition: none !important;
+}
+
 .desktop-icon-grid {
+  contain: layout style;
+  overflow: visible;
   grid-template-columns: repeat(4, calc((100vw - 32px - 36px) / 4)) !important;
   grid-auto-rows: calc((100vw - 32px - 36px) / 4) !important;
   gap: 12px !important;
