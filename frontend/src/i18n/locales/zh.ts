@@ -46,6 +46,8 @@ export const zh = {
   'settings.language': '🌍 语言',
   'settings.system': '⚙️ 通用',
   'settings.ai': 'AI 助手',
+  'settings.sidebarCollapse': '收起侧边栏',
+  'settings.sidebarExpand': '展开侧边栏',
   'settings.privacyPolicy': '隐私政策',
   'settings.bgTooLarge': '图片文件过大（最大 20 MB），请选择较小的图片。',
   'settings.langTitle': '语言选项',

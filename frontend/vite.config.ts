@@ -18,6 +18,9 @@ export default defineConfig(({ mode }) => {
   console.log(`[ViteConfig] Extension build: ${isExtensionBuild ? 'yes' : 'no'}`);
   console.log(`[ViteConfig] Final VITE_API_URL used: ${env.VITE_API_URL || '(not set)'}`);
 
+  const reactPath = path.resolve(__dirname, 'node_modules/react');
+  const reactDomPath = path.resolve(__dirname, 'node_modules/react-dom');
+
   const injectPlugin = () => ({
     name: 'inject-config',
     transformIndexHtml(html: string) {
@@ -51,9 +54,24 @@ export default defineConfig(({ mode }) => {
       injectPlugin(),
     ],
     resolve: {
-      alias: {
-        '@': path.resolve(__dirname, './src'),
-      },
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      alias: [
+        { find: '@', replacement: path.resolve(__dirname, './src') },
+        { find: /^react$/, replacement: path.join(reactPath, 'index.js') },
+        { find: /^react\/jsx-runtime$/, replacement: path.join(reactPath, 'jsx-runtime.js') },
+        { find: /^react\/jsx-dev-runtime$/, replacement: path.join(reactPath, 'jsx-dev-runtime.js') },
+        { find: /^react-dom$/, replacement: path.join(reactDomPath, 'index.js') },
+        { find: /^react-dom\/client$/, replacement: path.join(reactDomPath, 'client.js') },
+      ],
+    },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+      ],
     },
     server: {
       port: 5173,

@@ -6,20 +6,6 @@ import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
 import { FaviconImg, IconFallback, getIconCrossOrigin, shouldUseLetterFallback } from '../components/FaviconImg';
 import { openUrl } from '../utils/openUrl';
-
-// Lazy-loaded modals — only loaded when opened (saves ~300KB from initial bundle)
-const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
-const AuthModal = lazy(() => import('../components/AuthModal').then(m => ({ default: m.AuthModal })));
-const ProfileModal = lazy(() => import('../components/ProfileModal').then(m => ({ default: m.ProfileModal })));
-const BookmarkBrowser = lazy(() => import('../components/apps/BookmarkBrowser').then(m => ({ default: m.BookmarkBrowser })));
-const HistoryBrowser = lazy(() => import('../components/apps/HistoryBrowser').then(m => ({ default: m.HistoryBrowser })));
-const AddItemModal = lazy(() => import('../components/AddItemModal').then(m => ({ default: m.AddItemModal })));
-const ExploreWorld = lazy(() => import('../components/ExploreWorld').then(m => ({ default: m.ExploreWorld })));
-const AddWidgetModal = lazy(() => import('../components/AddWidgetModal').then(m => ({ default: m.AddWidgetModal })));
-const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => ({ default: m.ItToolsModal })));
-const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
-const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
-const TrendingModal = lazy(() => import('../components/TrendingModal').then(m => ({ default: m.TrendingModal })));
 import {
   DndContext,
   DragOverlay,
@@ -35,6 +21,20 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
+
+// Lazy-loaded modals stay split out of the initial desktop bundle.
+const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const AuthModal = lazy(() => import('../components/AuthModal').then(m => ({ default: m.AuthModal })));
+const ProfileModal = lazy(() => import('../components/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const BookmarkBrowser = lazy(() => import('../components/apps/BookmarkBrowser').then(m => ({ default: m.BookmarkBrowser })));
+const HistoryBrowser = lazy(() => import('../components/apps/HistoryBrowser').then(m => ({ default: m.HistoryBrowser })));
+const AddItemModal = lazy(() => import('../components/AddItemModal').then(m => ({ default: m.AddItemModal })));
+const ExploreWorld = lazy(() => import('../components/ExploreWorld').then(m => ({ default: m.ExploreWorld })));
+const AddWidgetModal = lazy(() => import('../components/AddWidgetModal').then(m => ({ default: m.AddWidgetModal })));
+const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => ({ default: m.ItToolsModal })));
+const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
+const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
+const TrendingModal = lazy(() => import('../components/TrendingModal').then(m => ({ default: m.TrendingModal })));
 
 // Disable all layout-change animations for desktop grid items.
 // We use a FLIP animation manager instead, and dnd-kit's internal

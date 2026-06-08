@@ -198,7 +198,24 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
     const previousTransitionDuration = shellElement?.style.transitionDuration ?? '';
+    let frameId: number | null = null;
     let nextPosition = startPosition;
+
+    const applyScheduledFrame = () => {
+      frameId = null;
+      applyFrame(shellElement, positionRef.current, startSize);
+    };
+
+    const scheduleFrame = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(applyScheduledFrame);
+    };
+
+    const cancelScheduledFrame = () => {
+      if (frameId === null) return;
+      window.cancelAnimationFrame(frameId);
+      frameId = null;
+    };
 
     sizeRef.current = startSize;
     positionRef.current = startPosition;
@@ -215,10 +232,11 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
         top: event.clientY - pointerOffsetY,
       }, startSize, viewportMargin);
       positionRef.current = nextPosition;
-      applyFrame(shellElement, nextPosition, startSize);
+      scheduleFrame();
     };
 
     const stopDrag = (event?: PointerEvent) => {
+      cancelScheduledFrame();
       if (event) {
         nextPosition = clampPosition({
           left: event.clientX - pointerOffsetX,
@@ -263,7 +281,24 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
     const previousTransitionDuration = shellElement?.style.transitionDuration ?? '';
+    let frameId: number | null = null;
     let nextSize = startSize;
+
+    const applyScheduledFrame = () => {
+      frameId = null;
+      applyFrame(shellElement, startPosition, sizeRef.current);
+    };
+
+    const scheduleFrame = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(applyScheduledFrame);
+    };
+
+    const cancelScheduledFrame = () => {
+      if (frameId === null) return;
+      window.cancelAnimationFrame(frameId);
+      frameId = null;
+    };
 
     sizeRef.current = startSize;
     positionRef.current = startPosition;
@@ -280,10 +315,11 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
         height: event.clientY + pointerOffsetY - startPosition.top,
       }, startPosition, minWidth, minHeight, viewportMargin);
       sizeRef.current = nextSize;
-      applyFrame(shellElement, startPosition, nextSize);
+      scheduleFrame();
     };
 
     const stopResize = (event?: PointerEvent) => {
+      cancelScheduledFrame();
       if (event) {
         nextSize = clampSizeForPosition({
           width: event.clientX + pointerOffsetX - startPosition.left,
@@ -319,7 +355,7 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
 
   const windowClassName = isFullscreen
     ? 'w-full h-full !rounded-none !border-0'
-    : 'w-full h-full sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]';
+    : 'floating-window-frame w-full h-full';
 
   const resizeHandle = !disabled && !isFullscreen && resizable ? (
     <button

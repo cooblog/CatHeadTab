@@ -169,6 +169,18 @@ body {
     background: transparent;
   }
 
+  .settings-sidebar {
+    width: 100%;
+  }
+
+  @media (min-width: 768px) {
+    .settings-sidebar {
+      width: var(--settings-sidebar-width, 14rem);
+      min-width: var(--settings-sidebar-width, 14rem);
+      max-width: var(--settings-sidebar-width, 14rem);
+    }
+  }
+
   .window-content {
     background: transparent;
     flex: 1;
@@ -306,6 +318,40 @@ body {
 
 /* 桌面图标网格：显式列数，支持 widget 跨多格子 (grid-column/row span) */
 /* 移动端：动态 cell 尺寸 = (视口宽 - 32px padding - 36px gap) / 4 列，保持正方形 */
+.floating-window-frame {
+  will-change: auto;
+}
+
+@media (min-width: 640px) {
+  .floating-window-frame {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--floating-window-width);
+    height: var(--floating-window-height);
+    max-width: calc(100vw - 3rem);
+    max-height: calc(100vh - 3rem);
+    translate: var(--floating-window-left) var(--floating-window-top);
+    will-change: translate;
+    backface-visibility: hidden;
+  }
+}
+
+.wallpaper-grid {
+  contain: layout paint style;
+}
+
+.wallpaper-grid-card {
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: 180px 120px;
+}
+
+body.floating-window-dragging .wallpaper-grid-card,
+body.floating-window-resizing .wallpaper-grid-card {
+  transition: none !important;
+}
+
 .desktop-icon-grid {
   grid-template-columns: repeat(4, calc((100vw - 32px - 36px) / 4)) !important;
   grid-auto-rows: calc((100vw - 32px - 36px) / 4) !important;

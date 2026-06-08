@@ -46,6 +46,8 @@ export const en = {
   'settings.language': '🌍 Language',
   'settings.system': '⚙️ General',
   'settings.ai': 'AI Agent',
+  'settings.sidebarCollapse': 'Collapse sidebar',
+  'settings.sidebarExpand': 'Expand sidebar',
   'settings.privacyPolicy': 'Privacy Policy',
   'settings.bgTooLarge': 'Image file is too large (max 20 MB). Please choose a smaller image.',
   'settings.langTitle': 'Language',
