@@ -1,0 +1,38 @@
+[
+  {
+    "version": "1.0.1",
+    "date": "2026-06-09",
+    "zh": [
+      "新增日历详情弹窗，可查看节日与日程",
+      "新增链接打开方式设置（当前标签页 / 新标签页）",
+      "增强桌面小组件与浮动窗口",
+      "便签内容与毛玻璃渲染更稳定",
+      "改进网站图标与链接图标的回退显示",
+      "优化桌面交互、右键菜单与设置窗口拖拽性能"
+    ],
+    "en": [
+      "Added a calendar detail modal for holidays and events",
+      "Added a link open mode setting (current vs. new tab)",
+      "Enhanced desktop widgets and floating windows",
+      "More reliable sticky notes and glassmorphism rendering",
+      "Improved favicon and fallback link icon display",
+      "Optimized desktop interactions, context menus, and settings window drag performance"
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-05-18",
+    "zh": [
+      "CatHeadTab 首个版本：可自定义的新标签页桌面",
+      "支持壁纸（内置 / 本地 / Wallhaven）、书签与历史记录",
+      "内置时钟、天气、汇率、股票、热榜等多种小组件",
+      "集成 AI 助手，支持中英双语"
+    ],
+    "en": [
+      "First release of CatHeadTab: a customizable new-tab desktop",
+      "Wallpapers (built-in / local / Wallhaven), bookmarks, and history",
+      "Built-in widgets: clock, weather, exchange rates, stocks, trending, and more",
+      "AI assistant with bilingual (English / Chinese) support"
+    ]
+  }
+]

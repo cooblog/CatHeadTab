@@ -42,10 +42,15 @@ export const en = {
   
   // Settings
   'settings.title': '⚙️ Settings',
-  'settings.wallpaper': '🖼️ Wallpaper',
+  'settings.wallpaper': 'Wallpaper',
   'settings.language': '🌍 Language',
-  'settings.system': '⚙️ General',
+  'settings.system': 'General',
   'settings.ai': 'AI Agent',
+  'settings.about': 'About',
+  'about.title': 'About CatHeadTab',
+  'about.currentVersion': 'Current version',
+  'about.whatsNew': "What's New",
+  'about.viewReleases': 'View all releases on GitHub',
   'settings.sidebarCollapse': 'Collapse sidebar',
   'settings.sidebarExpand': 'Expand sidebar',
   'settings.privacyPolicy': 'Privacy Policy',

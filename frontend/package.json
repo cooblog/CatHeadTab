@@ -7,9 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:ext": "tsc -b --force && vite build --mode extension && node scripts/zip.mjs",
-    "bump": "node scripts/bump.mjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "release": "npm run release:patch",
+    "release:patch": "npm version patch -m \"chore: release v%s\"",
+    "release:minor": "npm version minor -m \"chore: release v%s\"",
+    "release:major": "npm version major -m \"chore: release v%s\"",
+    "version": "node scripts/sync-manifest-version.mjs",
+    "postversion": "git push --follow-tags"
   },
   "dependencies": {
     "@ai-sdk/mcp": "^1.0.36",

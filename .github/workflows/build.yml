@@ -62,12 +62,23 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: catheadtab-extension
+
+      - name: Generate release notes from changelog
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          node frontend/scripts/release-notes.mjs "$VERSION" > RELEASE_NOTES.md
+          echo "----- Release notes -----"
+          cat RELEASE_NOTES.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: catheadtab-*.zip
+          body_path: RELEASE_NOTES.md
+          # Curated changelog first, then auto-generated commit/PR list appended
           generate_release_notes: true
