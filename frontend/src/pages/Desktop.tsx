@@ -4,21 +4,8 @@ import { useLayoutStore, DesktopItem, getAllDesktopItems, MAX_DOCK_ITEMS, WIDGET
 import { useConfigStore } from '../store/configStore';
 import { DesktopWidget } from '../components/widgets/DesktopWidget';
 import { useTranslation } from '../i18n/useTranslation';
-import { FaviconImg } from '../components/FaviconImg';
-
-// Lazy-loaded modals — only loaded when opened (saves ~300KB from initial bundle)
-const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
-const AuthModal = lazy(() => import('../components/AuthModal').then(m => ({ default: m.AuthModal })));
-const ProfileModal = lazy(() => import('../components/ProfileModal').then(m => ({ default: m.ProfileModal })));
-const BookmarkBrowser = lazy(() => import('../components/apps/BookmarkBrowser').then(m => ({ default: m.BookmarkBrowser })));
-const HistoryBrowser = lazy(() => import('../components/apps/HistoryBrowser').then(m => ({ default: m.HistoryBrowser })));
-const AddItemModal = lazy(() => import('../components/AddItemModal').then(m => ({ default: m.AddItemModal })));
-const ExploreWorld = lazy(() => import('../components/ExploreWorld').then(m => ({ default: m.ExploreWorld })));
-const AddWidgetModal = lazy(() => import('../components/AddWidgetModal').then(m => ({ default: m.AddWidgetModal })));
-const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => ({ default: m.ItToolsModal })));
-const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
-const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
-const TrendingModal = lazy(() => import('../components/TrendingModal').then(m => ({ default: m.TrendingModal })));
+import { FaviconImg, IconFallback, getIconCrossOrigin, shouldUseLetterFallback } from '../components/FaviconImg';
+import { openUrl } from '../utils/openUrl';
 import {
   DndContext,
   DragOverlay,
@@ -34,6 +21,21 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
+
+// Lazy-loaded modals stay split out of the initial desktop bundle.
+const SettingsModal = lazy(() => import('../components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const AuthModal = lazy(() => import('../components/AuthModal').then(m => ({ default: m.AuthModal })));
+const ProfileModal = lazy(() => import('../components/ProfileModal').then(m => ({ default: m.ProfileModal })));
+const BookmarkBrowser = lazy(() => import('../components/apps/BookmarkBrowser').then(m => ({ default: m.BookmarkBrowser })));
+const HistoryBrowser = lazy(() => import('../components/apps/HistoryBrowser').then(m => ({ default: m.HistoryBrowser })));
+const AddItemModal = lazy(() => import('../components/AddItemModal').then(m => ({ default: m.AddItemModal })));
+const ExploreWorld = lazy(() => import('../components/ExploreWorld').then(m => ({ default: m.ExploreWorld })));
+const AddWidgetModal = lazy(() => import('../components/AddWidgetModal').then(m => ({ default: m.AddWidgetModal })));
+const ItToolsModal = lazy(() => import('../components/ItToolsModal').then(m => ({ default: m.ItToolsModal })));
+const StickyNoteModal = lazy(() => import('../components/StickyNoteModal').then(m => ({ default: m.StickyNoteModal })));
+const AiAgentModal = lazy(() => import('../components/AiAgentModal').then(m => ({ default: m.AiAgentModal })));
+const TrendingModal = lazy(() => import('../components/TrendingModal').then(m => ({ default: m.TrendingModal })));
+const CalendarDetailModal = lazy(() => import('../components/CalendarDetailModal').then(m => ({ default: m.CalendarDetailModal })));
 
 // Disable all layout-change animations for desktop grid items.
 // We use a FLIP animation manager instead, and dnd-kit's internal
@@ -153,11 +155,13 @@ const DesktopIconContent: React.FC<{
     // Tolerate small perspective differences (~15%) before flipping modes
     setIsNonSquareIcon(ratio > 1.15 || ratio < 0.87);
   }, []);
+  const [iconLoadFailed, setIconLoadFailed] = useState(false);
 
   // Reset the non-square flag whenever the underlying URL/icon changes, so
   // the next icon load is evaluated fresh.
   useEffect(() => {
     setIsNonSquareIcon(false);
+    setIconLoadFailed(false);
   }, [item.url, item.icon]);
 
   // When a custom dockIconSize is provided, use inline styles; otherwise use Tailwind classes
@@ -203,6 +207,8 @@ const DesktopIconContent: React.FC<{
                   sz={64}
                   className="w-[88%] h-[88%] object-contain"
                   alt=""
+                  decoding="async"
+                  loading="lazy"
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -223,15 +229,33 @@ const DesktopIconContent: React.FC<{
               </div>
             ) : item.icon ? (
               item.icon.startsWith('http') ? (
-                <img
-                  src={item.icon}
-                  className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
-                  alt={item.title}
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                  onLoad={handleIconLoaded}
-                  onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
-                />
+                iconLoadFailed ? (
+                  <IconFallback
+                    className="w-full h-full text-2xl md:text-3xl"
+                    color={item.iconColor}
+                    seed={item.url || item.icon || item.title}
+                    text={item.title || item.url || 'Untitled'}
+                  />
+                ) : (
+                  <img
+                    src={item.icon}
+                    className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                    alt={item.title}
+                    crossOrigin={getIconCrossOrigin(item.icon)}
+                    decoding="async"
+                    loading={isDock ? 'eager' : 'lazy'}
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    onLoad={(e) => {
+                      if (shouldUseLetterFallback(e.currentTarget)) {
+                        setIconLoadFailed(true);
+                        return;
+                      }
+                      handleIconLoaded(e);
+                    }}
+                    onError={() => setIconLoadFailed(true)}
+                  />
+                )
               ) : (
                 <div className="flex items-center justify-center w-full h-full text-3xl md:text-4xl">{item.icon}</div>
               )
@@ -239,12 +263,16 @@ const DesktopIconContent: React.FC<{
               <FaviconImg
                 url={item.url}
                 sz={128}
-                className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain' : 'w-full h-full object-cover'}
+                className={isNonSquareIcon ? 'w-[78%] h-[78%] object-contain text-2xl md:text-3xl' : 'w-full h-full object-cover text-2xl md:text-3xl'}
+                fallbackColor={item.iconColor}
+                fallbackText={item.title || item.url || 'Untitled'}
+                fallbackSeed={item.url || item.title}
                 alt={item.title}
+                decoding="async"
+                loading={isDock ? 'eager' : 'lazy'}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 onLoad={handleIconLoaded}
-                onError={(e) => { e.currentTarget.style.display = 'none'; const s = e.currentTarget.nextElementSibling as HTMLElement; if (s) s.style.display = 'flex'; }}
               />
             ) : null}
             <div className="absolute inset-0 items-center justify-center hidden z-0">
@@ -277,6 +305,7 @@ const DesktopIconContent: React.FC<{
   if (a.type !== b.type) return false;
   if (a.title !== b.title) return false;
   if (a.icon !== b.icon) return false;
+  if (a.iconColor !== b.iconColor) return false;
   if (a.url !== b.url) return false;
   // For folders: compare children by length and ids
   if (a.type === 'folder') {
@@ -385,7 +414,13 @@ const useGridFlipManager = () => {
     });
   });
 
-  return { containerRef, snapshot };
+  // Callback ref so consumers attach the container without mutating the
+  // ref object returned from this hook (react-hooks/immutability).
+  const setContainer = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+  }, []);
+
+  return { containerRef, snapshot, setContainer };
 };
 
 // === Sortable Desktop Icon (used in grids) ===
@@ -564,8 +599,8 @@ const PageDropZone: React.FC<{ pageIdx: number; totalPages: number; children: Re
   // Each page must be exactly 1/totalPages of the flex container (= 1 viewport width)
   const pageWidthPercent = 100 / totalPages;
   return (
-    <div ref={setNodeRef} className="flex-shrink-0 h-full pt-4 flex flex-col items-center" style={{ width: `${pageWidthPercent}%` }}>
-      <div className="w-full h-full overflow-y-auto no-scrollbar pt-4">
+    <div ref={setNodeRef} className="desktop-page flex-shrink-0 h-full pt-4 flex flex-col items-center" style={{ width: `${pageWidthPercent}%` }}>
+      <div className="desktop-page-scroll w-full h-full overflow-y-auto no-scrollbar pt-4">
         {children}
         {/* Bottom padding to prevent last row being hidden behind Dock */}
         <div className="h-8 md:h-12 shrink-0" />
@@ -586,6 +621,16 @@ const SEARCH_MODES = [
   { id: 'history', icon: <HistoryIcon /> },
   { id: 'desktop', icon: <DesktopAppIcon /> },
 ] as const;
+
+function getDesktopGridMetrics(width: number, height: number) {
+  const isCompactDesktop = width >= 768 && (width < 1280 || height <= 820);
+
+  if (width >= 540 && width < 768) return { cellSize: 64, gap: 28 };
+  if (width < 640) return { cellSize: Math.max(56, (width - 68) / 4), gap: 12 };
+  if (width < 768) return { cellSize: 72, gap: 32 };
+  if (isCompactDesktop) return { cellSize: width < 1024 ? 72 : 76, gap: width < 1024 ? 28 : 32 };
+  return { cellSize: 80, gap: width >= 1280 ? 44 : width >= 1024 ? 40 : 36 };
+}
 
 
 // === Custom collision detection: debounce reordering so icons don't swap too eagerly ===
@@ -729,7 +774,7 @@ function createFolderAwareCollision(
 export const Desktop: React.FC = () => {
   const { fetchBookmarks } = useBookmarkStore();
   const { layout, removeDesktopItem, moveItemToDock, moveItemFromDock, reorderDesktopItem, moveItemToFolder, moveItemToPage, reorderInsideFolder, moveItemOutOfFolder, updateDesktopItem, mergeItemsToNewFolder } = useLayoutStore();
-  const { jwtToken, setLocked, language, userProfile } = useConfigStore();
+  const { jwtToken, setLocked, language, userProfile, linkOpenMode } = useConfigStore();
   const { t } = useTranslation();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -789,6 +834,7 @@ export const Desktop: React.FC = () => {
   // Trending modal state
   const [trendingModalType, setTrendingModalType] = useState<'github' | 'bilibili' | 'weibo' | 'xiaohongshu' | 'bbc' | null>(null);
   const [trendingModalOptions, setTrendingModalOptions] = useState<any>(null);
+  const [calendarDetailItem, setCalendarDetailItem] = useState<DesktopItem | null>(null);
   
   // Add Widget state
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
@@ -803,10 +849,9 @@ export const Desktop: React.FC = () => {
   // Pagination — iOS-style swipe gesture
   const [currentPage, setCurrentPage] = useState(0);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
-  // translateX offset applied to the pages track (px, negative = left)
-  const [pageOffset, setPageOffset] = useState(0);
-  // Whether a CSS transition should be active (false during finger-tracking)
-  const [pageTransition, setPageTransition] = useState(false);
+  const pagesTrackRef = useRef<HTMLDivElement>(null);
+  const pageOffsetRef = useRef(0);
+  const pageOffsetRAFRef = useRef<number | null>(null);
   // Container width (recalculated on resize)
   const [containerWidth, setContainerWidth] = useState(0);
   // Touch/mouse gesture tracking refs (not state, to avoid re-render on every move)
@@ -823,6 +868,10 @@ export const Desktop: React.FC = () => {
 
   // FLIP animation manager for desktop grid reorder animations
   const flipManager = useGridFlipManager();
+  const setPagesTrackNode = useCallback((node: HTMLDivElement | null) => {
+    pagesTrackRef.current = node;
+    flipManager.setContainer(node);
+  }, [flipManager.setContainer]);
 
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -949,7 +998,7 @@ export const Desktop: React.FC = () => {
   const handleItemClick = (item: DesktopItem) => {
     if (activeId) return;
     if (item.type === 'link' && item.url) {
-      window.open(item.url, '_blank');
+      openUrl(item.url, linkOpenMode);
     } else if (item.type === 'folder') {
       setOpenedFolder(item);
     } else if (item.type === 'app') {
@@ -963,6 +1012,9 @@ export const Desktop: React.FC = () => {
     } else if (item.type === 'widget') {
       if (item.widgetType === 'itTools') {
         setIsItToolsOpen(true);
+      } else if (item.widgetType === 'calendar') {
+        setCalendarDetailItem(item);
+        return;
       } else if (item.widgetType === 'stickyNote') {
         setStickyNoteItem(item);
       } else if (item.widgetType === 'stock') {
@@ -1419,13 +1471,13 @@ export const Desktop: React.FC = () => {
     if (!q) return;
     if (searchMode === 'web') {
       if (typeof chrome !== 'undefined' && chrome.search && chrome.search.query) {
-        chrome.search.query({ text: q, disposition: 'NEW_TAB' });
+        chrome.search.query({ text: q, disposition: linkOpenMode === 'current' ? 'CURRENT_TAB' : 'NEW_TAB' });
       } else {
-        window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, '_blank');
+        openUrl(`https://www.google.com/search?q=${encodeURIComponent(q)}`, linkOpenMode);
       }
     } else {
       if (searchResults.length > 0 && searchResults[0].url) {
-        window.location.href = searchResults[0].url;
+        openUrl(searchResults[0].url, linkOpenMode);
       }
     }
   };
@@ -1443,6 +1495,41 @@ export const Desktop: React.FC = () => {
   }, [layout.pages]);
   const totalPages = displayPages.length;
 
+  const setPagesTrackTransition = useCallback((enabled: boolean) => {
+    const el = pagesTrackRef.current;
+    if (!el) return;
+    el.style.transition = enabled ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none';
+  }, []);
+
+  const writePageOffset = useCallback((offset: number) => {
+    pageOffsetRef.current = offset;
+    const el = pagesTrackRef.current;
+    if (!el) return;
+    el.style.setProperty('--desktop-page-offset', `${offset}px`);
+  }, []);
+
+  const schedulePageOffset = useCallback((offset: number) => {
+    pageOffsetRef.current = offset;
+    if (pageOffsetRAFRef.current != null) return;
+
+    pageOffsetRAFRef.current = requestAnimationFrame(() => {
+      pageOffsetRAFRef.current = null;
+      const el = pagesTrackRef.current;
+      if (!el) return;
+      el.style.setProperty('--desktop-page-offset', `${pageOffsetRef.current}px`);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pageOffsetRAFRef.current != null) {
+        cancelAnimationFrame(pageOffsetRAFRef.current);
+        pageOffsetRAFRef.current = null;
+      }
+      document.body.classList.remove('desktop-page-swiping');
+    };
+  }, []);
+
   // Measure container width on mount and resize
   useLayoutEffect(() => {
     const measure = () => {
@@ -1458,10 +1545,11 @@ export const Desktop: React.FC = () => {
   // Animate to a specific page index
   const scrollToPage = useCallback((pageIdx: number) => {
     const clamped = Math.max(0, Math.min(pageIdx, totalPages - 1));
-    setPageTransition(true);
-    setPageOffset(-clamped * containerWidth);
+    document.body.classList.remove('desktop-page-swiping');
+    setPagesTrackTransition(true);
+    writePageOffset(-clamped * containerWidth);
     setCurrentPage(clamped);
-  }, [containerWidth, totalPages]);
+  }, [containerWidth, totalPages, setPagesTrackTransition, writePageOffset]);
 
   const getDirectPageIndex = useCallback((itemId: string) => {
     return layout.pages.findIndex(page => page.some(item => item.id === itemId));
@@ -1499,8 +1587,9 @@ export const Desktop: React.FC = () => {
       isDragging: true,
       isHorizontal: null,
     };
-    setPageTransition(false);
-  }, [activeId]);
+    document.body.classList.add('desktop-page-swiping');
+    setPagesTrackTransition(false);
+  }, [activeId, setPagesTrackTransition]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const s = swipeRef.current;
@@ -1531,8 +1620,8 @@ export const Desktop: React.FC = () => {
       delta = delta * 0.3; // damping factor
     }
 
-    setPageOffset(baseOffset + delta);
-  }, [activeId, currentPage, containerWidth, totalPages]);
+    schedulePageOffset(baseOffset + delta);
+  }, [activeId, currentPage, containerWidth, totalPages, schedulePageOffset]);
 
   const handleTouchEnd = useCallback(() => {
     const s = swipeRef.current;
@@ -1542,8 +1631,9 @@ export const Desktop: React.FC = () => {
     // If no horizontal swipe was detected (tap or vertical scroll),
     // just snap back and let the browser fire the native click event.
     if (!s.isHorizontal) {
-      setPageTransition(true);
-      setPageOffset(-currentPage * containerWidth);
+      document.body.classList.remove('desktop-page-swiping');
+      setPagesTrackTransition(true);
+      writePageOffset(-currentPage * containerWidth);
       return;
     }
 
@@ -1565,7 +1655,7 @@ export const Desktop: React.FC = () => {
     }
 
     scrollToPage(targetPage);
-  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage]);
+  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage, setPagesTrackTransition, writePageOffset]);
 
   // --- Mouse event handlers (for desktop trackpad / mouse drag) ---
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1587,8 +1677,9 @@ export const Desktop: React.FC = () => {
       isDragging: true,
       isHorizontal: null,
     };
-    setPageTransition(false);
-  }, [activeId]);
+    document.body.classList.add('desktop-page-swiping');
+    setPagesTrackTransition(false);
+  }, [activeId, setPagesTrackTransition]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const s = swipeRef.current;
@@ -1619,8 +1710,8 @@ export const Desktop: React.FC = () => {
       delta = delta * 0.3;
     }
 
-    setPageOffset(baseOffset + delta);
-  }, [activeId, currentPage, containerWidth, totalPages]);
+    schedulePageOffset(baseOffset + delta);
+  }, [activeId, currentPage, containerWidth, totalPages, schedulePageOffset]);
 
   const handleMouseUp = useCallback(() => {
     const s = swipeRef.current;
@@ -1628,8 +1719,9 @@ export const Desktop: React.FC = () => {
     s.isDragging = false;
 
     if (!s.isHorizontal) {
-      setPageTransition(true);
-      setPageOffset(-currentPage * containerWidth);
+      document.body.classList.remove('desktop-page-swiping');
+      setPagesTrackTransition(true);
+      writePageOffset(-currentPage * containerWidth);
       return;
     }
 
@@ -1650,13 +1742,13 @@ export const Desktop: React.FC = () => {
     }
 
     scrollToPage(targetPage);
-  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage]);
+  }, [activeId, currentPage, containerWidth, totalPages, scrollToPage, setPagesTrackTransition, writePageOffset]);
 
   // Sync offset when currentPage or containerWidth changes (e.g. on resize)
   useEffect(() => {
-    setPageTransition(true);
-    setPageOffset(-currentPage * containerWidth);
-  }, [containerWidth]);
+    setPagesTrackTransition(true);
+    writePageOffset(-currentPage * containerWidth);
+  }, [containerWidth, currentPage, setPagesTrackTransition, writePageOffset]);
 
   // Clamp currentPage when total pages shrink
   useEffect(() => {
@@ -1791,7 +1883,7 @@ export const Desktop: React.FC = () => {
           isSettingsOpen || isAuthOpen || isProfileOpen ||
           isBookmarkBrowserOpen || isHistoryBrowserOpen ||
           isExploreOpen || isItToolsOpen || isAddWidgetOpen ||
-          isAddModalOpen || !!stickyNoteItem || !!editingWidget
+          isAddModalOpen || !!stickyNoteItem || !!editingWidget || !!calendarDetailItem
         ) {
           e.preventDefault();
           return;
@@ -1811,7 +1903,7 @@ export const Desktop: React.FC = () => {
     >
       
       {/* 1. Search Bar */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-16 md:pt-20 px-6 pointer-events-none">
+      <div className="desktop-search-layer absolute top-0 left-0 right-0 z-30 flex justify-center pt-16 md:pt-20 px-6 pointer-events-none">
         <div className="w-full max-w-[580px] pointer-events-auto">
           <form onSubmit={handleSearchSubmit} className="relative group flex items-center">
             {isDropdownOpen && (
@@ -1879,7 +1971,7 @@ export const Desktop: React.FC = () => {
 
       {/* 2. Pages Area */}
       <div 
-        className="flex-1 overflow-hidden pt-36 md:pt-56 pb-28 md:pb-32"
+        className="desktop-pages-area flex-1 overflow-hidden pt-36 md:pt-56 pb-28 md:pb-32"
         onDoubleClick={(e) => {
           // Only trigger on blank area (the container itself or the page wrapper)
           const target = e.target as HTMLElement;
@@ -1992,14 +2084,12 @@ export const Desktop: React.FC = () => {
             onMouseLeave={handleMouseUp}
           >
             <div
-              ref={flipManager.containerRef}
-              className="h-full flex"
+              ref={setPagesTrackNode}
+              className="desktop-pages-track h-full flex"
               style={{
                 width: `${totalPages * 100}%`,
-                transform: `translateX(${pageOffset}px)`,
-                transition: pageTransition ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none',
-                willChange: swipeRef.current.isDragging ? 'transform' : 'auto',
-              }}
+                '--desktop-page-offset': `${-currentPage * containerWidth}px`,
+              } as React.CSSProperties}
             >
             {displayPages.map((page, pageIdx) => (
               <PageDropZone key={pageIdx} pageIdx={pageIdx} totalPages={totalPages}>
@@ -2076,7 +2166,7 @@ export const Desktop: React.FC = () => {
 
       {/* 3. Page Indicator Dots */}
       {!isLocalSearchActive && displayPages.length > 1 && (
-        <div className="absolute bottom-[108px] md:bottom-[118px] left-0 right-0 z-20 flex justify-center gap-2">
+        <div className="desktop-page-dots absolute bottom-[108px] md:bottom-[118px] left-0 right-0 z-20 flex justify-center gap-2">
           {displayPages.map((_, i) => (
             <button
               key={i}
@@ -2088,7 +2178,7 @@ export const Desktop: React.FC = () => {
       )}
 
       {/* 4. Dock Bar */}
-      <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
+      <div className="desktop-dock-bar absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-30" style={{ maxWidth: 'calc(100vw - 32px)' }}>
         <div
           className="bg-[#f5f5f5]/[0.12] backdrop-blur-xl border border-white/[0.15] rounded-[22px] md:rounded-[26px] shadow-[0_2px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] transition-[padding,gap] duration-300"
         >
@@ -2236,7 +2326,7 @@ export const Desktop: React.FC = () => {
                       key={item.id} 
                       item={item} 
                       onClick={(node) => {
-                        if (node.type === 'link' && node.url) window.open(node.url, '_blank');
+                        if (node.type === 'link' && node.url) openUrl(node.url, linkOpenMode);
                         else if (node.type === 'folder') setOpenedFolder(node);
                       }}
                       onContextMenu={(e, i) => handleContextMenu(e, i, false)}
@@ -2270,12 +2360,8 @@ export const Desktop: React.FC = () => {
               const overlaySize = (activeItem.widgetSize && activeItem.widgetSize in WIDGET_SIZE_MAP)
                 ? activeItem.widgetSize : 'small';
               const { cols: oCols, rows: oRows } = WIDGET_SIZE_MAP[overlaySize];
-              // Match actual CSS grid cell sizes for the current viewport
-              // cellW = cellH = 80px (72px on sm), gap is uniform per breakpoint
-              const isSm = typeof window !== 'undefined' && window.innerWidth >= 640;
-              const isMd = typeof window !== 'undefined' && window.innerWidth >= 768;
-              const cellSize = (!isSm) ? 80 : (!isMd) ? 72 : 80;
-              const gap = (!isSm) ? 28 : (!isMd) ? 32 : (window.innerWidth >= 1280 ? 44 : window.innerWidth >= 1024 ? 40 : 36);
+              // Match the CSS grid metrics for the current viewport, including compact mode.
+              const { cellSize, gap } = getDesktopGridMetrics(window.innerWidth, window.innerHeight);
               return (
                 <div style={{
                   width: oCols * cellSize + (oCols - 1) * gap,
@@ -2303,6 +2389,15 @@ export const Desktop: React.FC = () => {
       {stickyNoteItem && <StickyNoteModal onClose={() => setStickyNoteItem(null)} item={stickyNoteItem} />}
       {isAiAgentOpen && <AiAgentModal onClose={() => setIsAiAgentOpen(false)} />}
       {trendingModalType && <TrendingModal type={trendingModalType} options={trendingModalOptions} onClose={() => { setTrendingModalType(null); setTrendingModalOptions(null); }} />}
+      {calendarDetailItem && (
+        <CalendarDetailModal
+          onClose={() => setCalendarDetailItem(null)}
+          onEdit={() => {
+            if (calendarDetailItem) setEditingWidget(calendarDetailItem);
+            setCalendarDetailItem(null);
+          }}
+        />
+      )}
       {isAddWidgetOpen && <AddWidgetModal onClose={() => setIsAddWidgetOpen(false)} pageIndex={currentPage} />}
       {editingWidget && <AddWidgetModal onClose={() => setEditingWidget(null)} editItem={editingWidget} />}
       {isAddModalOpen && <AddItemModal 
@@ -2328,6 +2423,7 @@ export const Desktop: React.FC = () => {
             ref={contextMenuRef}
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[190px] max-h-[70vh] overflow-y-auto no-scrollbar animate-scaleIn"
             style={{ left: contextMenu.x, top: contextMenu.y }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             {/* Edit button — not for app types */}
             {contextMenu.item.type !== 'app' && (
@@ -2427,6 +2523,7 @@ export const Desktop: React.FC = () => {
             ref={blankContextMenuRef}
             className="fixed z-[210] context-menu-glass rounded-[14px] py-1.5 min-w-[200px] animate-scaleIn"
             style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             <button 
               className="w-full text-left px-4 py-2.5 text-[13px] text-white/90 hover:bg-white/[0.12] flex items-center gap-3 transition-colors rounded-lg mx-0"

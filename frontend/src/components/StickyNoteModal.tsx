@@ -1,7 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from '../i18n/useTranslation';
-import { useLayoutStore } from '../store/layoutStore';
+import {
+  STICKY_NOTE_CONTENT_MAX_LENGTH,
+  clampStickyNoteContent,
+  countTextCharacters,
+  useLayoutStore,
+} from '../store/layoutStore';
 import type { StickyNoteWidgetConfig, DesktopItem } from '../store/layoutStore';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 interface StickyNoteModalProps {
   onClose: () => void;
@@ -83,9 +89,14 @@ const COLOR_STYLES: Record<string, {
 export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item }) => {
   const { t } = useTranslation();
   const updateWidgetConfig = useLayoutStore(s => s.updateWidgetConfig);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(520, 0.7),
+    minHeight: 420,
+    minWidth: 420,
+  });
 
   const noteConfig = item.widgetConfig as StickyNoteWidgetConfig | undefined;
-  const [content, setContent] = useState(noteConfig?.content || '');
+  const [content, setContent] = useState(() => clampStickyNoteContent(noteConfig?.content || ''));
   const [selectedColor, setSelectedColor] = useState<NoteColor>(noteConfig?.color || 'yellow');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -105,10 +116,11 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    const safeContent = clampStickyNoteContent(newContent);
     saveTimeoutRef.current = setTimeout(() => {
       updateWidgetConfig(item.id, {
         widgetType: 'stickyNote',
-        content: newContent,
+        content: safeContent,
         color: newColor,
       });
     }, 400);
@@ -119,9 +131,10 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    const safeContent = clampStickyNoteContent(content);
     updateWidgetConfig(item.id, {
       widgetType: 'stickyNote',
-      content,
+      content: safeContent,
       color: selectedColor,
     });
     onClose();
@@ -135,7 +148,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   }, [onClose]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newContent = e.target.value;
+    const newContent = clampStickyNoteContent(e.target.value);
     setContent(newContent);
     saveNote(newContent, selectedColor);
   };
@@ -147,7 +160,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
   };
 
   // Character count
-  const charCount = content.length;
+  const charCount = countTextCharacters(content);
   const lineCount = content.split('\n').length;
 
   return (
@@ -163,13 +176,15 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
 
       {/* Note Window */}
       <div
-        className="backdrop-blur-xl border-0 sm:border border-black/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.35)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-auto sm:h-[70vh] sm:max-w-lg sm:min-w-[440px]"
-        style={{ background: styles.bg }}
+        ref={floatingWindow.shellRef}
+        className={`relative backdrop-blur-xl border-0 sm:border border-black/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.35)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} select-none w-full h-full sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]`}
+        style={{ ...floatingWindow.style, background: styles.bg }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="h-12 md:h-14 flex items-center px-3 md:px-5 shrink-0 select-none"
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 flex items-center px-3 md:px-5 shrink-0 select-none sm:cursor-default"
           style={{
             background: styles.headerBg,
             borderBottom: `1px solid rgba(0,0,0,0.08)`,
@@ -275,6 +290,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
             ref={textareaRef}
             value={content}
             onChange={handleContentChange}
+            maxLength={STICKY_NOTE_CONTENT_MAX_LENGTH}
             placeholder={t('widget.stickyNotePlaceholder')}
             className="absolute inset-0 w-full h-full resize-none border-0 outline-none p-4 leading-[28px]"
             style={{
@@ -302,7 +318,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
             className="text-[11px]"
             style={{ color: 'rgba(0,0,0,0.35)' }}
           >
-            {charCount} {t('widget.stickyNoteChars')} · {lineCount} {t('widget.stickyNoteLines')}
+            {charCount}/{STICKY_NOTE_CONTENT_MAX_LENGTH} {t('widget.stickyNoteChars')} / {lineCount} {t('widget.stickyNoteLines')}
           </span>
           <span
             className="text-[11px]"
@@ -311,6 +327,7 @@ export const StickyNoteModal: React.FC<StickyNoteModalProps> = ({ onClose, item 
             {t('widget.stickyNoteAutoSave')}
           </span>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

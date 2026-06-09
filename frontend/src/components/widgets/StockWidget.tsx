@@ -21,6 +21,7 @@ import type { WidgetSize, StockWidgetConfig, StockItem, StockMarket } from '../.
 import { useLayoutStore } from '../../store/layoutStore';
 import { useConfigStore } from '../../store/configStore';
 import { useTranslation } from '../../i18n/useTranslation';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../../hooks/useFloatingWindow';
 
 /**
  * Detect whether we are running inside a Chrome extension context
@@ -948,6 +949,14 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
   const [selectedMarket, setSelectedMarket] = useState<StockMarket>('US');
   const [search, setSearch] = useState('');
   const [selectedQuote, setSelectedQuote] = useState<StockQuote | null>(null);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(
+      typeof window === 'undefined' ? 768 : Math.min(768, window.innerWidth * 0.9),
+      0.68,
+    ),
+    minHeight: 500,
+    minWidth: 640,
+  });
 
   // Close on Escape key
   useEffect(() => {
@@ -1024,7 +1033,9 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
 
       {/* macOS-style App Window */}
       <div
-        className="bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden select-none w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-3xl sm:h-[70vh] md:h-[68vh]"
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} ${floatingWindow.windowClassName}`}
+        style={floatingWindow.style}
         onClick={(e) => e.stopPropagation()}
         /* Stop drag-related events from bubbling to the Desktop DndContext.
            Desktop uses MouseSensor (onMouseDown) and TouchSensor (onTouchStart),
@@ -1036,7 +1047,10 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
            Outer Desktop DndContext does not use PointerSensor by default. */
       >
         {/* Window Header — macOS traffic lights */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
@@ -1111,7 +1125,7 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
 
           {/* Content Area */}
           <div className="flex-1 flex flex-col p-3 sm:p-5 md:px-6 md:pt-6 md:pb-2 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
-            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar sm:pr-2 md:pr-3">
+            <div className="flex-1 min-h-0 overflow-y-auto desktop-scrollbar sm:pr-2 md:pr-3">
               {tab === 'list' ? (
                 /* ===== Watchlist Tab ===== */
                 <div className="space-y-3 animate-fadeIn">
@@ -1275,6 +1289,7 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
             </div>
           </div>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
 
       {/* Inline animations (same as SettingsModal) */}

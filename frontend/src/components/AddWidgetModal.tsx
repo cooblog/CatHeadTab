@@ -1,11 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from '../i18n/useTranslation';
 import type { TranslationKeys } from '../i18n/useTranslation';
 import type { WidgetType, WidgetSize, WidgetConfig } from '../store/layoutStore';
 import { useLayoutStore, WIDGET_SIZE_MAP } from '../store/layoutStore';
 import { useConfigStore } from '../store/configStore';
+import { CatHeadIcon } from './CatHeadIcon';
 import { DatePicker } from './DatePicker';
+import { useFloatingWindow } from '../hooks/useFloatingWindow';
 
 interface AddWidgetModalProps {
   onClose: () => void;
@@ -117,7 +119,7 @@ const WIDGET_CATEGORIES: WidgetCategory[] = [
       },
       {
         type: 'aiAgent',
-        icon: '🤖',
+        icon: '',
         labelKey: 'widget.aiAgent',
         descKey: 'widget.aiAgentDesc',
         sizes: ['small'],
@@ -312,7 +314,7 @@ const TimezoneDropdown: React.FC<{
               />
             </div>
             {/* Timezone list */}
-            <div className="max-h-[min(360px,50vh)] overflow-y-auto no-scrollbar">
+            <div className="max-h-[min(360px,50vh)] overflow-y-auto desktop-scrollbar">
               {/* Local timezone option */}
               <button
                 className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 ${!clockTimezone ? 'bg-white/5 text-white' : 'text-white/60'}`}
@@ -459,7 +461,7 @@ const LanguageDropdown: React.FC<{
               />
             </div>
             {/* list */}
-            <div className="max-h-[min(360px,50vh)] overflow-y-auto no-scrollbar">
+            <div className="max-h-[min(360px,50vh)] overflow-y-auto desktop-scrollbar">
               <button
                 className={`w-full px-4 py-3 text-[13px] text-left flex justify-between transition-colors hover:bg-white/5 ${!languageValue ? 'bg-white/5 text-white' : 'text-white/60'}`}
                 onClick={() => selectLanguage('')}
@@ -498,6 +500,17 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
   const addWidget = useLayoutStore(s => s.addWidget);
   const updateWidgetConfig = useLayoutStore(s => s.updateWidgetConfig);
   const updateDesktopItem = useLayoutStore(s => s.updateDesktopItem);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => ({
+      width: 640,
+      height: typeof window === 'undefined' ? 560 : Math.min(560, window.innerHeight - 96),
+    }),
+    minHeight: 360,
+    minWidth: 520,
+    resizable: false,
+  });
 
   // Close on Escape key
   useEffect(() => {
@@ -663,6 +676,49 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
 
 
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth < 640) return;
+    const headerElement = headerRef.current;
+    const contentElement = contentRef.current;
+    if (!headerElement || !contentElement) return;
+
+    const contentStyle = window.getComputedStyle(contentElement);
+    const paddingBottom = parseFloat(contentStyle.paddingBottom) || 0;
+    const bottomMostChild = Array.from(contentElement.children).reduce((maxBottom, child) => {
+      const childElement = child as HTMLElement;
+      return Math.max(
+        maxBottom,
+        childElement.offsetTop - contentElement.offsetTop + childElement.offsetHeight,
+      );
+    }, 0);
+    const measuredContentHeight = Math.max(bottomMostChild + paddingBottom, 0);
+
+    const nextHeight = Math.ceil(
+      headerElement.getBoundingClientRect().height
+      + measuredContentHeight
+      + 2,
+    );
+
+    floatingWindow.setWindowSize((currentSize) => ({
+      width: currentSize.width,
+      height: nextHeight,
+    }));
+  }, [
+    activeTab,
+    clockTimezone,
+    eventName,
+    floatingWindow.setWindowSize,
+    githubLanguage,
+    githubSince,
+    isEditMode,
+    isZh,
+    selectedSize,
+    selectedType,
+    targetDate,
+    weatherCity,
+    weatherUnit,
+  ]);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-0 sm:p-6 md:p-12" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       {/* Dimmed Background Overlay */}
@@ -673,11 +729,17 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
 
       {/* macOS-style Window */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none w-full h-full sm:w-[640px] ${selectedType ? 'sm:h-auto sm:max-h-[85vh]' : 'sm:h-[600px]'}`}
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} select-none w-full h-full sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]`}
+        style={floatingWindow.style}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Window Header — macOS traffic lights */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          ref={headerRef}
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
@@ -706,7 +768,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 bg-gradient-to-br from-white/[0.02] to-transparent no-scrollbar">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-5 sm:p-6 md:p-8 bg-gradient-to-br from-white/[0.02] to-transparent no-scrollbar">
           {!selectedType ? (
             /* Step 1: Choose widget type — Side-tab category layout */
             <div className="space-y-4 fade-in">
@@ -750,7 +812,11 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                     } ${isProLocked ? 'opacity-50' : ''}`}
                     onClick={() => { if (!isProLocked) setSelectedType(opt.type); }}
                   >
-                    <span className="text-2xl shrink-0">{opt.icon}</span>
+                    {opt.type === 'aiAgent' ? (
+                      <CatHeadIcon alt="" className="w-8 h-8 shrink-0 rounded-lg bg-black/25" />
+                    ) : (
+                      <span className="text-2xl shrink-0">{opt.icon}</span>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-[14px] font-medium text-white/90 flex items-center gap-2">
                         {t(opt.labelKey)}
@@ -938,8 +1004,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
                     ? '🧮 科学计算器支持基本四则运算、三角函数、对数、幂运算、百分比等。小尺寸显示精简计算器，中尺寸显示完整键盘并可展开科学计算功能。使用 math.js 引擎，支持复杂数学表达式。'
                     : '🧮 Scientific calculator supports basic arithmetic, trigonometric functions, logarithms, power, percentage and more. Small size shows a compact calculator, medium shows a full keypad with expandable scientific functions. Powered by math.js engine.')}
                   {selectedType === 'aiAgent' && (isZh
-                    ? '🤖 AI 助手是你的智能桌面管家。它可以帮你整理桌面图标、添加新图标、创建文件夹并自动分类、更换壁纸等；在本地 AI 模式下，也可以按你的明确请求搜索浏览器书签和历史记录。点击小组件后打开聊天窗口，用自然语言告诉它你想做什么。'
-                    : '🤖 AI Agent is your smart desktop assistant. It can organize desktop icons, add shortcuts, create categorized folders, change wallpaper, and more; in local AI mode, it can also search bookmarks and history when you explicitly ask. Click to open the chat window and tell it what you want in natural language.')}
+                    ? 'AI 助手是你的智能桌面管家。它可以帮你整理桌面图标、添加新图标、创建文件夹并自动分类、更换壁纸等；在本地 AI 模式下，也可以按你的明确请求搜索浏览器书签和历史记录。点击小组件后打开聊天窗口，用自然语言告诉它你想做什么。'
+                    : 'AI Agent is your smart desktop assistant. It can organize desktop icons, add shortcuts, create categorized folders, change wallpaper, and more; in local AI mode, it can also search bookmarks and history when you explicitly ask. Click to open the chat window and tell it what you want in natural language.')}
                   {selectedType === 'githubTrending' && (isZh
                     ? '🐙 GitHub Trending 实时展示当日最热门的开源项目。自动每 30 分钟刷新一次，显示项目名称、描述、编程语言、星标数和当日增量。点击任意项目可直接在新标签页打开 GitHub 仓库。'
                     : '🐙 GitHub Trending shows today\'s hottest open-source projects in real-time. Auto-refreshes every 30 minutes, displaying repo name, description, language, stars, and daily growth. Click any repo to open it in a new tab.')}
@@ -973,6 +1039,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({ onClose, pageInd
             </div>
           )}
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

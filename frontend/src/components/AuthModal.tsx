@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useConfigStore, isEnvConfigured } from '../store/configStore';
 import client from '../api/client';
 import { useTranslation } from '../i18n/useTranslation';
 import { isPasswordAcceptable } from '../utils/passwordStrength';
 import { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+import { useFloatingWindow } from '../hooks/useFloatingWindow';
 
 // 参考 Twitter 规则：4-15 字符，只允许字母、数字、下划线
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{4,15}$/;
@@ -15,6 +16,16 @@ type ModalStep = 'server' | 'auth';
 export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { serverUrl, setServerUrl, setJwtToken, setUserProfile } = useConfigStore();
   const { t } = useTranslation();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => ({
+      width: 384,
+      height: typeof window === 'undefined' ? 400 : Math.min(400, window.innerHeight - 96),
+    }),
+    minHeight: 360,
+    minWidth: 340,
+  });
 
   // Close on Escape key
   useEffect(() => {
@@ -285,6 +296,24 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const showOAuth = oauthConfig && (oauthConfig.github_client_id || oauthConfig.google_client_id);
 
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth < 640) return;
+    const headerElement = headerRef.current;
+    const contentElement = contentRef.current;
+    if (!headerElement || !contentElement) return;
+
+    const nextHeight = Math.ceil(
+      headerElement.getBoundingClientRect().height
+      + contentElement.scrollHeight
+      + 2,
+    );
+
+    floatingWindow.setWindowSize((currentSize) => ({
+      width: currentSize.width,
+      height: nextHeight,
+    }));
+  }, [cooldown, error, floatingWindow.setWindowSize, password, showOAuth, step, success, view]);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 sm:p-12" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       {/* Dimmed Background Overlay */}
@@ -295,11 +324,17 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
       {/* App Window container */}
       <div 
-        className="w-full max-w-sm bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none"
+        ref={floatingWindow.shellRef}
+        className={`relative w-full max-w-sm sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)] bg-black/30 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
+        style={floatingWindow.style}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          ref={headerRef}
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop */}
           <div className="flex items-center gap-2 w-auto md:w-20">
             <div className="hidden md:flex gap-2.5">
@@ -332,7 +367,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-8 desktop-scrollbar">
         {/* ===== Step 1: Server URL Configuration ===== */}
         {step === 'server' && (
           <>
@@ -588,6 +623,7 @@ export const AuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </>
         )}
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );

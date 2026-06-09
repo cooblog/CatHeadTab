@@ -74,6 +74,18 @@ export interface StickyNoteWidgetConfig {
   color?: 'yellow' | 'pink' | 'green' | 'blue' | 'purple' | 'orange';
 }
 
+export const STICKY_NOTE_CONTENT_MAX_LENGTH = 1000;
+
+export function countTextCharacters(value: string): number {
+  return Array.from(value).length;
+}
+
+export function clampStickyNoteContent(value: string): string {
+  const chars = Array.from(value);
+  if (chars.length <= STICKY_NOTE_CONTENT_MAX_LENGTH) return value;
+  return chars.slice(0, STICKY_NOTE_CONTENT_MAX_LENGTH).join('');
+}
+
 /** Stock market type. */
 export type StockMarket = 'US' | 'HK' | 'CN';
 
@@ -144,6 +156,7 @@ export interface DesktopItem {
   title: string;
   url?: string;
   icon?: string;
+  iconColor?: string;
   children?: DesktopItem[];
   /** Widget-specific fields (only present when type === 'widget'). */
   widgetType?: WidgetType;
@@ -309,6 +322,41 @@ const defaultLayout: DesktopLayout = {
   dock: defaultDock,
 };
 
+function sanitizeWidgetConfig<T extends Partial<WidgetConfig>>(
+  config: T,
+  fallbackWidgetType?: WidgetType,
+): T {
+  const maybeConfig = config as T & { widgetType?: WidgetType; content?: unknown };
+  const widgetType = maybeConfig.widgetType || fallbackWidgetType;
+  if (widgetType === 'stickyNote' && typeof maybeConfig.content === 'string') {
+    return {
+      ...config,
+      content: clampStickyNoteContent(maybeConfig.content),
+    } as T;
+  }
+  return config;
+}
+
+function sanitizeDesktopItem(item: DesktopItem): DesktopItem {
+  const widgetConfig = item.widgetConfig
+    ? sanitizeWidgetConfig(item.widgetConfig, item.widgetType) as WidgetConfig
+    : item.widgetConfig;
+  const children = item.children?.map(sanitizeDesktopItem);
+
+  return {
+    ...item,
+    ...(widgetConfig ? { widgetConfig } : {}),
+    ...(children ? { children } : {}),
+  };
+}
+
+function sanitizeDesktopLayout(layout: DesktopLayout): DesktopLayout {
+  return {
+    pages: layout.pages.map(page => page.map(sanitizeDesktopItem)),
+    dock: layout.dock.map(sanitizeDesktopItem),
+  };
+}
+
 // --- Helper: ensure all system apps exist in the Dock ---
 function ensureSystemAppsInDock(dock: DesktopItem[]): DesktopItem[] {
   const result = [...dock];
@@ -325,32 +373,32 @@ function migrateLayout(raw: any): DesktopLayout {
   // Already new format
   if (raw && raw.pages && Array.isArray(raw.pages)) {
     const dock = Array.isArray(raw.dock) ? raw.dock : [...defaultDock];
-    return {
+    return sanitizeDesktopLayout({
       pages: raw.pages.length > 0 ? raw.pages : [[]],
       dock: ensureSystemAppsInDock(dock),
-    };
+    });
   }
   // Old format: { desktopItems: DesktopItem[] }
   if (raw && Array.isArray(raw.desktopItems)) {
     const items: DesktopItem[] = raw.desktopItems;
     const systemApps = items.filter(i => i.id.startsWith('app-'));
     const desktopOnly = items.filter(i => !i.id.startsWith('app-'));
-    return {
+    return sanitizeDesktopLayout({
       pages: desktopOnly.length > 0 ? [desktopOnly] : [[]],
       dock: ensureSystemAppsInDock(systemApps),
-    };
+    });
   }
   // Cloud format: { items: DesktopItem[] }
   if (raw && Array.isArray(raw.items)) {
     const items: DesktopItem[] = raw.items;
     const systemApps = items.filter(i => i.id.startsWith('app-'));
     const desktopOnly = items.filter(i => !i.id.startsWith('app-'));
-    return {
+    return sanitizeDesktopLayout({
       pages: desktopOnly.length > 0 ? [desktopOnly] : [[]],
       dock: ensureSystemAppsInDock(systemApps),
-    };
+    });
   }
-  return { ...defaultLayout };
+  return sanitizeDesktopLayout({ ...defaultLayout });
 }
 
 // --- Helper: recursively find & remove item ---
@@ -407,7 +455,7 @@ function cleanEmptyPages(pages: DesktopItem[][]): DesktopItem[][] {
 
 function updateItemInList(list: DesktopItem[], id: string, updates: Partial<DesktopItem>): DesktopItem[] {
   return list.map(i => {
-    if (i.id === id) return { ...i, ...updates };
+    if (i.id === id) return sanitizeDesktopItem({ ...i, ...updates });
     if (i.children) return { ...i, children: updateItemInList(i.children, id, updates) };
     return i;
   });
@@ -506,7 +554,7 @@ export const useLayoutStore = create<LayoutState>()(
       get dock() { return get().layout.dock; },
       get canRollback() { return get().layoutSnapshots.length > 0; },
 
-      setLayout: (layout) => set({ layout }),
+      setLayout: (layout) => set({ layout: sanitizeDesktopLayout(layout) }),
 
       saveSnapshot: () => {
         const current = get().layout;
@@ -549,15 +597,16 @@ export const useLayoutStore = create<LayoutState>()(
           }
         }
 
+        const safeItem = sanitizeDesktopItem(item);
         const layout = { ...currentLayout, pages: currentLayout.pages.map(p => [...p]), dock: [...currentLayout.dock] };
         if (parentFolderId) {
           // Add into a folder (search all pages + dock)
-          layout.pages = layout.pages.map(page => addToFolder(page, parentFolderId, item));
-          layout.dock = addToFolder(layout.dock, parentFolderId, item);
+          layout.pages = layout.pages.map(page => addToFolder(page, parentFolderId, safeItem));
+          layout.dock = addToFolder(layout.dock, parentFolderId, safeItem);
         } else {
           const pi = pageIndex ?? layout.pages.length - 1;
           while (layout.pages.length <= pi) layout.pages.push([]);
-          layout.pages[pi] = [...layout.pages[pi], item];
+          layout.pages[pi] = [...layout.pages[pi], safeItem];
         }
         set({ layout });
         triggerAutoSync();
@@ -921,7 +970,7 @@ export const useLayoutStore = create<LayoutState>()(
           title: widgetType.charAt(0).toUpperCase() + widgetType.slice(1),
           widgetType,
           widgetSize,
-          widgetConfig: config,
+          widgetConfig: sanitizeWidgetConfig(config, widgetType) as WidgetConfig,
         };
         const pi = pageIndex ?? layout.pages.length - 1;
         while (layout.pages.length <= pi) layout.pages.push([]);
@@ -935,7 +984,11 @@ export const useLayoutStore = create<LayoutState>()(
         layout.pages = layout.pages.map(page =>
           page.map(item => {
             if (item.id === id && item.type === 'widget') {
-              return { ...item, widgetConfig: { ...item.widgetConfig, ...config } as WidgetConfig };
+              const widgetConfig = sanitizeWidgetConfig(
+                { ...item.widgetConfig, ...config } as WidgetConfig,
+                item.widgetType,
+              ) as WidgetConfig;
+              return { ...item, widgetConfig };
             }
             return item;
           })
@@ -947,7 +1000,7 @@ export const useLayoutStore = create<LayoutState>()(
       syncLayoutOnly: async () => {
         set({ loading: true, error: null });
         try {
-          const { layout } = get();
+          const layout = sanitizeDesktopLayout(get().layout);
           const res = await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
           // 使用服务器返回的 updated_at 更新本地时间戳，保持两端一致
           if (res.data?.updated_at) {
@@ -965,7 +1018,7 @@ export const useLayoutStore = create<LayoutState>()(
         set({ loading: true, error: null });
         useConfigStore.getState().markLocalModified();
         try {
-          const { backgroundImage, lockIdleTimeout } = useConfigStore.getState();
+          const { backgroundImage, lockIdleTimeout, linkOpenMode } = useConfigStore.getState();
 
           if (backgroundImage.startsWith('idb://')) {
             const rawBlob = await getRawBlob('bg-custom');
@@ -977,9 +1030,9 @@ export const useLayoutStore = create<LayoutState>()(
                 headers: { 'Content-Type': 'multipart/form-data' },
               });
             }
-            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background', lockIdleTimeout });
+            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background', lockIdleTimeout, linkOpenMode });
           } else {
-            await client.put('/api/v1/user/preferences', { backgroundImage, lockIdleTimeout });
+            await client.put('/api/v1/user/preferences', { backgroundImage, lockIdleTimeout, linkOpenMode });
           }
 
           set({ loading: false });
@@ -992,7 +1045,7 @@ export const useLayoutStore = create<LayoutState>()(
       uploadLayoutToCloud: async () => {
         set({ loading: true, error: null });
         try {
-          const { layout } = get();
+          const layout = sanitizeDesktopLayout(get().layout);
           const layoutRes = await client.put('/api/v1/layout', { pages: layout.pages, dock: layout.dock });
           
           // 使用服务器返回的 updated_at 更新本地时间戳
@@ -1001,7 +1054,7 @@ export const useLayoutStore = create<LayoutState>()(
             useConfigStore.getState().setLastLocalModifiedAt(serverTs);
           }
 
-          const { backgroundImage, lockIdleTimeout } = useConfigStore.getState();
+          const { backgroundImage, lockIdleTimeout, linkOpenMode } = useConfigStore.getState();
 
           if (backgroundImage.startsWith('idb://')) {
             // Upload local image binary to cloud
@@ -1015,10 +1068,10 @@ export const useLayoutStore = create<LayoutState>()(
               });
             }
             // Save preferences with marker indicating cloud-stored image
-            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background', lockIdleTimeout });
+            await client.put('/api/v1/user/preferences', { backgroundImage: 'cloud://background', lockIdleTimeout, linkOpenMode });
           } else {
             // URL-based wallpaper — just sync the URL string
-            await client.put('/api/v1/user/preferences', { backgroundImage, lockIdleTimeout });
+            await client.put('/api/v1/user/preferences', { backgroundImage, lockIdleTimeout, linkOpenMode });
           }
           
           set({ loading: false });
@@ -1045,10 +1098,15 @@ export const useLayoutStore = create<LayoutState>()(
           const prefsRes = await client.get('/api/v1/user/preferences');
           const bg = prefsRes.data.preferences?.backgroundImage;
           const cloudLockIdleTimeout = prefsRes.data.preferences?.lockIdleTimeout;
+          const cloudLinkOpenMode = prefsRes.data.preferences?.linkOpenMode;
 
           // Apply lock idle timeout from cloud (if present)
           if (typeof cloudLockIdleTimeout === 'number') {
             useConfigStore.getState().setLockIdleTimeout(cloudLockIdleTimeout);
+          }
+
+          if (cloudLinkOpenMode === 'current' || cloudLinkOpenMode === 'newTab') {
+            useConfigStore.getState().setLinkOpenMode(cloudLinkOpenMode);
           }
 
           if (bg) {
@@ -1083,7 +1141,7 @@ export const useLayoutStore = create<LayoutState>()(
         try {
           const res = await client.get('/api/v1/layout');
           const cloudLayout = migrateLayout(res.data.layout);
-          const localLayout = get().layout;
+          const localLayout = sanitizeDesktopLayout(get().layout);
           
           // Gather all cloud item IDs
           const allCloudIds = new Set<string>();
@@ -1115,8 +1173,9 @@ export const useLayoutStore = create<LayoutState>()(
             merged.pages[lastIdx] = [...merged.pages[lastIdx], ...localOnlyItems];
           }
 
-          set({ layout: merged });
-          await client.put('/api/v1/layout', { pages: merged.pages, dock: merged.dock });
+          const safeMerged = sanitizeDesktopLayout(merged);
+          set({ layout: safeMerged });
+          await client.put('/api/v1/layout', { pages: safeMerged.pages, dock: safeMerged.dock });
           
           set({ loading: false });
         } catch (err: any) {
@@ -1140,10 +1199,10 @@ export const useLayoutStore = create<LayoutState>()(
           const dock = Array.isArray(persisted.layout.dock) ? persisted.layout.dock : [...defaultDock];
           return {
             ...persisted,
-            layout: {
+            layout: sanitizeDesktopLayout({
               ...persisted.layout,
               dock: ensureSystemAppsInDock(dock),
-            },
+            }),
           };
         }
         // Old format had desktopItems at top level

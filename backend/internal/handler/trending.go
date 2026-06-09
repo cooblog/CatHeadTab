@@ -151,19 +151,13 @@ func (h *TrendingHandler) getOrFetch(key string, ttl time.Duration, fetchFn func
 //
 //	GET /api/v1/trending/github
 func (h *TrendingHandler) GithubTrending(c *gin.Context) {
-	lang := c.Query("lang")
-	since := c.Query("since")
-
-	cacheKey := "github_trending"
-	if lang != "" {
-		cacheKey += "_lang_" + lang
-	}
-	if since != "" {
-		cacheKey += "_since_" + since
-	}
+	lang := normalizeGithubTrendingParam(c.Query("lang"))
+	spokenLanguage := normalizeGithubTrendingParam(c.Query("spoken_language_code"))
+	since := normalizeGithubSince(c.Query("since"))
+	cacheKey := githubTrendingCacheKey(lang, spokenLanguage, since)
 
 	data, cached, err := h.getOrFetch(cacheKey, h.ttl, func() (interface{}, error) {
-		return fetchGithubTrending(lang, since)
+		return fetchGithubTrending(lang, spokenLanguage, since)
 	})
 	if err != nil {
 		logger.Error("[trending] github fetch error", "error", err)
@@ -177,19 +171,71 @@ func (h *TrendingHandler) GithubTrending(c *gin.Context) {
 // numberRe 用于从文本中提取带逗号的数字，如 "28,530" 或 "5,733 stars today"
 var numberRe = regexp.MustCompile(`[\d,]+`)
 
-func fetchGithubTrending(lang string, since string) ([]GithubTrendingRepo, error) {
+func normalizeGithubTrendingParam(value string) string {
+	return strings.TrimSpace(strings.ToLower(value))
+}
+
+func normalizeGithubSince(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
+	case "daily", "weekly", "monthly":
+		return normalized
+	default:
+		return ""
+	}
+}
+
+func githubTrendingCacheKey(lang, spokenLanguage, since string) string {
+	parts := []string{"github_trending"}
+	if lang != "" {
+		parts = append(parts, "lang_"+url.QueryEscape(lang))
+	}
+	if spokenLanguage != "" {
+		parts = append(parts, "spoken_"+url.QueryEscape(spokenLanguage))
+	}
 	if since != "" {
-		return fetchGithubTrendingWithParams(lang, since)
+		parts = append(parts, "since_"+since)
+	}
+	return strings.Join(parts, "_")
+}
+
+func buildGithubTrendingURL(lang, spokenLanguage, since string) string {
+	u := &url.URL{
+		Scheme: "https",
+		Host:   "github.com",
+		Path:   "/trending",
+	}
+	if lang != "" {
+		u.Path += "/" + lang
+		u.RawPath = "/trending/" + url.PathEscape(lang)
+		if u.RawPath == u.Path {
+			u.RawPath = ""
+		}
+	}
+	q := u.Query()
+	if since != "" {
+		q.Set("since", since)
+	}
+	if spokenLanguage != "" {
+		q.Set("spoken_language_code", spokenLanguage)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func fetchGithubTrending(lang, spokenLanguage, since string) ([]GithubTrendingRepo, error) {
+	if since != "" {
+		return fetchGithubTrendingWithParams(lang, spokenLanguage, since)
 	}
 
 	// Try daily first; if too few results, fall back to weekly
-	repos, err := fetchGithubTrendingWithParams(lang, "daily")
+	repos, err := fetchGithubTrendingWithParams(lang, spokenLanguage, "daily")
 	if err == nil && len(repos) >= 15 {
 		return repos, nil
 	}
 	logger.Info("[trending] github daily returned few repos, trying weekly", "count", len(repos))
 
-	weeklyRepos, weeklyErr := fetchGithubTrendingWithParams(lang, "weekly")
+	weeklyRepos, weeklyErr := fetchGithubTrendingWithParams(lang, spokenLanguage, "weekly")
 	if weeklyErr != nil {
 		// If weekly also fails, return whatever daily gave us (or its error)
 		if err != nil {
@@ -200,17 +246,10 @@ func fetchGithubTrending(lang string, since string) ([]GithubTrendingRepo, error
 	return weeklyRepos, nil
 }
 
-func fetchGithubTrendingWithParams(lang string, since string) ([]GithubTrendingRepo, error) {
+func fetchGithubTrendingWithParams(lang, spokenLanguage, since string) ([]GithubTrendingRepo, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
-	
-	urlStr := "https://github.com/trending"
-	if lang != "" {
-		urlStr += "/" + url.PathEscape(lang)
-	}
-	if since != "" {
-		urlStr += "?since=" + since
-	}
-	
+	urlStr := buildGithubTrendingURL(lang, spokenLanguage, since)
+
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("github trending request failed: %w", err)

@@ -286,7 +286,6 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
     fetchWeather();
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.city, config?.unit, cacheKey]);
 
   // When language changes and we already have weather data but are missing the
@@ -318,7 +317,6 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ size, config }) =>
     })();
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, weather?.cityZh, weather?.cityEn]);
 
   const unitLabel = config?.unit === 'F' ? '°F' : '°C';

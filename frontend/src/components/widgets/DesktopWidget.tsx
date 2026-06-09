@@ -115,7 +115,7 @@ export const DesktopWidget: React.FC<DesktopWidgetProps> = ({ item, isOverlay })
       }}
     >
       {/* Content layer */}
-      <div className="relative w-full h-full">
+      <div className="widget-content-scale relative w-full h-full">
         {renderWidget()}
       </div>
     </div>

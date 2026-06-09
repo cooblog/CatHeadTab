@@ -5,9 +5,11 @@ import { useLayoutStore } from '../store/layoutStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { saveImageBlob, loadImageBlob, compressImageToWebP, generateThumbnail, saveDirHandle, loadDirHandle } from '../utils/imageStore';
 import client from '../api/client';
+import { CatHeadIcon } from './CatHeadIcon';
 import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperCategoryFilter, WallpaperPurityFilter, WallpaperProviderConfig } from '../api/wallhavenTypes';
 import builtinBgWebp from '../assets/bg.webp';
 import builtinBg2Webp from '../assets/bg2.webp';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 type Tab = 'wallpaper' | 'system' | 'ai';
 type WallpaperSubTab = 'current' | 'browse';
@@ -40,6 +42,11 @@ const purityBadge = (purity: string): { label: string; color: string } | null =>
 const IDB_BG_KEY = 'bg-custom';
 // Max original file size allowed before compression (20 MB)
 const MAX_ORIGINAL_SIZE = 20 * 1024 * 1024;
+const WALLPAPER_GRID_ITEM_LIMIT = 192;
+
+function limitWallpaperItems(items: WallpaperItem[]): WallpaperItem[] {
+  return items.slice(0, WALLPAPER_GRID_ITEM_LIMIT);
+}
 
 /** Reset layout button with two-step confirmation (no confirm() dialog). */
 const ResetLayoutButton: React.FC<{ language: string }> = ({ language }) => {
@@ -446,7 +453,7 @@ const AISettingsSection: React.FC = () => {
 
           {/* Dropdown list */}
           {modelDropdownOpen && (
-            <div className="absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl no-scrollbar">
+            <div className="absolute z-50 mt-1.5 w-full max-h-60 overflow-y-auto bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl desktop-scrollbar">
               {filteredModels.length > 0 ? (
                 filteredModels.map(m => (
                   <button
@@ -516,11 +523,12 @@ const AISettingsSection: React.FC = () => {
 
 
 export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> = ({ onClose, initialTab = 'wallpaper' }) => {
-  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, jwtToken, userProfile } = useConfigStore();
+  const { serverUrl, setServerUrl, backgroundImage, setBackgroundImage, language, setLanguage, lockIdleTimeout, setLockIdleTimeout, linkOpenMode, setLinkOpenMode, jwtToken, userProfile } = useConfigStore();
   const isAdmin = userProfile?.role === 'admin';
   const { t } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Close on Escape key
   useEffect(() => {
@@ -530,6 +538,20 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   }, [onClose]);
   const [wpSubTab, setWpSubTab] = useState<WallpaperSubTab>('current');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => getDefaultFloatingWindowSize(typeof window === 'undefined' ? 1152 : Math.min(1152, window.innerWidth * 0.9), 0.68),
+    isFullscreen,
+    minHeight: 500,
+    minWidth: 700,
+  });
+  const importConfirmWindow = useFloatingWindow({
+    defaultSize: () => ({
+      width: 448,
+      height: typeof window === 'undefined' ? 480 : Math.min(540, window.innerHeight - 96),
+    }),
+    minHeight: 360,
+    minWidth: 360,
+  });
   const [url, setUrl] = useState(serverUrl);
   const [bg, setBg] = useState(backgroundImage);
   const [bgPreview, setBgPreview] = useState(''); // Object URL for local file preview
@@ -683,7 +705,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     })();
   }, [isAdmin]);
 
-  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false, existingIds?: string[]) => {
+  const fetchWallpapers = useCallback(async (page: number, query: string, sorting: WallpaperSorting, cats: Set<WallpaperCategoryFilter>, purities: Set<WallpaperPurityFilter>, append = false, existingItems: WallpaperItem[] = []) => {
     const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
     if (!srvUrl) {
       setWpError(t('settings.wpNeedServer'));
@@ -716,19 +738,19 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
       }
       // Deduplication: when loading more pages, send already-loaded IDs so the
       // backend can exclude them from the response (handles cache staleness).
-      if (append && existingIds && existingIds.length > 0) {
+      const existingIds = existingItems.map(item => item.id);
+      if (append && existingIds.length > 0) {
         params.set('exclude', existingIds.join(','));
       }
       const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
       const data = resp.data;
+      const nextItems = limitWallpaperItems(append ? [...existingItems, ...data.wallpapers] : data.wallpapers);
 
       setWpResult(data);
       setWpPage(data.currentPage);
-      setWpHasMore(data.currentPage < data.lastPage);
-      if (append) {
-        setWpMobileItems(prev => [...prev, ...data.wallpapers]);
-      } else {
-        setWpMobileItems(data.wallpapers);
+      setWpHasMore(data.currentPage < data.lastPage && nextItems.length < WALLPAPER_GRID_ITEM_LIMIT);
+      setWpMobileItems(nextItems);
+      if (!append) {
         if (contentScrollRef.current) {
           contentScrollRef.current.scrollTop = 0;
         }
@@ -756,7 +778,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   }, [activeTab, wpSubTab, wpSource, fetchWallpapers, wpQuery, wpSorting, wpCategories, wpPurity]);
 
   // --- COS wallpaper fetching ---
-  const fetchCosWallpapers = useCallback(async (page: number, append = false) => {
+  const fetchCosWallpapers = useCallback(async (page: number, append = false, existingItems: WallpaperItem[] = []) => {
     const srvUrl = useConfigStore.getState().getEffectiveServerUrl();
     if (!srvUrl) {
       setCosError(t('settings.wpNeedServer'));
@@ -776,14 +798,13 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
       params.set('sorting', 'date_added');
       const resp = await client.get<WallpaperSearchResult>(`/api/v1/wallpapers/search?${params.toString()}`);
       const data = resp.data;
+      const nextItems = limitWallpaperItems(append ? [...existingItems, ...data.wallpapers] : data.wallpapers);
 
       setCosResult(data);
       setCosPage(data.currentPage);
-      setCosHasMore(data.currentPage < data.lastPage);
-      if (append) {
-        setCosMobileItems(prev => [...prev, ...data.wallpapers]);
-      } else {
-        setCosMobileItems(data.wallpapers);
+      setCosHasMore(data.currentPage < data.lastPage && nextItems.length < WALLPAPER_GRID_ITEM_LIMIT);
+      setCosMobileItems(nextItems);
+      if (!append) {
         if (contentScrollRef.current) {
           contentScrollRef.current.scrollTop = 0;
         }
@@ -813,8 +834,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const handleCosLoadMore = useCallback(() => {
     if (cosLoadingMore || cosLoading || !cosHasMore || !cosResult) return;
     const nextPage = cosPage + 1;
-    fetchCosWallpapers(nextPage, true);
-  }, [cosLoadingMore, cosLoading, cosHasMore, cosResult, cosPage, fetchCosWallpapers]);
+    fetchCosWallpapers(nextPage, true, cosMobileItems);
+  }, [cosLoadingMore, cosLoading, cosHasMore, cosResult, cosPage, cosMobileItems, fetchCosWallpapers]);
 
   // COS infinite scroll observer
   useEffect(() => {
@@ -871,9 +892,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
   const handleWpLoadMore = useCallback(() => {
     if (wpLoadingMore || wpLoading || !wpHasMore || !wpResult) return;
     const nextPage = wpPage + 1;
-    // Collect IDs of already-loaded wallpapers for server-side deduplication.
-    const existingIds = wpMobileItems.map(item => item.id);
-    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, wpPurity, true, existingIds);
+    fetchWallpapers(nextPage, wpQuery, wpSorting, wpCategories, wpPurity, true, wpMobileItems);
   }, [wpLoadingMore, wpLoading, wpHasMore, wpResult, wpPage, wpQuery, wpSorting, wpCategories, wpPurity, wpMobileItems, fetchWallpapers]);
 
   // Infinite scroll: observe sentinel element
@@ -986,7 +1005,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     setLocalPageImages([]);
     const handles: { name: string; handle: FileSystemFileHandle }[] = [];
     const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg', '.avif']);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TS DOM types lack FileSystemDirectoryHandle async iteration
     for await (const entry of (dirHandle as any).values() as AsyncIterable<FileSystemHandle>) {
       if (entry.kind !== 'file') continue;
       const ext = entry.name.lastIndexOf('.') >= 0 ? entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase() : '';
@@ -1032,7 +1050,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     } catch {
       // Permission denied or handle invalid — silently ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localFileHandles.length, localFolderName]);
 
   // Load images for a specific page (lazy: generate small thumbnails for display)
@@ -1062,7 +1079,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     if (localFileHandles.length > 0) {
       loadLocalPage(localPage, localFileHandles);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localPage, localFileHandles]);
 
   // Auto-restore last used folder when switching to local source
@@ -1070,7 +1086,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     if (wpSource === 'local') {
       restoreLastFolder();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wpSource]);
 
   const localTotalPages = Math.max(1, Math.ceil(localFileHandles.length / LOCAL_PAGE_SIZE));
@@ -1135,7 +1150,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     return () => {
       localPageImages.forEach(img => URL.revokeObjectURL(img.thumbUrl));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Immediately apply and sync background whenever it changes
@@ -1295,19 +1309,24 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       {/* Dimmed Background Overlay */}
       <div
-        className="absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"
+        className="floating-window-backdrop absolute inset-0 bg-black/20 backdrop-blur-[2px] pointer-events-auto transition-opacity animate-fadeIn"
         onClick={onClose}
       />
 
       {/* App Window container */}
       <div
-        className={`bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all duration-300 select-none ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : 'w-full h-full sm:w-auto sm:h-auto sm:w-full sm:max-w-[90vw] md:max-w-6xl sm:h-[70vh] md:h-[68vh]'}`}
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} select-none ${isFullscreen ? 'w-full h-full !rounded-none !border-0' : floatingWindow.windowClassName}`}
+        style={floatingWindow.style}
         onClick={e => e.stopPropagation()}
       >
         {/* Window Header */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           {/* Left: Mac traffic lights on desktop, spacer on mobile */}
-          <div className="flex items-center gap-2 w-auto md:w-20">
+          <div className="flex items-center gap-2 w-auto md:w-32">
             {/* Desktop traffic lights */}
             <div className="hidden md:flex gap-2.5">
               <button onClick={onClose} className="w-3.5 h-3.5 rounded-full bg-[#ff5f56] hover:bg-[#ff5f56]/80 flex items-center justify-center transition-colors group border border-black/20 !cursor-default">
@@ -1327,6 +1346,25 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                 )}
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed(v => !v)}
+              className="hidden md:flex ml-2 w-7 h-7 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] border border-white/10 text-white/50 hover:text-white items-center justify-center transition-all active:scale-95"
+              aria-label={isSidebarCollapsed ? t('settings.sidebarExpand') : t('settings.sidebarCollapse')}
+              title={isSidebarCollapsed ? t('settings.sidebarExpand') : t('settings.sidebarCollapse')}
+            >
+              <svg
+                className={`w-3.5 h-3.5 transition-transform duration-300 ${isSidebarCollapsed ? 'rotate-180' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </button>
           </div>
 
           {/* Center title */}
@@ -1335,39 +1373,51 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           </div>
 
           {/* Right spacer */}
-          <div className="flex items-center w-auto md:w-20 justify-end">
+          <div className="flex items-center w-auto md:w-32 justify-end">
             <button onClick={onClose} className="md:hidden w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-colors">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
-            <div className="hidden md:block w-20" />
+            <div className="hidden md:block w-32" />
           </div>
         </div>
 
         {/* Body: sidebar + content */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Sidebar */}
-          <div className="w-full md:w-56 bg-black/20 border-b md:border-b-0 md:border-r border-white/10 px-3 py-2 md:p-6 flex flex-col gap-2 shrink-0">
-            <div className="flex flex-row md:flex-col gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0 hide-scroll">
+          <div
+            className={`settings-sidebar ${isSidebarCollapsed ? 'md:px-3 md:py-6' : 'md:p-6'} bg-black/20 border-b md:border-b-0 md:border-r border-white/10 px-3 py-2 flex flex-col gap-2 shrink-0 transition-[width] duration-300 ease-out`}
+            style={{ '--settings-sidebar-width': isSidebarCollapsed ? '5rem' : '14rem' } as React.CSSProperties}
+          >
+            <div className={`flex flex-row md:flex-col gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0 hide-scroll ${isSidebarCollapsed ? 'md:items-center' : ''}`}>
               <button
                 type="button"
-                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${activeTab === 'wallpaper' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${isSidebarCollapsed ? 'md:w-11 md:h-11 md:p-0 md:justify-center md:text-lg' : ''} ${activeTab === 'wallpaper' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
                 onClick={() => setActiveTab('wallpaper')}
+                aria-label={t('settings.wallpaper')}
+                title={isSidebarCollapsed ? t('settings.wallpaper') : undefined}
               >
-                 {t('settings.wallpaper')}
+                <span className="md:hidden">{t('settings.wallpaper')}</span>
+                <span className="hidden md:inline">{isSidebarCollapsed ? '🖼️' : t('settings.wallpaper')}</span>
               </button>
               <button
                 type="button"
-                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${activeTab === 'system' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${isSidebarCollapsed ? 'md:w-11 md:h-11 md:p-0 md:justify-center md:text-lg' : ''} ${activeTab === 'system' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
                 onClick={() => setActiveTab('system')}
+                aria-label={t('settings.system')}
+                title={isSidebarCollapsed ? t('settings.system') : undefined}
               >
-                 {t('settings.system')}
+                <span className="md:hidden">{t('settings.system')}</span>
+                <span className="hidden md:inline">{isSidebarCollapsed ? '⚙️' : t('settings.system')}</span>
               </button>
               <button
                 type="button"
-                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${activeTab === 'ai' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${isSidebarCollapsed ? 'md:w-11 md:h-11 md:p-0 md:justify-center' : ''} ${activeTab === 'ai' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
                 onClick={() => setActiveTab('ai')}
+                aria-label={t('settings.ai')}
+                title={isSidebarCollapsed ? t('settings.ai') : undefined}
               >
-                 {t('settings.ai')}
+                <CatHeadIcon alt="" className="w-5 h-5 shrink-0 rounded-md bg-black/25" />
+                <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>{t('settings.ai')}</span>
               </button>
             </div>
           </div>
@@ -1375,7 +1425,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           {/* Content Area */}
           <div className="flex-1 flex flex-col p-3 sm:p-6 sm:pb-2 md:px-8 md:pt-8 md:pb-2 relative bg-gradient-to-br from-white/[0.02] to-transparent overflow-hidden">
 
-            <div ref={contentScrollRef} className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'wallpaper' && wpSubTab === 'browse' && (wpSource === 'wallhaven' || wpSource === 'cos') ? 'wp-scrollbar' : 'no-scrollbar'}`}>
+            <div ref={contentScrollRef} className={`flex-1 min-h-0 overflow-y-auto sm:pr-2 md:pr-4 ${activeTab === 'wallpaper' && wpSubTab === 'browse' && (wpSource === 'wallhaven' || wpSource === 'cos') ? 'wp-scrollbar' : 'desktop-scrollbar'}`}>
 
               {/* ============ WALLPAPER TAB ============ */}
               {activeTab === 'wallpaper' && (
@@ -1555,11 +1605,11 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                           {/* COS Wallpaper grid */}
                           {!cosLoading && cosResult && cosResult.wallpapers.length > 0 && (
                             <>
-                            <div className={`grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                            <div className={`wallpaper-grid grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
                               {cosMobileItems.map(item => (
                                 <div
                                   key={item.id}
-                                  className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
+                                  className="wallpaper-grid-card relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
                                   onClick={() => setCosPreviewItem(item)}
                                 >
                                   <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[72%] sm:pb-[66%]'} />
@@ -1568,6 +1618,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                                     alt={item.id.split('/').pop() || item.id}
                                     className="absolute inset-0 w-full h-full object-cover"
                                     loading="lazy"
+                                    decoding="async"
                                   />
                                   {/* Hover overlay */}
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -1692,11 +1743,11 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
 
                           {/* Image grid — current page only (thumbnails for fast rendering) */}
                           {!localLoading && !localPageLoading && localPageImages.length > 0 && (
-                            <div className={`grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                            <div className={`wallpaper-grid grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
                               {localPageImages.map(img => (
                                 <div
                                   key={img.name}
-                                  className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
+                                  className="wallpaper-grid-card relative group cursor-pointer rounded-lg overflow-hidden border border-white/10 hover:border-[#72d565]/50 transition-all"
                                   onClick={() => openLocalPreview(img.name, img.handle)}
                                 >
                                   <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[72%] sm:pb-[66%]'} />
@@ -1704,6 +1755,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                                     src={img.thumbUrl}
                                     alt={img.name}
                                     className="absolute inset-0 w-full h-full object-cover"
+                                    decoding="async"
                                   />
                                   {/* Hover overlay */}
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
@@ -1894,11 +1946,11 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                           {/* Wallpaper grid */}
                           {!wpLoading && wpResult && wpResult.wallpapers.length > 0 && (
                             <>
-                            <div className={`grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                            <div className={`wallpaper-grid grid gap-3 sm:gap-4 content-start ${isFullscreen ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
                               {wpMobileItems.map(item => (
                                 <div
                                   key={item.id}
-                                  className={`relative group cursor-pointer rounded-lg overflow-hidden border ${purityBorderClass(item.purity)} transition-all`}
+                                  className={`wallpaper-grid-card relative group cursor-pointer rounded-lg overflow-hidden border ${purityBorderClass(item.purity)} transition-all`}
                                   onClick={() => setWpPreviewItem(item)}
                                 >
                                   <div className={isFullscreen ? 'w-full pb-[72%] sm:pb-[68%]' : 'w-full pb-[72%] sm:pb-[66%]'} />
@@ -1907,6 +1959,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                                     alt={`Wallpaper ${item.id}`}
                                     className="absolute inset-0 w-full h-full object-cover"
                                     loading="lazy"
+                                    decoding="async"
                                     referrerPolicy="no-referrer"
                                   />
                                   {/* Purity badge (sketchy/nsfw only) */}
@@ -2016,6 +2069,43 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                         >
                           {t(opt.label)}
                           {lockIdleTimeout === opt.ms && <span className="text-[#72d565]">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* Link opening mode section */}
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">{t('settings.openModeTitle')}</h3>
+                    <p className="text-[13px] text-white/50 mb-3">{t('settings.openModeDesc')}</p>
+
+                    <label className="block text-[11px] uppercase tracking-widest font-bold text-white/40 mb-2 ml-1">{t('settings.openModeLabel')}</label>
+                    <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                      {([
+                        { mode: 'newTab', label: 'settings.openModeNewTab', desc: 'settings.openModeNewTabDesc' },
+                        { mode: 'current', label: 'settings.openModeCurrent', desc: 'settings.openModeCurrentDesc' },
+                      ] as const).map((opt, idx, arr) => (
+                        <button
+                          key={opt.mode}
+                          className={`w-full px-5 py-4 text-[14px] font-medium flex items-center justify-between gap-4 text-left ${idx < arr.length - 1 ? 'border-b border-white/5' : ''} ${linkOpenMode === opt.mode ? 'bg-white/5 text-white/90' : 'text-white/50 hover:bg-white/5 hover:text-white/90'}`}
+                          onClick={() => {
+                            setLinkOpenMode(opt.mode);
+                            useConfigStore.getState().markLocalModified();
+                            if (jwtToken) {
+                              client.put('/api/v1/user/preferences', { linkOpenMode: opt.mode }).catch(err => {
+                                console.error('Failed to sync linkOpenMode to cloud', err);
+                              });
+                            }
+                          }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block">{t(opt.label)}</span>
+                            <span className="block text-[12px] text-white/35 mt-0.5 whitespace-normal">{t(opt.desc)}</span>
+                          </span>
+                          {linkOpenMode === opt.mode && <span className="text-[#72d565] shrink-0">✓</span>}
                         </button>
                       ))}
                     </div>
@@ -2146,6 +2236,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
             )}
           </div>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
 
       {/* === Fullscreen wallpaper preview overlay (from Wallhaven) === */}
@@ -2360,18 +2451,26 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
           onClick={() => setImportConfirmData(null)}
         >
           <div
-            className="bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 p-6 animate-scaleIn"
+            ref={importConfirmWindow.shellRef}
+            className={`relative bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-md mx-4 sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)] animate-scaleIn flex flex-col overflow-hidden transition-all ${importConfirmWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
+            style={importConfirmWindow.style}
             onClick={e => e.stopPropagation()}
           >
             {/* Title */}
-            <h3 className="text-lg font-bold text-white mb-1">{t('settings.importConfirmTitle')}</h3>
-            <p className="text-[13px] text-white/50 mb-5">
-              {importConfirmData.pages.flat().length + importConfirmData.dock.length} items
-            </p>
+            <div
+              onPointerDown={importConfirmWindow.handleDragPointerDown}
+              className="shrink-0 border-b border-white/10 px-6 py-5 select-none sm:cursor-default"
+            >
+              <h3 className="text-lg font-bold text-white mb-1">{t('settings.importConfirmTitle')}</h3>
+              <p className="text-[13px] text-white/50">
+                {importConfirmData.pages.flat().length + importConfirmData.dock.length} items
+              </p>
+            </div>
 
-            {/* Options */}
-            <div className="space-y-3">
-              {/* Overwrite option */}
+            <div className="flex-1 overflow-y-auto p-6 desktop-scrollbar">
+              {/* Options */}
+              <div className="space-y-3">
+                {/* Overwrite option */}
               <button
                 type="button"
                 onClick={handleImportOverwrite}
@@ -2388,7 +2487,7 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                 </div>
               </button>
 
-              {/* Merge option */}
+                {/* Merge option */}
               <button
                 type="button"
                 onClick={handleImportMerge}
@@ -2404,16 +2503,18 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                   <span className="block text-[12px] text-white/40 mt-0.5">{t('settings.importMergeDesc')}</span>
                 </div>
               </button>
-            </div>
+              </div>
 
-            {/* Cancel */}
-            <button
-              type="button"
-              onClick={() => setImportConfirmData(null)}
-              className="w-full mt-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 text-[13px] font-medium transition-colors"
-            >
-              {t('settings.cancel')}
-            </button>
+              {/* Cancel */}
+              <button
+                type="button"
+                onClick={() => setImportConfirmData(null)}
+                className="w-full mt-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 text-[13px] font-medium transition-colors"
+              >
+                {t('settings.cancel')}
+              </button>
+            </div>
+            {importConfirmWindow.resizeHandle}
           </div>
         </div>
       )}

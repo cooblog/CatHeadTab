@@ -32,6 +32,7 @@ export const ENV_API_URL: string = resolveApiUrl();
 export const isEnvConfigured: boolean = !!ENV_API_URL;
 
 export type UserRole = 'user' | 'pro' | 'admin';
+export type LinkOpenMode = 'current' | 'newTab';
 
 export interface UserProfile {
   username: string;
@@ -62,6 +63,8 @@ interface ConfigState {
   isLocked: boolean
   /** Idle timeout before auto-lock (milliseconds). 0 means never. */
   lockIdleTimeout: number
+  /** How regular website links should open from the desktop experience. */
+  linkOpenMode: LinkOpenMode
   /** Timestamp (ms) when the user last resolved a sync conflict. Used to suppress re-prompting after refresh. */
   lastSyncResolvedAt: number
   /** Timestamp (ms) when local data (layout/preferences) was last modified by the user. */
@@ -81,6 +84,7 @@ interface ConfigState {
   setUserProfile: (profile: UserProfile | null) => void
   setLocked: (locked: boolean) => void
   setLockIdleTimeout: (ms: number) => void
+  setLinkOpenMode: (mode: LinkOpenMode) => void
   setLastSyncResolvedAt: (ts: number) => void
   setLastLocalModifiedAt: (ts: number) => void
   /** Set the active provider and optionally update its config. */
@@ -136,6 +140,7 @@ export const useConfigStore = create<ConfigState>()(
       userProfile: null,
       isLocked: false,
       lockIdleTimeout: 0,
+      linkOpenMode: 'newTab',
       lastSyncResolvedAt: 0,
       lastLocalModifiedAt: 0,
       aiActiveProvider: '',
@@ -149,6 +154,7 @@ export const useConfigStore = create<ConfigState>()(
       setUserProfile: (profile) => set({ userProfile: profile }),
       setLocked: (locked) => set({ isLocked: locked }),
       setLockIdleTimeout: (ms) => set({ lockIdleTimeout: ms }),
+      setLinkOpenMode: (mode) => set({ linkOpenMode: mode }),
       setLastSyncResolvedAt: (ts) => set({ lastSyncResolvedAt: ts }),
       setLastLocalModifiedAt: (ts) => set({ lastLocalModifiedAt: ts }),
       setAIProvider: (providerKey, config) => set((state) => {
@@ -186,7 +192,7 @@ export const useConfigStore = create<ConfigState>()(
       name: 'catheadtab-config',
       storage: createJSONStorage(() => customStorage),
       // AI config is persisted locally but NEVER included in cloud sync
-      // (syncPreferencesToCloud only sends backgroundImage & lockIdleTimeout)
+      // (syncPreferencesToCloud sends non-AI preferences only)
     }
   )
 )

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../i18n/useTranslation';
+import { useFloatingWindow } from '../hooks/useFloatingWindow';
 
 export type SyncStrategy = 'merge' | 'cloudOverwriteLocal' | 'localOverwriteCloud';
 
@@ -17,6 +18,14 @@ export const SyncConflictModal: React.FC<SyncConflictModalProps> = ({
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<SyncStrategy | null>(null);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: () => ({
+      width: 448,
+      height: typeof window === 'undefined' ? 560 : Math.min(620, window.innerHeight - 96),
+    }),
+    minHeight: 420,
+    minWidth: 360,
+  });
 
   const handleSelect = async (strategy: SyncStrategy) => {
     setSelected(strategy);
@@ -78,18 +87,23 @@ export const SyncConflictModal: React.FC<SyncConflictModalProps> = ({
 
       {/* Modal */}
       <div
-        className="w-full max-w-md bg-black/40 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none"
+        ref={floatingWindow.shellRef}
+        className={`relative w-full max-w-md sm:fixed sm:left-[var(--floating-window-left)] sm:top-[var(--floating-window-top)] sm:w-[var(--floating-window-width)] sm:h-[var(--floating-window-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)] bg-black/40 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto transform animate-scaleIn overflow-hidden select-none transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'}`}
+        style={floatingWindow.style}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="h-12 md:h-14 border-b border-white/10 flex items-center justify-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none">
+        <div
+          onPointerDown={floatingWindow.handleDragPointerDown}
+          className="h-12 md:h-14 border-b border-white/10 flex items-center justify-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none sm:cursor-default"
+        >
           <span className="text-[13px] font-semibold text-white/70">
             {t('sync.conflictTitle')}
           </span>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 desktop-scrollbar">
           {/* Description */}
           <div className="text-center mb-6">
             <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
@@ -155,6 +169,7 @@ export const SyncConflictModal: React.FC<SyncConflictModalProps> = ({
             ))}
           </div>
         </div>
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );
