@@ -42,10 +42,15 @@ export const zh = {
   
   // Settings
   'settings.title': '⚙️ 偏好设置',
-  'settings.wallpaper': '🖼️ 壁纸',
+  'settings.wallpaper': '壁纸',
   'settings.language': '🌍 语言',
-  'settings.system': '⚙️ 通用',
+  'settings.system': '通用',
   'settings.ai': 'AI 助手',
+  'settings.about': '关于',
+  'about.title': '关于 CatHeadTab',
+  'about.currentVersion': '当前版本',
+  'about.whatsNew': '更新日志',
+  'about.viewReleases': '在 GitHub 查看全部发布',
   'settings.sidebarCollapse': '收起侧边栏',
   'settings.sidebarExpand': '展开侧边栏',
   'settings.privacyPolicy': '隐私政策',

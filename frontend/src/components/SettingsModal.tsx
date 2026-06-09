@@ -10,8 +10,9 @@ import type { WallpaperItem, WallpaperSearchResult, WallpaperSorting, WallpaperC
 import builtinBgWebp from '../assets/bg.webp';
 import builtinBg2Webp from '../assets/bg2.webp';
 import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
+import { changelog, getAppVersion, changesForLanguage } from '../utils/changelog';
 
-type Tab = 'wallpaper' | 'system' | 'ai';
+type Tab = 'wallpaper' | 'system' | 'ai' | 'about';
 type WallpaperSubTab = 'current' | 'browse';
 type WallpaperSource = 'builtin' | 'local' | 'wallhaven' | 'cos';
 
@@ -1396,8 +1397,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                 aria-label={t('settings.wallpaper')}
                 title={isSidebarCollapsed ? t('settings.wallpaper') : undefined}
               >
-                <span className="md:hidden">{t('settings.wallpaper')}</span>
-                <span className="hidden md:inline">{isSidebarCollapsed ? '🖼️' : t('settings.wallpaper')}</span>
+                <span className="w-5 h-5 shrink-0 flex items-center justify-center leading-none">🖼️</span>
+                <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>{t('settings.wallpaper')}</span>
               </button>
               <button
                 type="button"
@@ -1406,8 +1407,8 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
                 aria-label={t('settings.system')}
                 title={isSidebarCollapsed ? t('settings.system') : undefined}
               >
-                <span className="md:hidden">{t('settings.system')}</span>
-                <span className="hidden md:inline">{isSidebarCollapsed ? '⚙️' : t('settings.system')}</span>
+                <span className="w-5 h-5 shrink-0 flex items-center justify-center leading-none">⚙️</span>
+                <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>{t('settings.system')}</span>
               </button>
               <button
                 type="button"
@@ -1418,6 +1419,16 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
               >
                 <CatHeadIcon alt="" className="w-5 h-5 shrink-0 rounded-md bg-black/25" />
                 <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>{t('settings.ai')}</span>
+              </button>
+              <button
+                type="button"
+                className={`flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3.5 rounded-xl md:rounded-2xl transition-all font-semibold text-[13px] tracking-wide text-left whitespace-nowrap ${isSidebarCollapsed ? 'md:w-11 md:h-11 md:p-0 md:justify-center md:text-lg' : ''} ${activeTab === 'about' ? 'bg-white/20 text-white shadow-md' : 'text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                onClick={() => setActiveTab('about')}
+                aria-label={t('settings.about')}
+                title={isSidebarCollapsed ? t('settings.about') : undefined}
+              >
+                <span className="w-5 h-5 shrink-0 flex items-center justify-center leading-none">ℹ️</span>
+                <span className={isSidebarCollapsed ? 'md:sr-only' : ''}>{t('settings.about')}</span>
               </button>
             </div>
           </div>
@@ -2217,6 +2228,64 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
               {activeTab === 'ai' && (
                 <div className="space-y-6 fade-in">
                   <AISettingsSection />
+                </div>
+              )}
+
+              {/* ============ ABOUT TAB ============ */}
+              {activeTab === 'about' && (
+                <div className="space-y-6 fade-in max-w-2xl">
+                  {/* Current version */}
+                  <div className="flex items-center gap-4">
+                    <CatHeadIcon alt="" className="w-12 h-12 shrink-0 rounded-2xl bg-black/25" />
+                    <div>
+                      <h3 className="text-[15px] font-semibold text-white">{t('about.title')}</h3>
+                      <p className="text-[13px] text-white/50">
+                        {t('about.currentVersion')}
+                        <span className="ml-2 px-2 py-0.5 rounded-md bg-white/10 text-white/80 font-mono text-[12px]">v{getAppVersion()}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-white/5" />
+
+                  {/* What's New / changelog */}
+                  <div>
+                    <h4 className="text-[13px] font-semibold text-white/70 mb-3">{t('about.whatsNew')}</h4>
+                    <div className="space-y-4">
+                      {changelog.map((entry) => (
+                        <div key={entry.version} className="rounded-2xl bg-white/[0.03] border border-white/10 p-4">
+                          <div className="flex items-baseline justify-between mb-2">
+                            <span className="text-[14px] font-semibold text-[#72d565] font-mono">v{entry.version}</span>
+                            <span className="text-[12px] text-white/40">{entry.date}</span>
+                          </div>
+                          <ul className="space-y-1.5">
+                            {changesForLanguage(entry, language).map((change, i) => (
+                              <li key={i} className="text-[13px] text-white/70 flex gap-2 leading-relaxed">
+                                <span className="text-white/30 select-none">•</span>
+                                <span>{change}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Releases link */}
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      onClick={() => window.open('https://github.com/DeaglePC/CatHeadTab/releases', '_blank')}
+                      className="text-[12px] text-white/30 hover:text-[#72d565] transition-colors flex items-center gap-1.5"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                      </svg>
+                      {t('about.viewReleases')}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
