@@ -17,10 +17,13 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   const weekDays = isZh ? WEEK_DAYS_ZH : WEEK_DAYS_EN;
 
   const now = new Date();
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth();
+  const nowDate = now.getDate();
+  const [viewYear, setViewYear] = useState(nowYear);
+  const [viewMonth, setViewMonth] = useState(nowMonth);
 
-  const today = now.getDate();
+  const today = nowDate;
 
   const monthLabel = useMemo(() => {
     const d = new Date(viewYear, viewMonth);
@@ -31,8 +34,8 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ size }) => {
   }, [viewYear, viewMonth, isZh]);
 
   const days = useMemo(() => (
-    buildCalendarMonth(viewYear, viewMonth, now)
-  ), [viewYear, viewMonth, now.getFullYear(), now.getMonth(), now.getDate()]);
+    buildCalendarMonth(viewYear, viewMonth, new Date(nowYear, nowMonth, nowDate))
+  ), [viewYear, viewMonth, nowYear, nowMonth, nowDate]);
 
   const prevMonth = () => {
     if (viewMonth === 0) {

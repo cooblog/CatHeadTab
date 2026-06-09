@@ -1005,7 +1005,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     setLocalPageImages([]);
     const handles: { name: string; handle: FileSystemFileHandle }[] = [];
     const imageExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg', '.avif']);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TS DOM types lack FileSystemDirectoryHandle async iteration
     for await (const entry of (dirHandle as any).values() as AsyncIterable<FileSystemHandle>) {
       if (entry.kind !== 'file') continue;
       const ext = entry.name.lastIndexOf('.') >= 0 ? entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase() : '';
@@ -1051,7 +1050,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     } catch {
       // Permission denied or handle invalid — silently ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localFileHandles.length, localFolderName]);
 
   // Load images for a specific page (lazy: generate small thumbnails for display)
@@ -1081,7 +1079,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     if (localFileHandles.length > 0) {
       loadLocalPage(localPage, localFileHandles);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localPage, localFileHandles]);
 
   // Auto-restore last used folder when switching to local source
@@ -1089,7 +1086,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     if (wpSource === 'local') {
       restoreLastFolder();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wpSource]);
 
   const localTotalPages = Math.max(1, Math.ceil(localFileHandles.length / LOCAL_PAGE_SIZE));
@@ -1154,7 +1150,6 @@ export const SettingsModal: React.FC<{ onClose: () => void; initialTab?: Tab }> 
     return () => {
       localPageImages.forEach(img => URL.revokeObjectURL(img.thumbUrl));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Immediately apply and sync background whenever it changes

@@ -143,7 +143,6 @@ export const Popup: React.FC = () => {
       fetchTitle(url);
     }, 600);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, fetchTitle, titleAutoFilled]);
 
   const doAdd = (skipDupCheck: boolean) => {

@@ -414,7 +414,13 @@ const useGridFlipManager = () => {
     });
   });
 
-  return { containerRef, snapshot };
+  // Callback ref so consumers attach the container without mutating the
+  // ref object returned from this hook (react-hooks/immutability).
+  const setContainer = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+  }, []);
+
+  return { containerRef, snapshot, setContainer };
 };
 
 // === Sortable Desktop Icon (used in grids) ===
@@ -864,8 +870,8 @@ export const Desktop: React.FC = () => {
   const flipManager = useGridFlipManager();
   const setPagesTrackNode = useCallback((node: HTMLDivElement | null) => {
     pagesTrackRef.current = node;
-    flipManager.containerRef.current = node;
-  }, [flipManager.containerRef]);
+    flipManager.setContainer(node);
+  }, [flipManager.setContainer]);
 
   // DnD state
   const [activeId, setActiveId] = useState<string | null>(null);
