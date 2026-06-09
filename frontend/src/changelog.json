@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.0.2",
+    "date": "2026-06-10",
+    "zh": [
+      "设置中新增「关于」页，可查看当前版本与更新日志",
+      "优化设置侧边栏图标与文字的对齐"
+    ],
+    "en": [
+      "Added an About page in Settings showing the current version and changelog",
+      "Improved icon and text alignment in the settings sidebar"
+    ]
+  },
+  {
     "version": "1.0.1",
     "date": "2026-06-09",
     "zh": [
