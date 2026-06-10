@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useFloatingWindow } from '../hooks/useFloatingWindow';
 import { useTranslation } from '../i18n/useTranslation';
@@ -12,6 +12,8 @@ import {
   getUpcomingCalendarEvents,
   isSameDate,
   solarToLunar,
+  MAX_CALENDAR_YEAR,
+  MIN_CALENDAR_YEAR,
   WEEK_DAYS_EN,
   WEEK_DAYS_ZH,
   type CalendarFestival,
@@ -23,6 +25,9 @@ interface CalendarDetailModalProps {
   onClose: () => void;
   onEdit?: () => void;
 }
+
+const MONTHS_ZH = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const CATEGORY_TONE: Record<CalendarFestivalCategory, string> = {
   chinese: 'border-red-300/25 bg-red-500/15 text-red-100',
@@ -69,6 +74,14 @@ function TodayIcon() {
       <rect x="3" y="4" width="18" height="18" rx="2"/>
       <path d="M16 2v4M8 2v4M3 10h18"/>
       <path d="M12 14h.01M8 14h.01M16 14h.01M12 18h.01M8 18h.01M16 18h.01"/>
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+      <path d="m6 9 6 6 6-6"/>
     </svg>
   );
 }
@@ -241,13 +254,47 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
       .slice(0, 10);
   }, [calendarDays, selectedDate]);
 
+  // Year/month quick picker state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'month' | 'year'>('month');
+  const [pickerYear, setPickerYear] = useState(viewYear);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (pickerOpen) {
+        setPickerOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, pickerOpen]);
+
+  // Close picker on outside click. Capture phase, because the modal shell
+  // stops mousedown propagation so a bubble-phase document listener never fires.
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler, true);
+    return () => document.removeEventListener('mousedown', handler, true);
+  }, [pickerOpen]);
+
+  const togglePicker = useCallback(() => {
+    setPickerOpen((open) => {
+      if (!open) {
+        setPickerYear(viewYear);
+        setPickerMode('month');
+      }
+      return !open;
+    });
+  }, [viewYear]);
 
   const selectDate = useCallback((date: Date) => {
     setSelectedDate(date);
@@ -271,6 +318,16 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
     setViewMonth(today.getMonth());
     setSelectedDate(today);
   }, [today]);
+
+  // Jump straight to a year+month from the quick picker, keeping the
+  // selected day-of-month clamped like shiftMonth does.
+  const selectYearMonth = useCallback((year: number, monthIndex: number) => {
+    const maxDay = new Date(year, monthIndex + 1, 0).getDate();
+    setViewYear(year);
+    setViewMonth(monthIndex);
+    setSelectedDate(new Date(year, monthIndex, Math.min(selectedDate.getDate(), maxDay)));
+    setPickerOpen(false);
+  }, [selectedDate]);
 
   const addWidget = useLayoutStore((state) => state.addWidget);
   const [countdownAdded, setCountdownAdded] = useState(false);
@@ -375,7 +432,110 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     <h2 className="text-3xl font-bold tracking-normal text-white sm:text-4xl">
                       {selectedDate.getDate()}
                     </h2>
-                    <span className="text-[18px] font-semibold text-white/80">{formatMonthTitle(viewYear, viewMonth, isZh)}</span>
+                    <div ref={pickerRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={togglePicker}
+                        title={isZh ? '快速选择年份和月份' : 'Quick-select year and month'}
+                        className="inline-flex items-center gap-1 rounded-lg text-[18px] font-semibold text-white/80 transition-colors hover:text-white"
+                      >
+                        {formatMonthTitle(viewYear, viewMonth, isZh)}
+                        <ChevronDownIcon open={pickerOpen} />
+                      </button>
+                      {pickerOpen && (
+                        <div
+                          className="absolute left-0 top-full z-30 mt-2 w-[268px] rounded-2xl border border-white/[0.15] p-3 shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
+                          style={{
+                            background: 'rgba(30, 32, 36, 0.95)',
+                            backdropFilter: 'saturate(180%) blur(40px)',
+                            WebkitBackdropFilter: 'saturate(180%) blur(40px)',
+                          }}
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setPickerYear((y) => Math.max(MIN_CALENDAR_YEAR, y - (pickerMode === 'year' ? 12 : 1)))}
+                              disabled={pickerYear <= MIN_CALENDAR_YEAR}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                              title={pickerMode === 'year' ? (isZh ? '前 12 年' : 'Previous 12 years') : (isZh ? '上一年' : 'Previous year')}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPickerMode((m) => (m === 'month' ? 'year' : 'month'))}
+                              className="rounded-lg px-3 py-1 text-[13px] font-semibold text-white/90 transition-colors hover:bg-white/10"
+                              title={pickerMode === 'month' ? (isZh ? '选择年份' : 'Pick a year') : (isZh ? '返回月份选择' : 'Back to months')}
+                            >
+                              {pickerMode === 'month'
+                                ? (isZh ? `${pickerYear}年` : `${pickerYear}`)
+                                : `${Math.floor(pickerYear / 12) * 12} – ${Math.floor(pickerYear / 12) * 12 + 11}`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPickerYear((y) => Math.min(MAX_CALENDAR_YEAR, y + (pickerMode === 'year' ? 12 : 1)))}
+                              disabled={pickerYear >= MAX_CALENDAR_YEAR}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                              title={pickerMode === 'year' ? (isZh ? '后 12 年' : 'Next 12 years') : (isZh ? '下一年' : 'Next year')}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+                            </button>
+                          </div>
+                          {pickerMode === 'month' ? (
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {(isZh ? MONTHS_ZH : MONTHS_EN).map((label, idx) => {
+                                const isCurrent = pickerYear === viewYear && idx === viewMonth;
+                                const isThisMonth = pickerYear === today.getFullYear() && idx === today.getMonth();
+                                return (
+                                  <button
+                                    type="button"
+                                    key={label}
+                                    onClick={() => selectYearMonth(pickerYear, idx)}
+                                    className={`h-9 rounded-lg text-[12px] font-semibold transition-colors ${
+                                      isCurrent
+                                        ? 'border border-red-300/55 bg-red-500/22 text-white'
+                                        : isThisMonth
+                                          ? 'bg-white/[0.08] text-white/85 ring-1 ring-white/20 hover:bg-white/15'
+                                          : 'text-white/65 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {Array.from({ length: 12 }, (_, i) => Math.floor(pickerYear / 12) * 12 + i).map((year) => {
+                                const outOfRange = year < MIN_CALENDAR_YEAR || year > MAX_CALENDAR_YEAR;
+                                const isCurrent = year === viewYear;
+                                const isThisYear = year === today.getFullYear();
+                                return (
+                                  <button
+                                    type="button"
+                                    key={year}
+                                    disabled={outOfRange}
+                                    onClick={() => {
+                                      setPickerYear(year);
+                                      setPickerMode('month');
+                                    }}
+                                    className={`h-9 rounded-lg text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-25 ${
+                                      isCurrent
+                                        ? 'border border-red-300/55 bg-red-500/22 text-white'
+                                        : isThisYear
+                                          ? 'bg-white/[0.08] text-white/85 ring-1 ring-white/20 hover:bg-white/15'
+                                          : 'text-white/65 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                  >
+                                    {year}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <span className="text-[13px] text-white/42">{formatLunarDate(selectedLunar, isZh)}</span>
                   </div>
                 </div>

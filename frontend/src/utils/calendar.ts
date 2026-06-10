@@ -23,6 +23,10 @@ const LUNAR_INFO = [
 ];
 
 const MAX_LUNAR_YEAR = MIN_LUNAR_YEAR + LUNAR_INFO.length - 1;
+
+/** Year range with lunar data available — calendar UI should not navigate outside it. */
+export const MIN_CALENDAR_YEAR = MIN_LUNAR_YEAR;
+export const MAX_CALENDAR_YEAR = MAX_LUNAR_YEAR;
 const LUNAR_MONTHS = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
 const LUNAR_DAYS = [
   '初一','初二','初三','初四','初五','初六','初七','初八','初九','初十',
