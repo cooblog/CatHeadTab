@@ -133,6 +133,8 @@ function formatCompactDate(date: Date, isZh: boolean): string {
 function formatDaysAway(daysAway: number, isZh: boolean): string {
   if (daysAway === 0) return isZh ? '今天' : 'Today';
   if (daysAway === 1) return isZh ? '明天' : 'Tomorrow';
+  if (daysAway === -1) return isZh ? '昨天' : 'Yesterday';
+  if (daysAway < 0) return isZh ? `${-daysAway}天前` : `${-daysAway} days ago`;
   return isZh ? `${daysAway}天后` : `In ${daysAway} days`;
 }
 
@@ -231,28 +233,39 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
     getFestivalsForDate(selectedDate, selectedLunar)
   ), [selectedDate, selectedLunar]);
 
+  // Days-away labels are always relative to the real today, not the selected
+  // date — a festival should only ever read "今天" when it actually is today.
+  const todayStart = useMemo(() => (
+    new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  ), [today]);
+
+  const daysFromToday = useCallback((date: Date) => (
+    Math.round((date.getTime() - todayStart.getTime()) / 86400000)
+  ), [todayStart]);
+
   const upcomingEvents = useMemo(() => (
     getUpcomingCalendarEvents(selectedDate, 12, 140)
-  ), [selectedDate]);
+      .map((event) => ({ ...event, daysAway: daysFromToday(event.date) }))
+  ), [selectedDate, daysFromToday]);
 
   const upcomingInternationalEvents = useMemo(() => (
     getUpcomingCalendarEvents(selectedDate, 30, 220)
       .filter((event) => event.festival.category === 'international')
       .slice(0, 5)
-  ), [selectedDate]);
+      .map((event) => ({ ...event, daysAway: daysFromToday(event.date) }))
+  ), [selectedDate, daysFromToday]);
 
-  const monthEvents = useMemo(() => {
-    const selectedStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-    return calendarDays
-      .filter((day) => day.isCurrentMonth && day.date >= selectedStart && day.festivals.length > 0)
+  const monthEvents = useMemo(() => (
+    calendarDays
+      .filter((day) => day.isCurrentMonth && day.festivals.length > 0)
       .flatMap((day) => day.festivals.map((item) => ({
         date: day.date,
         key: `${day.key}-${item.id}`,
         festival: item,
-        daysAway: Math.round((day.date.getTime() - selectedStart.getTime()) / 86400000),
+        daysAway: daysFromToday(day.date),
       })))
-      .slice(0, 10);
-  }, [calendarDays, selectedDate]);
+      .slice(0, 10)
+  ), [calendarDays, daysFromToday]);
 
   // Year/month quick picker state
   const [pickerOpen, setPickerOpen] = useState(false);
