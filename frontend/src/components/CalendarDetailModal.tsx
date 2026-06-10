@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useFloatingWindow } from '../hooks/useFloatingWindow';
 import { useTranslation } from '../i18n/useTranslation';
+import { useLayoutStore } from '../store/layoutStore';
 import {
   buildCalendarMonth,
   formatLunarDate,
@@ -72,6 +73,24 @@ function TodayIcon() {
   );
 }
 
+function TimerIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="10" x2="14" y1="2" y2="2"/>
+      <line x1="12" x2="15" y1="14" y2="11"/>
+      <circle cx="12" cy="14" r="8"/>
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5"/>
+    </svg>
+  );
+}
+
 function getFestivalName(item: CalendarFestival, isZh: boolean): string {
   return isZh ? item.nameZh : item.nameEn;
 }
@@ -117,10 +136,12 @@ function EventList({
   emptyText,
   events,
   isZh,
+  onSelectDate,
 }: {
   emptyText: string;
   events: UpcomingCalendarEvent[];
   isZh: boolean;
+  onSelectDate: (date: Date) => void;
 }) {
   if (events.length === 0) {
     return (
@@ -133,9 +154,12 @@ function EventList({
   return (
     <div className="space-y-2">
       {events.map((event) => (
-        <div
+        <button
+          type="button"
           key={event.key}
-          className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 py-2.5"
+          onClick={() => onSelectDate(event.date)}
+          title={isZh ? '跳转到该日期' : 'Jump to this date'}
+          className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 py-2.5 text-left transition-colors hover:border-white/15 hover:bg-white/[0.07]"
         >
           <div className="flex h-10 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-black/25 text-white/80">
             <span className="text-[14px] font-bold leading-none">{event.date.getDate()}</span>
@@ -153,7 +177,7 @@ function EventList({
               <span>{formatDaysAway(event.daysAway, isZh)}</span>
             </div>
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -247,6 +271,31 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
     setViewMonth(today.getMonth());
     setSelectedDate(today);
   }, [today]);
+
+  const addWidget = useLayoutStore((state) => state.addWidget);
+  const [countdownAdded, setCountdownAdded] = useState(false);
+
+  const addCountdownWidget = useCallback(() => {
+    const eventName = selectedFestivals.length > 0
+      ? getFestivalName(selectedFestivals[0], isZh)
+      : formatCompactDate(selectedDate, isZh);
+    addWidget('countdown', 'medium', {
+      widgetType: 'countdown',
+      targetDate: getDateKey(selectedDate),
+      eventName,
+    });
+    setCountdownAdded(true);
+  }, [addWidget, isZh, selectedDate, selectedFestivals]);
+
+  useEffect(() => {
+    setCountdownAdded(false);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (!countdownAdded) return;
+    const timer = setTimeout(() => setCountdownAdded(false), 2000);
+    return () => clearTimeout(timer);
+  }, [countdownAdded]);
 
   const modal = (
     <div
@@ -432,6 +481,21 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                         <span className="text-[12px] text-white/35">{isZh ? '暂无节日或节气' : 'No festival or solar term'}</span>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={addCountdownWidget}
+                      title={isZh ? '在桌面添加该日期的倒计时小组件' : 'Add a countdown widget for this date to the desktop'}
+                      className={`mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl text-[12px] font-semibold transition-colors ${
+                        countdownAdded
+                          ? 'bg-[#72d565]/20 text-[#9ae88f]'
+                          : 'bg-white/[0.07] text-white/70 hover:bg-white/15 hover:text-white'
+                      }`}
+                    >
+                      {countdownAdded ? <CheckIcon /> : <TimerIcon />}
+                      {countdownAdded
+                        ? (isZh ? '已添加到桌面' : 'Added to desktop')
+                        : (isZh ? '添加倒计时' : 'Add countdown')}
+                    </button>
                   </div>
                 </section>
 
@@ -444,6 +508,7 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     emptyText={isZh ? '本月暂无已标记节日' : 'No marked events this month'}
                     events={monthEvents}
                     isZh={isZh}
+                    onSelectDate={selectDate}
                   />
                 </section>
 
@@ -456,6 +521,7 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     emptyText={isZh ? '近期暂无节日' : 'No upcoming events'}
                     events={upcomingEvents}
                     isZh={isZh}
+                    onSelectDate={selectDate}
                   />
                 </section>
 
@@ -468,6 +534,7 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     emptyText={isZh ? '近期暂无国外节日' : 'No international holidays soon'}
                     events={upcomingInternationalEvents}
                     isZh={isZh}
+                    onSelectDate={selectDate}
                   />
                 </section>
               </div>
