@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useFloatingWindow } from '../hooks/useFloatingWindow';
 import { useTranslation } from '../i18n/useTranslation';
+import { useLayoutStore } from '../store/layoutStore';
 import {
   buildCalendarMonth,
   formatLunarDate,
@@ -11,6 +12,8 @@ import {
   getUpcomingCalendarEvents,
   isSameDate,
   solarToLunar,
+  MAX_CALENDAR_YEAR,
+  MIN_CALENDAR_YEAR,
   WEEK_DAYS_EN,
   WEEK_DAYS_ZH,
   type CalendarFestival,
@@ -22,6 +25,9 @@ interface CalendarDetailModalProps {
   onClose: () => void;
   onEdit?: () => void;
 }
+
+const MONTHS_ZH = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const CATEGORY_TONE: Record<CalendarFestivalCategory, string> = {
   chinese: 'border-red-300/25 bg-red-500/15 text-red-100',
@@ -72,6 +78,32 @@ function TodayIcon() {
   );
 }
 
+function ChevronDownIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+      <path d="m6 9 6 6 6-6"/>
+    </svg>
+  );
+}
+
+function TimerIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="10" x2="14" y1="2" y2="2"/>
+      <line x1="12" x2="15" y1="14" y2="11"/>
+      <circle cx="12" cy="14" r="8"/>
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 6 9 17l-5-5"/>
+    </svg>
+  );
+}
+
 function getFestivalName(item: CalendarFestival, isZh: boolean): string {
   return isZh ? item.nameZh : item.nameEn;
 }
@@ -101,6 +133,8 @@ function formatCompactDate(date: Date, isZh: boolean): string {
 function formatDaysAway(daysAway: number, isZh: boolean): string {
   if (daysAway === 0) return isZh ? '今天' : 'Today';
   if (daysAway === 1) return isZh ? '明天' : 'Tomorrow';
+  if (daysAway === -1) return isZh ? '昨天' : 'Yesterday';
+  if (daysAway < 0) return isZh ? `${-daysAway}天前` : `${-daysAway} days ago`;
   return isZh ? `${daysAway}天后` : `In ${daysAway} days`;
 }
 
@@ -117,10 +151,12 @@ function EventList({
   emptyText,
   events,
   isZh,
+  onSelectDate,
 }: {
   emptyText: string;
   events: UpcomingCalendarEvent[];
   isZh: boolean;
+  onSelectDate: (date: Date) => void;
 }) {
   if (events.length === 0) {
     return (
@@ -133,9 +169,12 @@ function EventList({
   return (
     <div className="space-y-2">
       {events.map((event) => (
-        <div
+        <button
+          type="button"
           key={event.key}
-          className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 py-2.5"
+          onClick={() => onSelectDate(event.date)}
+          title={isZh ? '跳转到该日期' : 'Jump to this date'}
+          className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.035] px-3 py-2.5 text-left transition-colors hover:border-white/15 hover:bg-white/[0.07]"
         >
           <div className="flex h-10 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-black/25 text-white/80">
             <span className="text-[14px] font-bold leading-none">{event.date.getDate()}</span>
@@ -153,7 +192,7 @@ function EventList({
               <span>{formatDaysAway(event.daysAway, isZh)}</span>
             </div>
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -194,36 +233,81 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
     getFestivalsForDate(selectedDate, selectedLunar)
   ), [selectedDate, selectedLunar]);
 
+  // Days-away labels are always relative to the real today, not the selected
+  // date — a festival should only ever read "今天" when it actually is today.
+  const todayStart = useMemo(() => (
+    new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  ), [today]);
+
+  const daysFromToday = useCallback((date: Date) => (
+    Math.round((date.getTime() - todayStart.getTime()) / 86400000)
+  ), [todayStart]);
+
   const upcomingEvents = useMemo(() => (
     getUpcomingCalendarEvents(selectedDate, 12, 140)
-  ), [selectedDate]);
+      .map((event) => ({ ...event, daysAway: daysFromToday(event.date) }))
+  ), [selectedDate, daysFromToday]);
 
   const upcomingInternationalEvents = useMemo(() => (
     getUpcomingCalendarEvents(selectedDate, 30, 220)
       .filter((event) => event.festival.category === 'international')
       .slice(0, 5)
-  ), [selectedDate]);
+      .map((event) => ({ ...event, daysAway: daysFromToday(event.date) }))
+  ), [selectedDate, daysFromToday]);
 
-  const monthEvents = useMemo(() => {
-    const selectedStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-    return calendarDays
-      .filter((day) => day.isCurrentMonth && day.date >= selectedStart && day.festivals.length > 0)
+  const monthEvents = useMemo(() => (
+    calendarDays
+      .filter((day) => day.isCurrentMonth && day.festivals.length > 0)
       .flatMap((day) => day.festivals.map((item) => ({
         date: day.date,
         key: `${day.key}-${item.id}`,
         festival: item,
-        daysAway: Math.round((day.date.getTime() - selectedStart.getTime()) / 86400000),
+        daysAway: daysFromToday(day.date),
       })))
-      .slice(0, 10);
-  }, [calendarDays, selectedDate]);
+      .slice(0, 10)
+  ), [calendarDays, daysFromToday]);
+
+  // Year/month quick picker state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'month' | 'year'>('month');
+  const [pickerYear, setPickerYear] = useState(viewYear);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (pickerOpen) {
+        setPickerOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, pickerOpen]);
+
+  // Close picker on outside click. Capture phase, because the modal shell
+  // stops mousedown propagation so a bubble-phase document listener never fires.
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler, true);
+    return () => document.removeEventListener('mousedown', handler, true);
+  }, [pickerOpen]);
+
+  const togglePicker = useCallback(() => {
+    setPickerOpen((open) => {
+      if (!open) {
+        setPickerYear(viewYear);
+        setPickerMode('month');
+      }
+      return !open;
+    });
+  }, [viewYear]);
 
   const selectDate = useCallback((date: Date) => {
     setSelectedDate(date);
@@ -247,6 +331,41 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
     setViewMonth(today.getMonth());
     setSelectedDate(today);
   }, [today]);
+
+  // Jump straight to a year+month from the quick picker, keeping the
+  // selected day-of-month clamped like shiftMonth does.
+  const selectYearMonth = useCallback((year: number, monthIndex: number) => {
+    const maxDay = new Date(year, monthIndex + 1, 0).getDate();
+    setViewYear(year);
+    setViewMonth(monthIndex);
+    setSelectedDate(new Date(year, monthIndex, Math.min(selectedDate.getDate(), maxDay)));
+    setPickerOpen(false);
+  }, [selectedDate]);
+
+  const addWidget = useLayoutStore((state) => state.addWidget);
+  const [countdownAdded, setCountdownAdded] = useState(false);
+
+  const addCountdownWidget = useCallback(() => {
+    const eventName = selectedFestivals.length > 0
+      ? getFestivalName(selectedFestivals[0], isZh)
+      : formatCompactDate(selectedDate, isZh);
+    addWidget('countdown', 'medium', {
+      widgetType: 'countdown',
+      targetDate: getDateKey(selectedDate),
+      eventName,
+    });
+    setCountdownAdded(true);
+  }, [addWidget, isZh, selectedDate, selectedFestivals]);
+
+  useEffect(() => {
+    setCountdownAdded(false);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (!countdownAdded) return;
+    const timer = setTimeout(() => setCountdownAdded(false), 2000);
+    return () => clearTimeout(timer);
+  }, [countdownAdded]);
 
   const modal = (
     <div
@@ -326,7 +445,110 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     <h2 className="text-3xl font-bold tracking-normal text-white sm:text-4xl">
                       {selectedDate.getDate()}
                     </h2>
-                    <span className="text-[18px] font-semibold text-white/80">{formatMonthTitle(viewYear, viewMonth, isZh)}</span>
+                    <div ref={pickerRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={togglePicker}
+                        title={isZh ? '快速选择年份和月份' : 'Quick-select year and month'}
+                        className="inline-flex items-center gap-1 rounded-lg text-[18px] font-semibold text-white/80 transition-colors hover:text-white"
+                      >
+                        {formatMonthTitle(viewYear, viewMonth, isZh)}
+                        <ChevronDownIcon open={pickerOpen} />
+                      </button>
+                      {pickerOpen && (
+                        <div
+                          className="absolute left-0 top-full z-30 mt-2 w-[268px] rounded-2xl border border-white/[0.15] p-3 shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
+                          style={{
+                            background: 'rgba(30, 32, 36, 0.95)',
+                            backdropFilter: 'saturate(180%) blur(40px)',
+                            WebkitBackdropFilter: 'saturate(180%) blur(40px)',
+                          }}
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setPickerYear((y) => Math.max(MIN_CALENDAR_YEAR, y - (pickerMode === 'year' ? 12 : 1)))}
+                              disabled={pickerYear <= MIN_CALENDAR_YEAR}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                              title={pickerMode === 'year' ? (isZh ? '前 12 年' : 'Previous 12 years') : (isZh ? '上一年' : 'Previous year')}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6"/></svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPickerMode((m) => (m === 'month' ? 'year' : 'month'))}
+                              className="rounded-lg px-3 py-1 text-[13px] font-semibold text-white/90 transition-colors hover:bg-white/10"
+                              title={pickerMode === 'month' ? (isZh ? '选择年份' : 'Pick a year') : (isZh ? '返回月份选择' : 'Back to months')}
+                            >
+                              {pickerMode === 'month'
+                                ? (isZh ? `${pickerYear}年` : `${pickerYear}`)
+                                : `${Math.floor(pickerYear / 12) * 12} – ${Math.floor(pickerYear / 12) * 12 + 11}`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPickerYear((y) => Math.min(MAX_CALENDAR_YEAR, y + (pickerMode === 'year' ? 12 : 1)))}
+                              disabled={pickerYear >= MAX_CALENDAR_YEAR}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                              title={pickerMode === 'year' ? (isZh ? '后 12 年' : 'Next 12 years') : (isZh ? '下一年' : 'Next year')}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6"/></svg>
+                            </button>
+                          </div>
+                          {pickerMode === 'month' ? (
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {(isZh ? MONTHS_ZH : MONTHS_EN).map((label, idx) => {
+                                const isCurrent = pickerYear === viewYear && idx === viewMonth;
+                                const isThisMonth = pickerYear === today.getFullYear() && idx === today.getMonth();
+                                return (
+                                  <button
+                                    type="button"
+                                    key={label}
+                                    onClick={() => selectYearMonth(pickerYear, idx)}
+                                    className={`h-9 rounded-lg text-[12px] font-semibold transition-colors ${
+                                      isCurrent
+                                        ? 'border border-red-300/55 bg-red-500/22 text-white'
+                                        : isThisMonth
+                                          ? 'bg-white/[0.08] text-white/85 ring-1 ring-white/20 hover:bg-white/15'
+                                          : 'text-white/65 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {Array.from({ length: 12 }, (_, i) => Math.floor(pickerYear / 12) * 12 + i).map((year) => {
+                                const outOfRange = year < MIN_CALENDAR_YEAR || year > MAX_CALENDAR_YEAR;
+                                const isCurrent = year === viewYear;
+                                const isThisYear = year === today.getFullYear();
+                                return (
+                                  <button
+                                    type="button"
+                                    key={year}
+                                    disabled={outOfRange}
+                                    onClick={() => {
+                                      setPickerYear(year);
+                                      setPickerMode('month');
+                                    }}
+                                    className={`h-9 rounded-lg text-[12px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-25 ${
+                                      isCurrent
+                                        ? 'border border-red-300/55 bg-red-500/22 text-white'
+                                        : isThisYear
+                                          ? 'bg-white/[0.08] text-white/85 ring-1 ring-white/20 hover:bg-white/15'
+                                          : 'text-white/65 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                  >
+                                    {year}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <span className="text-[13px] text-white/42">{formatLunarDate(selectedLunar, isZh)}</span>
                   </div>
                 </div>
@@ -432,6 +654,21 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                         <span className="text-[12px] text-white/35">{isZh ? '暂无节日或节气' : 'No festival or solar term'}</span>
                       )}
                     </div>
+                    <button
+                      type="button"
+                      onClick={addCountdownWidget}
+                      title={isZh ? '在桌面添加该日期的倒计时小组件' : 'Add a countdown widget for this date to the desktop'}
+                      className={`mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl text-[12px] font-semibold transition-colors ${
+                        countdownAdded
+                          ? 'bg-[#72d565]/20 text-[#9ae88f]'
+                          : 'bg-white/[0.07] text-white/70 hover:bg-white/15 hover:text-white'
+                      }`}
+                    >
+                      {countdownAdded ? <CheckIcon /> : <TimerIcon />}
+                      {countdownAdded
+                        ? (isZh ? '已添加到桌面' : 'Added to desktop')
+                        : (isZh ? '添加倒计时' : 'Add countdown')}
+                    </button>
                   </div>
                 </section>
 
@@ -444,6 +681,7 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     emptyText={isZh ? '本月暂无已标记节日' : 'No marked events this month'}
                     events={monthEvents}
                     isZh={isZh}
+                    onSelectDate={selectDate}
                   />
                 </section>
 
@@ -456,6 +694,7 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     emptyText={isZh ? '近期暂无节日' : 'No upcoming events'}
                     events={upcomingEvents}
                     isZh={isZh}
+                    onSelectDate={selectDate}
                   />
                 </section>
 
@@ -468,6 +707,7 @@ export const CalendarDetailModal: React.FC<CalendarDetailModalProps> = ({ onClos
                     emptyText={isZh ? '近期暂无国外节日' : 'No international holidays soon'}
                     events={upcomingInternationalEvents}
                     isZh={isZh}
+                    onSelectDate={selectDate}
                   />
                 </section>
               </div>
