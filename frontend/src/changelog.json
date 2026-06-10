@@ -1,5 +1,21 @@
 [
   {
+    "version": "1.0.3",
+    "date": "2026-06-11",
+    "zh": [
+      "日历详情页支持点击右侧节日跳转到对应日期",
+      "日历详情页新增年份与月份快速选择",
+      "新增一键添加倒计时小组件：选中日期后即可在桌面创建倒计时",
+      "修复本月节日列表在点击节日后条目消失的问题"
+    ],
+    "en": [
+      "Calendar detail: click a festival in the sidebar to jump to its date",
+      "Calendar detail: added a quick year/month picker",
+      "Added one-click countdown widgets: pick a date and create a countdown on the desktop",
+      "Fixed the monthly festival list losing entries after clicking a festival"
+    ]
+  },
+  {
     "version": "1.0.2",
     "date": "2026-06-10",
     "zh": [
