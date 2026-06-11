@@ -53,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: catheadtab-extension
-          path: frontend/catheadtab-*.zip
+          path: frontend/release/catheadtab-*.zip
           retention-days: 7
 
   release:
