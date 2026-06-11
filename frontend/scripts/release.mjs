@@ -53,11 +53,23 @@ if (!changelog.some((e) => e.version === version)) {
   console.warn(`\n⚠️  changelog.json has no entry for ${version}. Add one before releasing for proper release notes.`);
 }
 
-// 5. Commit, tag, and push (pushing the tag triggers CI to build + release).
+// 5. Build the extension zip locally (release/catheadtab-v<version>.zip).
+//    Building before commit/tag means a broken build aborts the release before
+//    anything is published; roll back the bump so the tree is clean for a retry.
+console.log(`\n📦 Building extension zip for ${tag}...\n`);
+try {
+  run('npm run build:ext');
+} catch {
+  run('git checkout -- package.json package-lock.json public/manifest.json');
+  console.error('\n❌ build:ext failed — version bump rolled back, nothing committed or pushed.');
+  process.exit(1);
+}
+
+// 6. Commit, tag, and push (pushing the tag triggers CI to build + release).
 console.log(`\n🚀 Releasing ${tag}\n`);
 run('git add package.json package-lock.json public/manifest.json');
 run(`git commit -m "chore: release ${tag}"`);
 run(`git tag -a ${tag} -m "chore: release ${tag}"`);
 run('git push --follow-tags');
 
-console.log(`\n🎉 Pushed ${tag}. CI will build the zip and create the GitHub Release.`);
+console.log(`\n🎉 Pushed ${tag}. Local zip: release/catheadtab-${tag.slice(1)}.zip — CI will build the same and create the GitHub Release.`);

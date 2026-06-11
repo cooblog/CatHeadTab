@@ -60,9 +60,12 @@ if (fs.existsSync(distManifestPath)) {
   fs.writeFileSync(distManifestPath, JSON.stringify(distManifest, null, 2));
 }
 
-// Define output file
+// Define output file — zips land in release/ (gitignored) so the repo root
+// stays clean and local builds match where the user keeps release artifacts.
+const releaseDir = path.join(frontendDir, 'release');
+fs.mkdirSync(releaseDir, { recursive: true });
 const outputFileName = `catheadtab-v${version}.zip`;
-const outputPath = path.join(frontendDir, outputFileName);
+const outputPath = path.join(releaseDir, outputFileName);
 
 console.log(`Starting to create zip file: ${outputFileName}...`);
 
@@ -74,7 +77,7 @@ const archive = archiver('zip', {
 
 // Listen for all archive data to be written
 output.on('close', function() {
-  console.log(`Successfully created ${outputFileName} (${archive.pointer()} bytes)`);
+  console.log(`Successfully created release/${outputFileName} (${archive.pointer()} bytes)`);
   console.log('Ready to upload to Chrome Web Store!');
 });
 
