@@ -235,9 +235,16 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
       scheduleFrame();
     };
 
+    // preventDefault() on pointerdown does not stop touch panning; without this
+    // the browser claims the swipe as a scroll and fires pointercancel mid-drag.
+    const preventTouchScroll = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault();
+    };
+
     const stopDrag = (event?: PointerEvent) => {
       cancelScheduledFrame();
-      if (event) {
+      // pointercancel carries zeroed coordinates, so only trust pointerup as a drop point.
+      if (event && event.type === 'pointerup') {
         nextPosition = clampPosition({
           left: event.clientX - pointerOffsetX,
           top: event.clientY - pointerOffsetY,
@@ -256,11 +263,13 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', stopDrag);
       window.removeEventListener('pointercancel', stopDrag);
+      window.removeEventListener('touchmove', preventTouchScroll);
     };
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', stopDrag);
     window.addEventListener('pointercancel', stopDrag);
+    window.addEventListener('touchmove', preventTouchScroll, { passive: false });
   }, [disabled, isFullscreen, minHeight, minWidth, viewportMargin]);
 
   const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
@@ -318,9 +327,16 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
       scheduleFrame();
     };
 
+    // Same touch-scroll guard as dragging: without it the browser cancels the
+    // gesture and the pointercancel coordinates would collapse the window.
+    const preventTouchScroll = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault();
+    };
+
     const stopResize = (event?: PointerEvent) => {
       cancelScheduledFrame();
-      if (event) {
+      // pointercancel carries zeroed coordinates, so only trust pointerup.
+      if (event && event.type === 'pointerup') {
         nextSize = clampSizeForPosition({
           width: event.clientX + pointerOffsetX - startPosition.left,
           height: event.clientY + pointerOffsetY - startPosition.top,
@@ -339,11 +355,13 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', stopResize);
       window.removeEventListener('pointercancel', stopResize);
+      window.removeEventListener('touchmove', preventTouchScroll);
     };
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', stopResize);
     window.addEventListener('pointercancel', stopResize);
+    window.addEventListener('touchmove', preventTouchScroll, { passive: false });
   }, [disabled, isFullscreen, minHeight, minWidth, resizable, viewportMargin]);
 
   const style = !disabled && !isFullscreen ? ({
@@ -362,7 +380,7 @@ export function useFloatingWindow(options: UseFloatingWindowOptions) {
       type="button"
       onPointerDown={handleResizePointerDown}
       className="hidden sm:flex absolute bottom-0 right-0 z-30 h-10 w-10 cursor-nwse-resize items-end justify-end bg-transparent p-2 text-white/25 transition-colors hover:bg-transparent hover:text-white/60 focus:outline-none focus-visible:outline-none"
-      style={{ cursor: 'nwse-resize' }}
+      style={{ cursor: 'nwse-resize', touchAction: 'none' }}
       title={options.resizeHandleTitle ?? 'Drag to resize'}
       aria-label={options.resizeHandleAriaLabel ?? options.resizeHandleTitle ?? 'Drag to resize'}
     >

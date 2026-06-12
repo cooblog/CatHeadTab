@@ -33,26 +33,6 @@ a[aria-disabled="true"],
   cursor: not-allowed;
 }
 
-body.trending-modal-dragging,
-body.trending-modal-dragging * {
-  cursor: default !important;
-}
-
-body.trending-modal-resizing,
-body.trending-modal-resizing * {
-  cursor: nwse-resize !important;
-}
-
-body.ai-agent-modal-dragging,
-body.ai-agent-modal-dragging * {
-  cursor: default !important;
-}
-
-body.ai-agent-modal-resizing,
-body.ai-agent-modal-resizing * {
-  cursor: nwse-resize !important;
-}
-
 body.floating-window-dragging,
 body.floating-window-dragging * {
   cursor: default !important;

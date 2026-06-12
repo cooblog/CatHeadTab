@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useConfigStore } from '../store/configStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { FaviconImg } from './FaviconImg';
+import { getDefaultFloatingWindowSize, useFloatingWindow } from '../hooks/useFloatingWindow';
 
 // ── Shared types ─────────────────────────────────────────────────────
 
@@ -56,20 +57,6 @@ interface GithubFilterOption {
   value: string;
   label: string;
 }
-
-interface ModalSize {
-  width: number;
-  height: number;
-}
-
-interface ModalPosition {
-  left: number;
-  top: number;
-}
-
-const MODAL_MIN_WIDTH = 420;
-const MODAL_MIN_HEIGHT = 360;
-const MODAL_VIEWPORT_MARGIN = 48;
 
 const LANG_COLORS: Record<string, string> = {
   JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', Java: '#b07219',
@@ -172,63 +159,9 @@ function normalizeGithubSince(value: unknown): GithubSince {
   return value === 'weekly' || value === 'monthly' ? value : 'daily';
 }
 
-function clampModalSize(size: ModalSize): ModalSize {
-  if (typeof window === 'undefined') return size;
-  const maxWidth = Math.max(MODAL_MIN_WIDTH, window.innerWidth - MODAL_VIEWPORT_MARGIN);
-  const maxHeight = Math.max(MODAL_MIN_HEIGHT, window.innerHeight - MODAL_VIEWPORT_MARGIN);
-  return {
-    width: Math.min(Math.max(size.width, MODAL_MIN_WIDTH), maxWidth),
-    height: Math.min(Math.max(size.height, MODAL_MIN_HEIGHT), maxHeight),
-  };
-}
-
-function clampModalSizeForPosition(size: ModalSize, position: ModalPosition): ModalSize {
-  if (typeof window === 'undefined') return size;
-  const edgeGap = MODAL_VIEWPORT_MARGIN / 2;
-  const maxWidth = Math.max(MODAL_MIN_WIDTH, window.innerWidth - position.left - edgeGap);
-  const maxHeight = Math.max(MODAL_MIN_HEIGHT, window.innerHeight - position.top - edgeGap);
-  return {
-    width: Math.min(Math.max(size.width, MODAL_MIN_WIDTH), maxWidth),
-    height: Math.min(Math.max(size.height, MODAL_MIN_HEIGHT), maxHeight),
-  };
-}
-
-function clampModalPosition(position: ModalPosition, size: ModalSize): ModalPosition {
-  if (typeof window === 'undefined') return position;
-  const edgeGap = MODAL_VIEWPORT_MARGIN / 2;
-  const maxLeft = Math.max(edgeGap, window.innerWidth - size.width - edgeGap);
-  const maxTop = Math.max(edgeGap, window.innerHeight - size.height - edgeGap);
-  return {
-    left: Math.min(Math.max(position.left, edgeGap), maxLeft),
-    top: Math.min(Math.max(position.top, edgeGap), maxTop),
-  };
-}
-
-function getDefaultModalSize(): ModalSize {
-  if (typeof window === 'undefined') {
-    return { width: 560, height: 560 };
-  }
-  const desktop = window.innerWidth >= 768;
-  return clampModalSize({
-    width: desktop ? 560 : 500,
-    height: Math.round(window.innerHeight * (desktop ? 0.7 : 0.75)),
-  });
-}
-
-function getCenteredModalPosition(size: ModalSize): ModalPosition {
-  if (typeof window === 'undefined') return { left: 0, top: 0 };
-  return clampModalPosition({
-    left: Math.round((window.innerWidth - size.width) / 2),
-    top: Math.round((window.innerHeight - size.height) / 2),
-  }, size);
-}
-
-function applyModalFrame(element: HTMLElement | null, position: ModalPosition, size: ModalSize): void {
-  if (!element) return;
-  element.style.setProperty('--trending-modal-left', `${position.left}px`);
-  element.style.setProperty('--trending-modal-top', `${position.top}px`);
-  element.style.setProperty('--trending-modal-width', `${size.width}px`);
-  element.style.setProperty('--trending-modal-height', `${size.height}px`);
+function getDefaultModalSize() {
+  const desktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+  return getDefaultFloatingWindowSize(desktop ? 560 : 500, desktop ? 0.7 : 0.75);
 }
 
 function githubStarsPeriodLabel(since: GithubSince, isZh: boolean): string {
@@ -340,13 +273,11 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onC
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [modalSize, setModalSize] = useState<ModalSize>(() => getDefaultModalSize());
-  const [modalPosition, setModalPosition] = useState<ModalPosition>(() => getCenteredModalPosition(modalSize));
-  const modalShellRef = useRef<HTMLDivElement>(null);
-  const modalSizeRef = useRef<ModalSize>(modalSize);
-  const modalPositionRef = useRef<ModalPosition>(modalPosition);
+  const floatingWindow = useFloatingWindow({
+    defaultSize: getDefaultModalSize,
+    isFullscreen,
+    resizeHandleTitle: isZh ? '拖动调整大小' : 'Drag to resize',
+  });
   const [githubLanguage, setGithubLanguage] = useState<string>(options?.language ?? '');
   const [githubSpokenLanguage, setGithubSpokenLanguage] = useState<string>(options?.spokenLanguage ?? options?.spoken_language_code ?? '');
   const [githubSince, setGithubSince] = useState<GithubSince>(() => normalizeGithubSince(options?.since));
@@ -359,12 +290,6 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onC
     setGithubSpokenLanguage(options?.spokenLanguage ?? options?.spoken_language_code ?? '');
     setGithubSince(normalizeGithubSince(options?.since));
   }, [type, options?.language, options?.spokenLanguage, options?.spoken_language_code, options?.since]);
-
-  useEffect(() => {
-    modalSizeRef.current = modalSize;
-    modalPositionRef.current = modalPosition;
-    applyModalFrame(modalShellRef.current, modalPosition, modalSize);
-  }, [modalPosition, modalSize]);
 
   const load = useCallback(async () => {
     if (!serverUrl) return;
@@ -388,163 +313,10 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onC
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const clampOnResize = () => {
-      const nextSize = clampModalSize(modalSizeRef.current);
-      const nextPosition = clampModalPosition(modalPositionRef.current, nextSize);
-      modalSizeRef.current = nextSize;
-      modalPositionRef.current = nextPosition;
-      applyModalFrame(modalShellRef.current, nextPosition, nextSize);
-      setModalPosition(nextPosition);
-      setModalSize(nextSize);
-    };
-    window.addEventListener('resize', clampOnResize);
-    return () => window.removeEventListener('resize', clampOnResize);
-  }, []);
-
-  useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
-
-  useEffect(() => {
-    return () => {
-      document.body.classList.remove('trending-modal-dragging', 'trending-modal-resizing');
-    };
-  }, []);
-
-  const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    if (isFullscreen) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const modalElement = modalShellRef.current;
-    const startRect = modalElement?.getBoundingClientRect();
-    const startPosition = startRect
-      ? { left: startRect.left, top: startRect.top }
-      : modalPositionRef.current;
-    const startSize = startRect
-      ? clampModalSize({ width: startRect.width, height: startRect.height })
-      : modalSizeRef.current;
-    const pointerOffsetX = startRect ? startRect.right - e.clientX : 0;
-    const pointerOffsetY = startRect ? startRect.bottom - e.clientY : 0;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    const previousTransitionDuration = modalElement?.style.transitionDuration ?? '';
-    let nextSize = startSize;
-
-    modalSizeRef.current = startSize;
-    modalPositionRef.current = startPosition;
-    applyModalFrame(modalElement, startPosition, startSize);
-    setIsResizing(true);
-    document.body.classList.add('trending-modal-resizing');
-    document.body.style.cursor = 'nwse-resize';
-    document.body.style.userSelect = 'none';
-    if (modalElement) modalElement.style.transitionDuration = '0ms';
-
-    const handleMove = (event: PointerEvent) => {
-      nextSize = clampModalSizeForPosition({
-        width: event.clientX + pointerOffsetX - startPosition.left,
-        height: event.clientY + pointerOffsetY - startPosition.top,
-      }, startPosition);
-      modalSizeRef.current = nextSize;
-      applyModalFrame(modalElement, startPosition, nextSize);
-    };
-
-    const stopResize = (event?: PointerEvent) => {
-      if (event) {
-        nextSize = clampModalSizeForPosition({
-          width: event.clientX + pointerOffsetX - startPosition.left,
-          height: event.clientY + pointerOffsetY - startPosition.top,
-        }, startPosition);
-      }
-      modalSizeRef.current = nextSize;
-      modalPositionRef.current = startPosition;
-      applyModalFrame(modalElement, startPosition, nextSize);
-      setModalSize(nextSize);
-      setModalPosition(startPosition);
-      setIsResizing(false);
-      document.body.classList.remove('trending-modal-resizing');
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      if (modalElement) modalElement.style.transitionDuration = previousTransitionDuration;
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', stopResize);
-      window.removeEventListener('pointercancel', stopResize);
-    };
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', stopResize);
-    window.addEventListener('pointercancel', stopResize);
-  }, [isFullscreen]);
-
-  const handleWindowDragPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (isFullscreen || e.button !== 0 || window.innerWidth < 640) return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('button, a, input, textarea, select, [role="button"]')) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const modalElement = modalShellRef.current;
-    const startRect = modalElement?.getBoundingClientRect();
-    const startSize = startRect
-      ? clampModalSize({ width: startRect.width, height: startRect.height })
-      : modalSizeRef.current;
-    const startPosition = startRect
-      ? { left: startRect.left, top: startRect.top }
-      : modalPositionRef.current;
-    const pointerOffsetX = e.clientX - startPosition.left;
-    const pointerOffsetY = e.clientY - startPosition.top;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    const previousTransitionDuration = modalElement?.style.transitionDuration ?? '';
-    let nextPosition = startPosition;
-
-    modalSizeRef.current = startSize;
-    modalPositionRef.current = startPosition;
-    applyModalFrame(modalElement, startPosition, startSize);
-    setIsDragging(true);
-    document.body.classList.add('trending-modal-dragging');
-    document.body.style.cursor = 'default';
-    document.body.style.userSelect = 'none';
-    if (modalElement) modalElement.style.transitionDuration = '0ms';
-
-    const handleMove = (event: PointerEvent) => {
-      nextPosition = clampModalPosition({
-        left: event.clientX - pointerOffsetX,
-        top: event.clientY - pointerOffsetY,
-      }, startSize);
-      modalPositionRef.current = nextPosition;
-      applyModalFrame(modalElement, nextPosition, startSize);
-    };
-
-    const stopDrag = (event?: PointerEvent) => {
-      if (event) {
-        nextPosition = clampModalPosition({
-          left: event.clientX - pointerOffsetX,
-          top: event.clientY - pointerOffsetY,
-        }, startSize);
-      }
-      modalPositionRef.current = nextPosition;
-      modalSizeRef.current = startSize;
-      applyModalFrame(modalElement, nextPosition, startSize);
-      setModalPosition(nextPosition);
-      setModalSize(startSize);
-      setIsDragging(false);
-      document.body.classList.remove('trending-modal-dragging');
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      if (modalElement) modalElement.style.transitionDuration = previousTransitionDuration;
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', stopDrag);
-      window.removeEventListener('pointercancel', stopDrag);
-    };
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', stopDrag);
-    window.addEventListener('pointercancel', stopDrag);
-  }, [isFullscreen]);
 
   return (
     <div className={`fixed inset-0 z-[100] flex items-center justify-center pointer-events-none ${isFullscreen ? 'p-0' : 'p-0 sm:p-6 md:p-12'}`}>
@@ -553,23 +325,14 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onC
 
       {/* Window */}
       <div
-        ref={modalShellRef}
-        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden transition-all ${isResizing || isDragging ? 'duration-0' : 'duration-300'} ${
-          isFullscreen
-            ? 'w-full h-full !rounded-none !border-0'
-            : 'w-full h-full sm:fixed sm:left-[var(--trending-modal-left)] sm:top-[var(--trending-modal-top)] sm:w-[var(--trending-modal-width)] sm:h-[var(--trending-modal-height)] sm:max-w-[calc(100vw-3rem)] sm:max-h-[calc(100vh-3rem)]'
-        }`}
-        style={!isFullscreen ? ({
-          '--trending-modal-left': `${modalPositionRef.current.left}px`,
-          '--trending-modal-top': `${modalPositionRef.current.top}px`,
-          '--trending-modal-width': `${modalSizeRef.current.width}px`,
-          '--trending-modal-height': `${modalSizeRef.current.height}px`,
-        } as React.CSSProperties) : undefined}
+        ref={floatingWindow.shellRef}
+        className={`relative bg-black/30 backdrop-blur-xl border-0 sm:border border-white/10 rounded-none sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.55)] flex flex-col pointer-events-auto animate-scaleIn overflow-hidden transition-all ${floatingWindow.isInteracting ? 'duration-0' : 'duration-300'} ${floatingWindow.windowClassName}`}
+        style={floatingWindow.style}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          onPointerDown={handleWindowDragPointerDown}
+          onPointerDown={floatingWindow.handleDragPointerDown}
           className={`h-12 md:h-14 border-b border-white/10 flex items-center px-3 md:px-5 shrink-0 bg-white/[0.02] select-none ${!isFullscreen ? 'sm:cursor-default' : ''}`}
         >
           {/* Mac traffic lights (desktop) */}
@@ -813,22 +576,7 @@ export const TrendingModal: React.FC<TrendingModalProps> = ({ type, options, onC
           ))}
         </div>
 
-        {!isFullscreen && (
-          <button
-            type="button"
-            onPointerDown={handleResizePointerDown}
-            className="hidden sm:flex absolute bottom-0 right-0 z-30 h-10 w-10 cursor-nwse-resize items-end justify-end bg-transparent p-2 text-white/25 transition-colors hover:bg-transparent hover:text-white/60 focus:outline-none focus-visible:outline-none"
-            style={{ cursor: 'nwse-resize' }}
-            title={isZh ? '拖动调整大小' : 'Drag to resize'}
-            aria-label={isZh ? '拖动调整大小' : 'Drag to resize'}
-          >
-            <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <path d="M14 6 6 14" />
-              <path d="M14 10 10 14" />
-              <path d="M14 2 2 14" />
-            </svg>
-          </button>
-        )}
+        {floatingWindow.resizeHandle}
       </div>
     </div>
   );
