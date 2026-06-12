@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.4",
+    "date": "2026-06-13",
+    "zh": [
+      "修复在触摸屏上拖动或缩放浮动窗口（热榜、AI 助手）时窗口跳动或意外收起的问题"
+    ],
+    "en": [
+      "Fixed floating windows (Trending and AI assistant) jumping or collapsing when dragged or resized on touch screens"
+    ]
+  },
+  {
     "version": "1.0.3",
     "date": "2026-06-11",
     "zh": [
